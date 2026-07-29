@@ -186,12 +186,58 @@ Depends on: everything.
 
 ---
 
-## Cross-cutting work not tied to a module
+## Open items
 
-- **CI** — run `render-roster.py --check` and a link check on PR. Waiting until
-  `verify-docs` has proven itself locally.
-- **Scheduled freshness check** — a monthly job that runs the freshness auditor
-  and opens an issue when the roster drifts.
-- **Roster verification** — every `tag_verified: false` in `models/roster.yaml`
-  needs confirming against the live registry. See
-  [ADR 0005](decisions/0005-unverified-tags.md).
+Most of the work here surfaces on its own — the field notes ask for benchmark
+numbers by name, the exercises force the model comparison, and a stale tag
+announces itself as a failed pull. What follows is the residue: the things that
+will *silently* not happen.
+
+The first two groups are why this is a **gate list for module 02**, not a
+backlog. Guess at them and module 02 gets written wrong.
+
+### Decisions only the author can make
+
+Each states its default, so leaving it alone is a valid answer rather than an
+unresolved question.
+
+- [ ] **Ordering: evals at 03, before the agent loop.** Reasoning is in
+      [Two decisions about ordering](#two-decisions-about-ordering) above.
+      *Default if unchanged:* evals land at 03 and everything downstream is
+      written to be measurable against the harness built there.
+- [ ] **The spine example.** Currently proposed: a changelog / release-notes
+      drafter that reads `git log` and emits structured output — chosen because
+      ground truth is cheap, structured output is where small models fail
+      legibly, and it needs real tools by module 04. *Default if unchanged:*
+      module 02 onward is written around it, and changing it later means
+      rewriting exercises rather than editing a line.
+
+### Answered by running module 01
+
+These are empirical. Nobody can settle them from the armchair, and both were
+flagged as risks when the curriculum was designed. Record answers in
+[`modules/01-local-model-lab/FIELD-NOTES.md`](../modules/01-local-model-lab/FIELD-NOTES.md).
+
+- [ ] **Is rung 0 usefully bad, or uselessly bad?** The premise needs it to fail
+      in ways that *point at a cause*. A model that simply emits noise teaches
+      nothing and should be swapped for the next rung up.
+- [ ] **Is tool calling at rungs 2–3 reliable enough for module 04?**
+      **This is the largest design risk in the curriculum.** Module 04 assumes
+      "a working agent" is reachable on this roster. If the top rung cannot
+      complete a multi-step tool loop, module 04 needs rethinking — either
+      heavier scaffolding, constrained decoding, or an honest admission that
+      this is where local models run out.
+
+### Repo maintenance
+
+- [ ] **Roster verification** — every `tag_verified: false` in
+      `models/roster.yaml` needs confirming against the live registry. Run
+      `/update-models` from a machine with network access. Note that fixing only
+      the one tag that blocks you leaves the rest stale, which is the likely
+      failure mode. See [ADR 0005](decisions/0005-unverified-tags.md).
+- [ ] **Test the macOS paths** — native Ollama on macOS and Ubuntu-on-Apple-
+      Silicon are both currently documented as untested. Honest, but untested.
+- [ ] **CI** — run `render-roster.py --check` and a link check on PR. Waiting
+      until `verify-docs` has proven itself locally.
+- [ ] **Scheduled freshness check** — a monthly job that runs the freshness
+      auditor and opens an issue when the roster drifts.
