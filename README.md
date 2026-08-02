@@ -53,6 +53,7 @@ bash scripts/check-env.sh
 | [`modules/`](modules/) | The curriculum |
 | [`models/roster.yaml`](models/roster.yaml) | The model list — single source of truth |
 | [`scripts/`](scripts/) | Environment check, model pull, benchmarking |
+| [`TODO.md`](TODO.md) | The working backlog — open questions and what's next to do |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Module status and specs for what's next |
 | [`docs/STYLE.md`](docs/STYLE.md) | How this repo is written |
 | [`docs/decisions/`](docs/decisions/) | Why things are the way they are |
@@ -63,6 +64,9 @@ bash scripts/check-env.sh
 Modules 00 and 01 are written. Modules 02–09 are specced in
 [`docs/ROADMAP.md`](docs/ROADMAP.md). There are no empty placeholder folders —
 a module appears when it has content.
+
+Open questions and what's next to do are in [`TODO.md`](TODO.md), which is
+written to be read cold.
 
 **This repo ships no benchmark numbers.** Performance figures are meaningless
 across machines, so instead of publishing numbers that would be wrong for you,

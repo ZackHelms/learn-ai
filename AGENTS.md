@@ -77,8 +77,9 @@ sentence; a command that silently does not work is not.
 models/roster.yaml     SINGLE SOURCE OF TRUTH for models
 modules/NN-name/       curriculum; README.md + exercises/ + FIELD-NOTES.md
 scripts/               check-env, pull-roster, bench, render-roster
+TODO.md                the working backlog — actionable items live HERE
 docs/STYLE.md          voice rules + module template  ← read before writing
-docs/ROADMAP.md        module status and specs for what is next
+docs/ROADMAP.md        curriculum design; module specs and ordering rationale
 docs/decisions/        ADRs for load-bearing choices
 .claude/               authoring tooling (commands, subagents)
 ```
@@ -107,6 +108,7 @@ docs/decisions/        ADRs for load-bearing choices
 
 | Task | How |
 |---|---|
+| Find what needs doing | Read `TODO.md`. Record new open items there, not in a new file |
 | Refresh models against upstream | `/update-models`, or edit `models/roster.yaml` and re-render |
 | Start a new module | `/new-module`, or copy the template from `docs/STYLE.md` |
 | Check docs are consistent | `/verify-docs` |

@@ -62,7 +62,7 @@ Collected as they come up, so later entries know what to look at.
 > **Two of these gate module 02.** The curriculum's design rests on assumptions
 > that can only be settled by running this module, and they are marked ⚠️ below.
 > Answers belong here; they are tracked in
-> [`docs/ROADMAP.md`](../../docs/ROADMAP.md#answered-by-running-module-01).
+> [`TODO.md`](../../TODO.md#gated-on-running-module-01).
 
 - **Does generation speed scale linearly with parameter count?** It should be
   roughly memory-bandwidth-bound on CPU, but the constant matters.
