@@ -107,6 +107,7 @@ Track3 is aimed at someone who is paying $20/month for claude pro and wants to l
 ### COWORK
 
 Fyi, I just finished the "learn-ai track restructure" via claude cli in my vscode/wsl/ubuntu/learn-ai local repo which I have committed to main and pushed to remote.
+make sure to `git pull` if you found a way to clone this repo somewhere.
 
 Remember that these track-02-free-tier modules dont have to only cover dev use cases in vscode/wsl/ubuntu... I also want to cover walking the user through each of those 4 provider's web
 app interfaces (I know all 4 currently have various web app interfaces), and the mobile app options, and the windows pc app options, and the vscode dev options. all for free tier. 
