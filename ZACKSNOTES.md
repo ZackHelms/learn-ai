@@ -104,10 +104,9 @@ Track2 is aimed at someone who does not want to go as deep as track1 would take 
 Track3 is aimed at someone who is paying $20/month for claude pro and wants to level up particular ai skills to see what is possible and highlights what is possible with claude paid tier vs free tier. My brother (44) is an example of someone who is a good candidate for this track; also, I am a good candidate for this track where I want to add some modules around creating sdk based agents that use Luna/Haiku tier models with intentionally chosen effort levels (escalation of effort level when applicable) with evals (ie unit tests or benchmarks for some basic task I can understand well enough to make this a solid learning opportunity to get my brainstorming working in other directions for similar sdk based agent opportunities using paid LLMs.. there is overlap with track1 here but that is totally fine and reinforces concepts in different ways.)
 
 
-
 ### COWORK
 
-Fyi, claude cli just finished running "Handoff: learn-ai track restructure" in my vscode/wsl/ubuntu/learn-ai local repo which I have committed to main and pushed to remote.
+Fyi, I just finished the "learn-ai track restructure" via claude cli in my vscode/wsl/ubuntu/learn-ai local repo which I have committed to main and pushed to remote.
 
 Remember that these track-02-free-tier modules dont have to only cover dev use cases in vscode/wsl/ubuntu... I also want to cover walking the user through each of those 4 provider's web
 app interfaces (I know all 4 currently have various web app interfaces), and the mobile app options, and the windows pc app options, and the vscode dev options. all for free tier. 
