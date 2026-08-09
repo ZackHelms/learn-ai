@@ -18,10 +18,11 @@ Column notes:
 
 ## Eval runs
 
-| Datetime | Harness | LLM | Reasoning effort | Run | Time(s) | Cost | Score | Grader | Notes |
-| -------- | ------- | --- | ------ | --- | ------- | ---- | ----- | ------ | ----- |
+|                Datetime |     Harness | LLM (Reasoning effort) | Run |  Time |    Cost | Score | Grader | Notes |
+| ----------------------- | ----------- | ---------------------- | --- | ----- | ------- | ----- | ------ | ----- |
+| 2026-08-09_17:11:22_EDT | Claude Code | claude-haiku-4-5 (low) |   1 | 1m57s | $0.1742 |       |        | 3.4k input, 19.7k output, 0 cache read, 36.1k cache write ($0.1742)
 
-(none yet)
+
 
 ## Pipeline validation runs
 

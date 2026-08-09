@@ -7,6 +7,7 @@ OUTPUT FORMAT (strict)
 - Must run by opening the file directly in a browser.
 - Do not ask me clarifying questions. Make reasonable assumptions and list them in a comment block at the top of the file.
 - Output the entire file in one code block. No commentary outside it.
+- Output filename `ashfalloutpost.html`
 
 PREMISE
 A volcanic eruption has buried the region in ash. The player manages a survivor outpost

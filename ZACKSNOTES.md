@@ -185,6 +185,7 @@ Here is how I envision the "benchmark" process going:
 
 Before getting started, ask me questions to maximize alignment between my intent and how you are interpreting my intent and what is possible & practical. 
 
+### Eval: Haiku 4.5 (low)
 
 
 

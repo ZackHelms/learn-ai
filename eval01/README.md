@@ -1,23 +1,21 @@
 # eval01 - Ashfall Outpost, a one-prompt LLM eval
 
-One task, one prompt, one shot: the model under test gets
-[`make-game-ashfall-outpost.prompt.md`](make-game-ashfall-outpost.prompt.md) and must produce a
-complete, playable, self-contained HTML game in a single reply. The output is scored out of 100:
-
+## Description
+One task, one prompt, one shot: the model under test gets [`make-game-ashfall-outpost.prompt.md`]
+(make-game-ashfall-outpost.prompt.md) and must produce a complete, playable, self-contained HTML 
+game in a single reply. The output is scored out of 100: 
 - **54 points, deterministic** - measured by [`eval_ashfall.py`](eval_ashfall.py) with no model
   in the loop (rubric categories A-E).
 - **46 points, model-graded** - an LLM judge reads the code and scores it against
   [`GRADER_PROMPT.md`](GRADER_PROMPT.md) (rubric categories F-G).
 
-[`RUBRIC.md`](RUBRIC.md) defines every point. [`RESULTS.md`](RESULTS.md) is the scoreboard.
+[`RUBRIC.md`](RUBRIC.md) defines every point. [`RESULTS.md`](RESULTS.md) is the scoreboard. 
 Candidate outputs and their score files live in `runs/`.
 
-Hence the directory name: strictly speaking this is an **eval** (one task, graded against a
-rubric), not a benchmark (a standardized suite of many such tasks). See the glossary at the
-bottom.
+Hence the directory name: strictly speaking this is an **eval** (one task, graded against a rubric), 
+not a benchmark (a standardized suite of many such tasks). See the glossary at the bottom.
 
-## Why this task
-
+**Why this task**:
 A one-shot game build is a capacity probe: it forces long coherent code generation, strict
 instruction following (banned APIs, seeded randomness), and cross-system design - and weak
 models fail it in visibly different ways at every level. The deterministic half catches
@@ -31,13 +29,11 @@ that never talk to each other," which is where mid models separate from strong o
 1. Pick a harness (claude.ai web, ChatGPT app, gemini CLI, Claude Code, ...), a model, and a
    reasoning-effort level if the harness exposes one.
 2. Record the start datetime: `date +"%Y-%m-%d_%H:%M:%S_%Z"`.
-3. Paste the prompt **verbatim** into a fresh session. One shot only: no follow-ups, no
-   "continue", no fixing. If the reply truncates mid-file, that IS the result - truncation
-   is a capability signal, score it as-is.
-4. Save the HTML output to `runs/<model>_<reasoning-effort>_r<N>.html`
-   (example: `runs/haiku-4-5_extended_r1.html`; `r1` is run number 1 of that config).
-5. Note wall-clock time and whatever cost signal the harness exposes (tokens, credits,
-   percent of quota).
+3. Paste the prompt **verbatim** into a fresh session: make-game-ashfall-outpost.prompt.md
+   One shot only: no follow-ups, no "continue", no fixing. If the reply truncates mid-file,
+   that IS the result - truncation is a capability signal, score it as-is.
+4. `mv ashfalloutpost.html runs/${model}-${runid}.html` (e.g. `runs/haiku-4-5-low-001.html`)
+5. Record cost signal the harness exposes (tokens, credits, percent of quota) in [RESULTS.md](RESULTS.md)
 
 ### 2. Score - deterministic half
 
