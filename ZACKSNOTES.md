@@ -122,6 +122,50 @@ Ultimately this will need to be written up in one of the modules in track-02-fre
 https://antigravity.google/docs/overview & https://antigravity.google/docs/cli/overview currently are open in my chrome browser. 
 Note that antigravity.google/docs/cli returns 404 "Error: Not Found" for me too.
 
+---
+
+```bash
+./tmp/script02.sh 
+# 239 /tmp/agy-install.sh
+# ee1ea43ce4e9e56356c4ab6dad907ef357ae4bdfcaadb682735909fb57c9c640  /tmp/agy-install.sh
+
+cp /tmp/agy-install.sh /mnt/c/Users/zmhel/claude-cowork-learn-ai/
+cp /mnt/c/Users/zmhel/claude-cowork-learn-ai/track-02-notes-google-antigravity-cli.md .claude/notes/202608082222.track-02-notes-google-antigravity-cli.md
+
+```
+
+Propose an idea for a game with a lot of different internal systems that I could use as an eval prompt for comparing different AI model and effort levels capabilities. 
+Ultimately I want 1 prompt that I can copy/paste to different AI LLM's (and potentially different effort levels where allowed) to compare how each one handles the task.  
+I'm thinking the type of game should be consistent and be a web based application so that this prompt can be tested via free tier web ai providers or mobile apps in 
+addition to PC apps or even cli (like wsl2/ubuntu in vscode) all of which should be able to render (e.g. in an artifact or local hosted web page) the game for play testing. 
+
+## 9Aug2026 (vscode/ubuntu/claude-cli)
+
+Me:
+Review `.claude/notes/202608082222.track-02-notes-google-antigravity-cli.md`:
+1. Shape it into module prose, let me know when you have something for me to review. If there is anything else to flesh out for the gemini cli module (in track02) then draft a plan for us to walk through later (name it `.claude/plans/YYYYMMDDhhmmss.00-track02-geminicli.md)
+2. For the remaining items for track-02 I would like you to draft plans (in .claude/plans/) with file names prefixed with datetime stamp
+    (like "YYYYMMDDhhmmss" 24h time similar to the files I created in .claude/notes/) then a sequence number (e.g. ".01", ".02", ...) 
+    followed by a slug describing the plan, for example `202608082234.01-track02-geminiweb.md`, `202608082234.02-track02-geminimobile.md`, 
+    `202608082234.03-track02-geminipcapp.md`, `202608082234.04-track02-claudeweb.md`, and so on for the remaining providers (anthropic, 
+    openai, github copilot) and mode for each (cli, web, mobile app, pc app). Last plan (really more of a 'task') in the track02 series 
+    will be to update the track02 README.md (and root README.md) based on what was created for all these track02 modules.
+    Mostly with track02 I just want to explore each provider and their various modes available for free tier usage, I'd like to use
+    the same simple (standardized) prompt `what is your model name and version?` to measure free tier quota usage for each model and each 
+    effort level offered (yes this will be a lot of different little tests). 
+    Also I'd like to see how each handles a more complex prompt like `.claude/prompts/make-game-ashfall-outpost.prompt.md`
+    This is kind of the grand finale of the track02 free tier modules, showing how simple games can be created with free tier ai,
+    but also observing how quickly the free tier quota is drained (I can provide my own benchmark observed numbers later)
+    with guidance on how to pick model and effort level. I want to personally build my own intuition and help others with intuition
+    on what model tier (low like haiku, mid like sonnet, high like opus.. depending on what is available with the free tier offering)
+    and effort (low, medium, high are typically the only ones I see with free tier offerings) level should be used for a moderately sized
+    prompt like `.claude/prompts/make-game-ashfall-outpost.prompt.md` and then how best to make adjustments to the game later (i.e. 
+    do I start new session with best model and effort available or when can I skimp and use lwo tier model and effort... also i should provide
+    some guidance on creating context files and guardrails and maintaining (with commands like agy `/learn`) to help the ai work better
+    and more aligned with my intent with me over time).
+    When I test this out I might need to start with the best available model and effort level (for each of the 4 providers at free tier level)
+    and then i might need to wait till the quota refreshes in order to try other options like lesser models and efforts just to see how each
+    handles it. Each should produce a distinct output file that I can re-test later (at least when I'm working on this in vscode/wsl/ubuntu/cli).
 
 
 
@@ -129,7 +173,7 @@ Note that antigravity.google/docs/cli returns 404 "Error: Not Found" for me too.
 
 
 
-### LATER (after implementing the base set of modules for track02)
+## LATER (after implementing the base set of modules for track02)
 TODO ask fable-max for a context based agent (I may already have one) that specializes in researching the latest state of ai platform offerings and alerting me via some
     intermediary file or item added to the TODO.md backlog with a link to a plan for updating this learn-ai repo so it is up to date with the latest offerings.
     This agent might be the final judge that confirms the learn-ai repo is up to date.
