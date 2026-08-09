@@ -65,7 +65,7 @@ if [ "$UNAME_S" != "Linux" ]; then
   warn "Not Linux (found: $UNAME_S)."
   note "This course is written and tested against Ubuntu 24.04+."
   note "On macOS, prefer a NATIVE Ollama install over a Linux VM -- see"
-  note "modules/00-overview/README.md, 'If you are on a Mac'."
+  note "track-01-local-models/00-overview/README.md, 'If you are on a Mac'."
 else
   if [ -r /etc/os-release ]; then
     # shellcheck disable=SC1091
@@ -238,6 +238,6 @@ if [ "$WARNINGS" -gt 0 ]; then
   printf '%sReady%s, with %d warning(s). Read them, then carry on.\n' \
     "$GREEN" "$RESET" "$WARNINGS"
 else
-  printf '%sReady.%s Next: modules/01-local-model-lab/README.md\n' "$GREEN" "$RESET"
+  printf '%sReady.%s Next: track-01-local-models/01-local-model-lab/README.md\n' "$GREEN" "$RESET"
 fi
 exit 0

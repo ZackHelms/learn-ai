@@ -37,9 +37,11 @@ current as of 2026-07-29 — treat that date as the baseline.
 
 ### 3. Harness claims
 
-Every module has an "If you use a harness" section describing Claude Code,
-Codex, Copilot, or Cursor. These products change monthly. Flag any claim about
-their behavior that is uncited or that you can show is now wrong.
+Every Track 01 module (`track-01-local-models/`) has an "If you use a harness"
+section describing Claude Code, Codex, Copilot, or Cursor, and Tracks 02 and 03
+describe the commercial platforms directly. These products change monthly. Flag
+any claim about their behavior that is uncited or that you can show is now
+wrong.
 
 ### 4. Links
 

@@ -36,8 +36,10 @@ These are not style preferences. Breaking them makes the repo wrong.
    on the page.
 4. **Cite sources with a link and a date.** Model and tool facts rot within
    months. An uncited claim about a version is a future bug.
-5. **No exercise depends on a paid harness or a hosted API key.** That is the
-   whole premise. If something genuinely requires one, it is an optional aside
+5. **No exercise exceeds its track's spend assumption.** Track 01: no paid
+   harness, no hosted API key, ever — that is its premise. Track 02: zero
+   spend, free accounts only. Track 03: a Claude Pro subscription and nothing
+   beyond it. If something genuinely requires more, it is an optional aside
    clearly marked as such.
 
 ## Generated blocks
@@ -89,7 +91,7 @@ Numbered, hands-on. Each states its goal and how to know it worked.
 Concrete pass criteria. Ideally a command whose output the reader can compare.
 
 ## If you use a harness
-How this maps to Claude Code / Codex / Copilot / Cursor. See below.
+How this maps to Claude Code / Codex / Copilot / Cursor. Track 01 — see below.
 
 ## Field notes
 What surprised me. Honest, dated, first person.
@@ -100,10 +102,12 @@ Links with dates.
 
 ### The "If you use a harness" section
 
-This section appears in **every** module, and it is load-bearing rather than
-decorative.
+This section appears in **every Track 01 module**, and it is load-bearing
+rather than decorative. Tracks 02 and 03 cover the commercial platforms
+directly, so they do not carry it; their module template gets settled when
+their first modules are written.
 
-The curriculum is harness-agnostic: nothing requires Claude Code, Codex, or
+Track 01 is harness-agnostic: nothing in it requires Claude Code, Codex, or
 Copilot. But most readers arriving here already use one, and the material is far
 more valuable if it explains what those tools are doing under the hood rather
 than pretending they do not exist.

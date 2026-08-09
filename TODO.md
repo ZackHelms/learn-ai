@@ -30,8 +30,9 @@ bash scripts/pull-roster.sh
 > means the roster is stale, not that you did something wrong.
 > `scripts/pull-roster.sh` prints the three-step fix.
 
-Then work through [Module 01](modules/01-local-model-lab/) and record what you
-get in its [`FIELD-NOTES.md`](modules/01-local-model-lab/FIELD-NOTES.md).
+Then work through [Track 01, Module 01](track-01-local-models/01-local-model-lab/)
+and record what you get in its
+[`FIELD-NOTES.md`](track-01-local-models/01-local-model-lab/FIELD-NOTES.md).
 
 ---
 
@@ -167,6 +168,8 @@ marked as such in the text.
 
 ## Done
 
+- Track restructure: top-level `track-NN-slug/` layout, tracks 01–03
+  ([ADR 0006](docs/decisions/0006-tracks-top-level.md)), 2026-08-08
 - Modules 00 (overview) and 01 (local model lab), with exercises
 - `models/roster.yaml` as single source of truth, with generated-block rendering
 - `scripts/`: `check-env.sh`, `pull-roster.sh`, `bench.py`, `render-roster.py`

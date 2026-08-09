@@ -174,9 +174,9 @@ that goes in field notes, and if you try it, I would like to know how it went.
 ## How to use this repo
 
 ```
-modules/NN-name/README.md      the teaching
-modules/NN-name/exercises/     hands-on work
-modules/NN-name/FIELD-NOTES.md real measured results — yours go here
+track-01-local-models/NN-name/README.md      the teaching
+track-01-local-models/NN-name/exercises/     hands-on work
+track-01-local-models/NN-name/FIELD-NOTES.md real measured results — yours go here
 models/roster.yaml             the model list (single source of truth)
 scripts/                       environment check, model pull, benchmark
 docs/                          style guide, roadmap, decision records

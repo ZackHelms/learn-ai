@@ -51,15 +51,18 @@ Then run `uv run scripts/render-roster.py`. Available blocks: `roster`,
 
 **Cite version and capability claims** with a link and a date.
 
-**No exercise may require a paid harness or a hosted API key.** That is the
-premise of the whole curriculum.
+**No exercise may exceed its track's spend assumption.** Track 01: no paid
+harness, no hosted API key, ever. Track 02: zero spend, free accounts only.
+Track 03: a Claude Pro subscription and nothing beyond it. The track README
+states the assumption.
 
 ## Structure
 
 Follow the template in `docs/STYLE.md` exactly. Two sections deserve special
 care:
 
-**"If you use a harness"** is mandatory in every module. Map what the module
+**"If you use a harness"** is mandatory in every Track 01 module (Tracks 02 and
+03 cover the commercial platforms directly and skip it). Map what the module
 just taught onto Claude Code / Codex / Copilot / Cursor. Describe the
 *mechanism*, not the marketing. Link documentation for any specific claim.
 Never require the reader to own the tool.
@@ -71,7 +74,7 @@ worst thing you can put in this repo.
 
 ## Pedagogical spine
 
-The curriculum's premise is that **deliberately weak models teach better**. Small
+Track 01's premise is that **deliberately weak models teach better**. Small
 models fail legibly; frontier models paper over bad prompts, sloppy tool
 schemas, and missing evals.
 

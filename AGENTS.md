@@ -9,24 +9,53 @@ Claude-Code-specific notes. Put changes here, not there. See
 
 ## What this repo is
 
-A hands-on curriculum for learning **agentic AI with locally hosted models**.
-Written as a lab notebook by someone learning the material while writing it, not
-as a textbook by an expert.
+A hands-on AI curriculum organized into **tracks**, each with its own premise
+and audience. Written as a lab notebook by someone learning the material while
+writing it, not as a textbook by an expert.
 
-Two premises drive nearly every decision:
+## Tracks
+
+Each track is a top-level `track-NN-slug/` directory with its own premise,
+audience, and spend assumption, stated in its README. See
+[ADR 0006](docs/decisions/0006-tracks-top-level.md).
+
+| Track | Premise | Spend assumption |
+|---|---|---|
+| `track-01-local-models/` | Local weak models, harness-agnostic | Zero — no paid tooling, no API keys |
+| `track-02-free-tier/` | What the free tiers of Gemini, Microsoft Copilot, ChatGPT/Codex, and Claude can do | Zero — free accounts only |
+| `track-03-claude-pro/` | What Claude Pro at $20/month unlocks | A Claude Pro subscription, nothing beyond it |
+
+Deferred (roadmap mention only — never scaffold): base paid tiers of OpenAI,
+Gemini, GitHub Copilot.
+
+Rules that keep this structure from regressing:
+
+- Modules live only inside a track: `track-NN-slug/MM-slug/`. Never create a
+  bare `modules/` directory.
+- Module numbers are zero-padded and **restart per track**, so cross-track
+  references must name the track ("Track 01, module 04").
+- A track's premise governs its modules. Content that fits no existing premise
+  is a new track: ROADMAP entry and ADR first, directory only when the first
+  module has content.
+- The "If you use a harness" module section is a **Track 01** rule, not a
+  repo-wide one — see `docs/STYLE.md`.
+
+Two premises drive nearly every decision **inside Track 01**:
 
 1. **Deliberately weak models are better teaching tools.** Small CPU-bound
    models fail in legible, reproducible ways. A frontier model papers over a bad
    prompt, a sloppy tool schema, or a missing eval; a 1B model does not. Speed
    and small footprint outrank reasoning quality when choosing models.
-2. **The curriculum is harness-agnostic.** No exercise may require Claude Code,
+2. **The track is harness-agnostic.** No exercise may require Claude Code,
    GitHub Copilot, or OpenAI Codex. Those tools are *mapped to* instead, so the
    material is useful to people who pay for them without being dependent on
    them. (The `.claude/` directory is authoring tooling for this repo, not part
    of the curriculum.)
 
-Audience: engineers who may already use a commercial coding harness and want to
-understand what it is actually doing.
+Audience varies by track. Track 01: engineers who may already use a commercial
+coding harness and want to understand what it is actually doing. Track 02: no
+dev machine needed — a phone or tablet is enough. Track 03: someone already
+paying for Claude Pro.
 
 ## Before you write anything
 
@@ -74,27 +103,32 @@ sentence; a command that silently does not work is not.
 ## Layout
 
 ```
-models/roster.yaml     SINGLE SOURCE OF TRUTH for models
-modules/NN-name/       curriculum; README.md + exercises/ + FIELD-NOTES.md
-scripts/               check-env, pull-roster, bench, render-roster
-TODO.md                the working backlog — actionable items live HERE
-docs/STYLE.md          voice rules + module template  ← read before writing
-docs/ROADMAP.md        curriculum design; module specs and ordering rationale
-docs/decisions/        ADRs for load-bearing choices
-.claude/               authoring tooling (commands, subagents)
+models/roster.yaml       SINGLE SOURCE OF TRUTH for models (Track 01's roster)
+track-NN-slug/           one track per directory; README.md + MM-slug/ modules
+  track-01-local-models/   local weak models, harness-agnostic (00–01 written)
+  track-02-free-tier/      the big four platforms at zero spend
+  track-03-claude-pro/     what Claude Pro unlocks
+scripts/                 check-env, pull-roster, bench, render-roster (Track 01)
+TODO.md                  the working backlog — actionable items live HERE
+docs/STYLE.md            voice rules + module template  ← read before writing
+docs/ROADMAP.md          curriculum design; track and module specs, ordering
+docs/decisions/          ADRs for load-bearing choices
+.claude/                 authoring tooling (commands, subagents)
 ```
 
 ## Conventions
 
-- **Modules** are `modules/NN-slug/`, zero-padded, README.md as the entry point.
+- **Modules** are `track-NN-slug/MM-slug/`, zero-padded, numbering restarts per
+  track, README.md as the entry point.
 - **Field notes** live in each module's `FIELD-NOTES.md` — real measured output,
   always with date and hardware. The README stays stable; field notes carry the
   machine-specific observations.
 - **No empty stub directories.** A module appears on disk when it has content.
   Until then it is a spec in `docs/ROADMAP.md`.
-- **Every module ends with an "If you use a harness" section** mapping what was
-  just built onto Claude Code / Codex / Copilot / Cursor. Describe mechanisms,
-  link documentation, never require the reader to own the tool.
+- **Every Track 01 module ends with an "If you use a harness" section** mapping
+  what was just built onto Claude Code / Codex / Copilot / Cursor. Describe
+  mechanisms, link documentation, never require the reader to own the tool.
+  Tracks 02 and 03 cover the commercial platforms directly and skip it.
 - **Python** uses `uv`. Scripts carry PEP 723 inline metadata so
   `uv run scripts/foo.py` resolves dependencies with no separate install step.
   Note that Ubuntu 24.04 marks system Python as externally managed (PEP 668), so
@@ -132,6 +166,7 @@ docs/decisions/        ADRs for load-bearing choices
 ## Things that are not this repo's job
 
 Fine-tuning, RAG pipelines, GPU/CUDA setup, multi-node serving, and model
-training. Not because they do not matter, but because the curriculum has a
-premise — small models, ordinary hardware, agentic patterns — and scope creep
-would dilute it. Redirect rather than expand.
+training. Not because they do not matter, but because each track has a premise
+and scope creep would dilute it. Content that fits no existing track's premise
+is a ROADMAP proposal for a new track, not an expansion of an existing module.
+Redirect rather than expand.

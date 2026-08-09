@@ -34,7 +34,7 @@ fi
 
 if ! command -v ollama >/dev/null 2>&1; then
   echo "error: ollama is not installed." >&2
-  echo "  See modules/01-local-model-lab/README.md for the install step." >&2
+  echo "  See track-01-local-models/01-local-model-lab/README.md for the install step." >&2
   exit 1
 fi
 

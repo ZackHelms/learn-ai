@@ -6,7 +6,7 @@
 """Exercise A, automated: ask every roster model for structured JSON and check
 mechanically whether it complied.
 
-    uv run modules/01-local-model-lab/exercises/compare-structured-output.py
+    uv run track-01-local-models/01-local-model-lab/exercises/compare-structured-output.py
 
 Why this is worth automating
 ----------------------------

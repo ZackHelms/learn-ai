@@ -1,6 +1,6 @@
 ---
 description: Scaffold a new curriculum module against the repo template
-argument-hint: "<number> <slug>   e.g. 02 prompt-engineering"
+argument-hint: "<track> <number> <slug>   e.g. track-01-local-models 02 prompt-engineering"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash(ls*), Bash(uv run scripts/render-roster.py*)
 ---
 
@@ -17,17 +17,20 @@ Create a new module: **$ARGUMENTS**
    and stated dependencies. Follow that spec; if you think it is wrong, say so
    and get agreement before diverging.
 
-3. **Read the previous module** in `modules/` to match tone, depth, and pacing.
+3. **Read the previous module** in the target track to match tone, depth, and
+   pacing.
 
-4. **Create `modules/NN-slug/`** with:
+4. **Create `track-NN-slug/MM-slug/`** (module numbers restart per track) with:
    - `README.md` following the template exactly
    - `exercises/` if the module has hands-on work
    - `FIELD-NOTES.md` seeded with the standard header and left empty
 
 5. **Update `docs/ROADMAP.md`** — flip the status to written and link it.
 
-6. **Update `modules/00-overview/README.md`** — the module list there is the
-   course map and must stay accurate.
+6. **Update the course maps** — for Track 01 that is the module list in
+   `track-01-local-models/00-overview/README.md`; for every track, the track's
+   `README.md` status section and the root `README.md` track listing must stay
+   accurate.
 
 7. **Re-render** if the module uses any generated block:
    ```bash
@@ -37,7 +40,8 @@ Create a new module: **$ARGUMENTS**
 ## Requirements for the draft
 
 - Every section of the template present, even if brief.
-- The **"If you use a harness"** section is mandatory. Map what the module
+- The **"If you use a harness"** section is mandatory in Track 01 modules
+  (Tracks 02 and 03 cover the commercial platforms directly). Map what the module
   teaches onto Claude Code / Codex / Copilot / Cursor. Describe mechanisms, link
   documentation, and never require the reader to own any of them.
 - **No invented numbers.** No tokens/sec, no eval scores, no timings unless

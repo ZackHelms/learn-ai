@@ -52,10 +52,10 @@ fetch them; that is the `freshness-auditor`'s job.
 
 ### 5. Module template conformance
 
-For each `modules/*/README.md`, confirm the sections from
+For each `track-*/*/README.md`, confirm the sections from
 [`docs/STYLE.md`](../../docs/STYLE.md) are present, especially:
 
-- **If you use a harness** — mandatory in every module
+- **If you use a harness** — mandatory in every Track 01 module
 - **Field notes**
 - **Check yourself**
 
