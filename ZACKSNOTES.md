@@ -138,10 +138,65 @@ Propose an idea for a game with a lot of different internal systems that I could
 Ultimately I want 1 prompt that I can copy/paste to different AI LLM's (and potentially different effort levels where allowed) to compare how each one handles the task.  
 I'm thinking the type of game should be consistent and be a web based application so that this prompt can be tested via free tier web ai providers or mobile apps in 
 addition to PC apps or even cli (like wsl2/ubuntu in vscode) all of which should be able to render (e.g. in an artifact or local hosted web page) the game for play testing. 
+> .claude/prompts/make-game-ashfall-outpost.prompt.md
+
+Can you give me a markdown file for the scoring rubric and suggest a way for me to grade the output ? I recall that "evals" typically involve a mix of deterministic 
+script(s) for measuring things that can be deterministically determined plus AI based grading to fill in the remaining fuzzy gaps. For example, could you create a 
+program that I could run to produce the deterministic part of the score (with comments at the top of the program explaining what it is scoring and how it ties back 
+to the rubric md) and a prompt or command I could run to ask my smartest available LLM+effort (in my free tier module work) to score the fuzzy parts? (note that I 
+can refine all of this later in my personal Fable5(max) claude code session if it would help to iterate on this some; for example refine the prompt, and clean up 
+the rubric and eval program and eval prompt).
+`mv /mnt/c/Users/zmhel/Downloads/GRADER_PROMPT.md benchmark-ashfall-outpost/`
+`mv /mnt/c/Users/zmhel/Downloads/RUBRIC.md benchmark-ashfall-outpost/`
+> benchmark-ashfall-outpost/README.md
+> benchmark-ashfall-outpost/make-game-ashfall-outpost.prompt.md
+> benchmark-ashfall-outpost/RUBRIC.md
+> benchmark-ashfall-outpost/GRADER_PROMPT.md
+> benchmark-ashfall-outpost/eval_ashfall.py
+> benchmark-ashfall-outpost/RESULTS.md
+
+
 
 ## 9Aug2026 (vscode/ubuntu/claude-cli)
+check claude chat response (I had to go to bed before it finished)
+work with cc to refine the benchmark prompt & rubric & evals (prompt+script=score); I should get a good grasp on this prior to running it through all the free tier models.
 
-Me:
+### Fable5(xhigh)
+I'm trying to create an ai model benchmark and I could use your help reviewing my approach and files and offering advice and cleaning anything up.
+My goals here are to learn how evals and ai model benchmarks work and then use that exercise in some of my learn-ai modules.
+I want to learn industry standard practices and terminology, so please let me know where I have diverged from that.
+Note that these files (all in `benchmark01`) were created by Opus5(xhigh) in the claude chat desktop app and are not perfect, for example
+    `benchmark01/GRADER_PROMPT.md` contains guidance for me at the top that should be removed and moved into the README.md
+    and also the "Optional: run it as a Claude Code command" section is redundant. The GRADER_PROMPT.md prompt should be sufficient and
+    I just hand it to the best available model I have; which, if I'm working with a "free tier" offering, may not be a top tier model+effort
+    so I need this GRADER_PROMPT.md to be written with sufficient guidance that even low intelligence free tier (or even locally hosted cheap
+    as in track01) models can complete the grading tasks successfully. You might be able to refine this some by running the entire process 
+    in sub-agents (e.g. Haiku & Sonnet) to vet and refine the files before handing over to me for my own slow testing.
+
+Here is how I envision the "benchmark" process going:
+1. I open an ai prompt interface in the harness of my choice (e.g. https://claude.ai/new free tier web interface, openai codex/chatgpt mobile app or dekstop app still free tier, google gemini agy cli in VSCode/wsl2/ubuntu)
+2. Select the LLM & effort level (if available) I want to benchmark
+3. Give it `benchmark01/make-game-ashfall-outpost.prompt.md` and wait for it to complete in one shot
+4. In RESULTS.md record the approximate start datetime (with timezone like `date +"%Y-%m-%d_%H:%M:%S_%Z"`), harness 
+    (e.g. free tier gemini agy, claude code cli pro plan, claude chat web interface, etc), LLM, effort level, time to complete, 
+    and cost (in terms of whatever is available like tokens, ai credits, percentage of weekly quota, etc).
+5. I run `benchmark01/eval_ashfall.py` in a shell, or ask a fresh new model session to run it for me and record the score it produces.
+6. I give `benchmark01/GRADER_PROMPT.md` to a different fresh new model session and it gives me a score based on its judgements which I add to RESULTS.md (e.g. 42 + 34 = 76 (out of 100 max))
+
+Before getting started, ask me questions to maximize alignment between my intent and how you are interpreting my intent and what is possible & practical. 
+
+
+
+
+
+
+
+
+
+
+
+
+TODO
 Review `.claude/notes/202608082222.track-02-notes-google-antigravity-cli.md`:
 1. Shape it into module prose, let me know when you have something for me to review. If there is anything else to flesh out for the gemini cli module (in track02) then draft a plan for us to walk through later (name it `.claude/plans/YYYYMMDDhhmmss.00-track02-geminicli.md)
 2. For the remaining items for track-02 I would like you to draft plans (in .claude/plans/) with file names prefixed with datetime stamp
@@ -155,7 +210,8 @@ Review `.claude/notes/202608082222.track-02-notes-google-antigravity-cli.md`:
     effort level offered (yes this will be a lot of different little tests). 
     Also I'd like to see how each handles a more complex prompt like `.claude/prompts/make-game-ashfall-outpost.prompt.md`
     This is kind of the grand finale of the track02 free tier modules, showing how simple games can be created with free tier ai,
-    but also observing how quickly the free tier quota is drained (I can provide my own benchmark observed numbers later)
+    but also observing how quickly the free tier quota is drained (I can provide my own benchmark observed numbers later for quota percent
+    used and how long the one shot game dev takes and tokens or ai credits if those metrics are visible to me)
     with guidance on how to pick model and effort level. I want to personally build my own intuition and help others with intuition
     on what model tier (low like haiku, mid like sonnet, high like opus.. depending on what is available with the free tier offering)
     and effort (low, medium, high are typically the only ones I see with free tier offerings) level should be used for a moderately sized
@@ -166,6 +222,8 @@ Review `.claude/notes/202608082222.track-02-notes-google-antigravity-cli.md`:
     When I test this out I might need to start with the best available model and effort level (for each of the 4 providers at free tier level)
     and then i might need to wait till the quota refreshes in order to try other options like lesser models and efforts just to see how each
     handles it. Each should produce a distinct output file that I can re-test later (at least when I'm working on this in vscode/wsl/ubuntu/cli).
+    Also I'd like these grand finale module(s) to introduce evals and rubrics (which will be a deeper topic in track03 where with paid claude pro you 
+    actually have more headroom to experiment with things like evals before hitting the weekly quota limit). In particular
 
 
 
