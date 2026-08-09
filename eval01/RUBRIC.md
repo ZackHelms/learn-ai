@@ -1,8 +1,19 @@
-# Ashfall Outpost - Eval Rubric v1.1
+# Ashfall Outpost - Eval Rubric v1.2
 
 Scoring rubric for the ASHFALL OUTPOST single-prompt LLM eval. One prompt is pasted verbatim
-into each model / effort level; each run produces one self-contained HTML file, which is then
-scored out of 100.
+into each model / reasoning-effort level; each run produces one self-contained HTML file,
+which is then scored out of 100. This file defines what the points mean; the run protocol lives in
+[README.md](README.md).
+
+Changes in v1.2 (2026-08-09): no point values changed. The runtime checker now switches to a
+Dev/Debug tab before hunting for the Run Tests / Run Benchmark buttons (a compliant candidate
+used to lose all of C2-D3 for putting them in the Dev tab the prompt asked for). `--merge` now
+accepts the grader's raw reply: it extracts the last JSON object, normalizes key spellings,
+and scores skipped items as 0 with a warning. GRADER_PROMPT.md gained an explicit no-cascade
+rule: a file-wide defect (e.g. one JS syntax error) is priced once by A3, and the AI grader
+scores source-level wiring past it - without the rule, two graders legitimately read the same
+broken-but-detailed candidate as 28/46 and 0/46. Protocol and reporting conventions moved to
+README.md.
 
 Grading is split by who can judge it reliably:
 
@@ -28,7 +39,7 @@ A3 requires the runtime pass (`--runtime`).
 ## Category B - Instruction compliance (15 pts, D)
 
 Measures whether the model followed explicit constraints in the prompt. This is where cheap
-models and low effort levels leak first.
+models and low reasoning-effort levels leak first.
 
 | ID | Check | Pts |
 |----|-------|-----|
@@ -133,32 +144,9 @@ pipeline with a minor gap. **4** = fully wired, visible to the player, and trace
 
 ## How to run a full grade
 
-```bash
-# 1. Deterministic pass (static only, stdlib, no deps)
-python3 eval_ashfall.py runs/gpt-x-high.html
-
-# 2. Deterministic pass with runtime checks (needs playwright)
-pip install playwright && playwright install chromium
-python3 eval_ashfall.py runs/gpt-x-high.html --runtime
-
-# 3. AI pass: paste GRADER_PROMPT.md plus the candidate file into your strongest
-#    model + highest effort. Save its JSON reply as runs/gpt-x-high.ai.json
-
-# 4. Merge into a final score out of 100
-python3 eval_ashfall.py runs/gpt-x-high.html --runtime --merge runs/gpt-x-high.ai.json
-
-# 5. Compare everything scored so far
-python3 eval_ashfall.py --report runs/
-```
-
-## Reporting conventions
-
-- Always record: model name, effort/reasoning level, date, whether tools/search were on,
-  wall-clock time, and output token count if the provider shows it.
-- One shot only. No follow-up turns, no "continue", no fixing.
-- If the model truncates mid-file, score it as-is. Truncation is a real capability signal.
-- If the runtime pass is skipped, the script reports `scored_out_of` below 100. Never compare
-  a runtime-scored run against a static-only run without normalizing.
+See "Protocol - run one candidate" in [README.md](README.md). Short version: deterministic
+pass with `eval_ashfall.py --runtime`, AI pass by handing `GRADER_PROMPT.md` plus the
+candidate to a fixed grader model, then `--merge` for the total and `--report` to compare.
 
 ## Known weak spots (fix in a later iteration)
 
@@ -167,4 +155,8 @@ python3 eval_ashfall.py --report runs/
 - D2 hash detection looks for a hex-ish token near the word "hash". Same caveat.
 - Button discovery is by visible text. A model that labels the button "Self Test" instead of
   "Run Tests" loses C1 despite complying in spirit. Either tighten the wording in the prompt or
-  widen the matcher.
+  widen the matcher. (The narrower case - buttons hidden inside an inactive Dev tab - is fixed
+  as of v1.2; the checker now tries Dev/Debug/Tests-labelled tabs before giving up.)
+- The ceiling is reachable: a strong model has scored 100/100 (see the pipeline-validation
+  table in RESULTS.md). The eval discriminates in the low and middle range; if every candidate
+  you care about clusters at the top, the task needs to get harder (saturation).

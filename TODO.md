@@ -46,6 +46,14 @@ is a valid answer** — these are not blocking.
       *If unchanged:* evals land at 03, and everything downstream gets written
       to be measurable against the harness built there.
 
+- [ ] **Where `eval01/` formally lives.** The Ashfall Outpost one-prompt eval
+      sits at the repo root as a deliberate working area while it stabilizes —
+      outside the track structure, which normally forbids new top-level
+      directories. Once proven, either formalize as a shared `evals/` asset
+      (short ADR) or fold into a module (Track 01's evals module, or Track 02 as
+      the free-tier comparison exercise).
+      *If unchanged:* stays at root, exempt from the track rules.
+
 - [ ] **The spine example carried across modules.**
       Currently proposed: a changelog / release-notes drafter that reads
       `git log` and emits structured output. Chosen because ground truth is

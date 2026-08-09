@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["playwright"]
+# ///
+# The PEP 723 block above lets `uv run eval_ashfall.py` resolve playwright for the
+# --runtime pass. Plain `python3 eval_ashfall.py` also works: the static pass is
+# stdlib-only, and --runtime degrades gracefully when playwright is missing.
 """
 eval_ashfall.py - deterministic scorer for the ASHFALL OUTPOST LLM eval.
 
@@ -209,6 +216,32 @@ def find_button(page, pattern):
 HASH_RX = re.compile(r"hash\W{0,12}([0-9a-zA-Z_\-]{6,64})", re.I)
 
 
+def find_button_in_tabs(page, pattern):
+    """find_button, but if the control is hiding inside an inactive tab, switch tabs.
+
+    The prompt asks for Run Tests / Run Benchmark inside a "Dev" panel, and visible-text
+    discovery cannot see into a tab that is not active. Try the current view first, then
+    click a Dev/Debug-looking tab, then walk every short-labelled control that looks like
+    a tab header.
+    """
+    btn = find_button(page, pattern)
+    if btn is not None:
+        return btn
+    for tab_pat in (r"^dev\w*$", r"^debug$", r"^tests?$"):
+        tab = find_button(page, tab_pat)
+        if tab is None:
+            continue
+        try:
+            tab.click(timeout=2000)
+            page.wait_for_timeout(400)
+        except Exception:
+            continue
+        btn = find_button(page, pattern)
+        if btn is not None:
+            return btn
+    return None
+
+
 def runtime_checks(path, timeout_ms=15000):
     try:
         from playwright.sync_api import sync_playwright
@@ -233,7 +266,7 @@ def runtime_checks(path, timeout_ms=15000):
                        "detail": "errors=%d %s" % (len(errors), errors[:3])}
 
             # C1 runtime half + C2 + C3 - self tests
-            btn = find_button(page, r"run\s*tests?")
+            btn = find_button_in_tabs(page, r"run\s*tests?")
             r["C1_runtime"] = {"pts": 2.0 if btn else 0.0, "max": 2.0,
                                "detail": "clickable_control=%s" % bool(btn)}
             n_assert, n_fail = 0, None
@@ -264,7 +297,7 @@ def runtime_checks(path, timeout_ms=15000):
             for _ in range(2):
                 page.goto(url, timeout=timeout_ms)
                 page.wait_for_timeout(1000)
-                b = find_button(page, r"run\s*benchmark")
+                b = find_button_in_tabs(page, r"run\s*benchmark")
                 if not b:
                     break
                 try:
@@ -322,15 +355,95 @@ CATEGORY_OF = {
 }
 
 
+F_KEYS = [str(i) for i in range(1, 14)]
+G_KEYS = ["G1", "G2", "G3", "G4", "G5"]
+
+
+def _extract_json(text):
+    """Return the last parseable JSON object in text.
+
+    Graders - especially weak ones - wrap their JSON in prose or markdown fences no
+    matter what the prompt says, so the whole grader reply can be saved verbatim and
+    fed to --merge. Only the final JSON object is used.
+    """
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, dict):
+            return obj
+    except ValueError:
+        pass
+    decoder = json.JSONDecoder()
+    best, i = None, 0
+    while True:
+        j = text.find("{", i)
+        if j < 0:
+            break
+        try:
+            obj, end = decoder.raw_decode(text[j:])
+            if isinstance(obj, dict):
+                best, i = obj, j + end
+                continue
+        except ValueError:
+            pass
+        i = j + 1
+    return best
+
+
+def _as_int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _norm_scores(data):
+    """Normalize grader key spellings: F may arrive as {"1":..} or {"F1":..}, nested
+    under "F"/"G" or flat at the top level. Returns ({"1":..}, {"G1":..})."""
+    f, g = {}, {}
+
+    def put(dst, prefix, k, v):
+        digits = re.sub(r"\D", "", str(k))
+        if digits:
+            dst[prefix + digits] = v
+
+    for k, v in (data.get("F") or {}).items():
+        put(f, "", k, v)
+    for k, v in (data.get("G") or {}).items():
+        put(g, "G", k, v)
+    if not f:
+        for k, v in data.items():
+            if re.fullmatch(r"F\d{1,2}", str(k)):
+                put(f, "", k, v)
+    if not g:
+        for k, v in data.items():
+            if re.fullmatch(r"G[1-5]", str(k)):
+                put(g, "G", k, v)
+    return f, g
+
+
 def load_ai(path):
-    """Expected shape: {"F": {"1": 0|1|2, ... "13": ...}, "G": {"G1": 0-4, ... "G5": 0-4}}"""
-    with open(path) as fh:
-        data = json.load(fh)
-    f = data.get("F", {})
-    g = data.get("G", {})
-    f_pts = sum(min(2, max(0, int(v))) for v in f.values())
-    g_pts = sum(min(4, max(0, int(v))) for v in g.values())
-    return f_pts, g_pts, data
+    """Parse the grader reply. Returns (f_pts, g_pts, data, missing_keys).
+
+    Missing keys score 0 rather than crashing: a grader that skipped an item has
+    effectively scored it absent, but the gap is reported so you can regrade."""
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    data = _extract_json(text)
+    if data is None:
+        raise SystemExit(
+            "error: no JSON object found in %s\n"
+            "Save the grader's reply (the whole reply is fine) and pass that file to --merge."
+            % path)
+    f, g = _norm_scores(data)
+    if not f and not g:
+        raise SystemExit(
+            "error: found JSON in %s but no F/G scores in it.\n"
+            "Expected shape: {\"F\": {\"1\": 0-2, ... \"13\": 0-2}, \"G\": {\"G1\": 0-4, ... \"G5\": 0-4}}"
+            % path)
+    missing = [("F" + k) for k in F_KEYS if k not in f] + [k for k in G_KEYS if k not in g]
+    f_pts = sum(min(2, max(0, _as_int(f.get(k)))) for k in F_KEYS)
+    g_pts = sum(min(4, max(0, _as_int(g.get(k)))) for k in G_KEYS)
+    return f_pts, g_pts, data, missing
 
 
 def grade(path, use_runtime, merge_path):
@@ -367,10 +480,11 @@ def grade(path, use_runtime, merge_path):
     }
 
     if merge_path:
-        f_pts, g_pts, ai_raw = load_ai(merge_path)
+        f_pts, g_pts, ai_raw, ai_missing = load_ai(merge_path)
         out["ai_points"] = f_pts + g_pts
         out["ai_max"] = AI_TOTAL
         out["ai_detail"] = ai_raw
+        out["ai_missing_keys"] = ai_missing
         out["total"] = round(det_pts + f_pts + g_pts, 1)
         out["scored_out_of"] = round(det_max + AI_TOTAL, 1)
     else:
@@ -388,6 +502,9 @@ def print_grade(g):
         print("  %-2s  %5.1f / %-5.1f  %s" % (cid, v["pts"], v["max"], bar))
     if "ai_points" in g:
         print("  F+G %5.1f / %-5.1f  (model-graded)" % (g["ai_points"], g["ai_max"]))
+        if g.get("ai_missing_keys"):
+            print("  warning: grader skipped %s - scored as 0, consider regrading"
+                  % ",".join(g["ai_missing_keys"]))
     print("-" * 68)
     print("  TOTAL %.1f / %.1f" % (g["total"], g["scored_out_of"]))
     if g["runtime_note"]:
@@ -440,6 +557,9 @@ def main():
         return 1
     if not os.path.isfile(a.candidate):
         print("no such file: %s" % a.candidate, file=sys.stderr)
+        return 1
+    if a.merge and not os.path.isfile(a.merge):
+        print("no such file: %s (expected the saved grader reply)" % a.merge, file=sys.stderr)
         return 1
 
     g = grade(a.candidate, a.runtime, a.merge)

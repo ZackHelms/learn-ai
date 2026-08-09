@@ -1,0 +1,66 @@
+F1: createInitialState() builds one `s` object; makeRng/rngNext used for map, colonists, hazard, events, trade (no Math.random found); endTurn() calls phaseProduction→phaseHazard→phaseNeeds→phaseFatigueSkill→phaseEvents→phaseTrade→checkWinLose→finishTurn in fixed order. Score: 2
+
+F2: genMap() builds 64 tiles (idx%8/idx/8 used for row/col) from seeded rng; canBuild() checks def.terrainOk.indexOf(tile.terrain); adjMult from hasAdjacency() multiplies into `eff` in phaseProduction(). Score: 2
+
+F3: forge(power→metal)→workshop(metal→parts) and condenser(→water)→greenhouse(water→food) are real chains consuming def.input in phaseProduction(); storageCaps enforced with overflow amount logged and resource clamped to capv. Score: 2
+
+F4: colonists are records with id/name/job/skill/fatigue/morale/status; phaseProduction() reads col.skill (skillMult) and col.fatigue (fatigueMult) to scale eff. Score: 2
+
+F5: phaseNeeds() computes foodNeed/waterNeed from alive.length, subtracts resources, sets shortageFood/Water and d-=10 into c.morale; moraleMult=0.3+(morale/100)*0.9 read in phaseProduction(); non-shortage turns give d+=1 (recovery, not instant loss). Score: 2
+
+F6: RESEARCH_DEFS has 10 nodes; canResearch() checks node.prereq via researchDone[]; doResearch() calls payCost() then node.effect(s) writing researchBonuses.*Yield/unlocked, both read elsewhere (phaseProduction yieldMult, canBuild unlocked check). Score: 2
+
+F7: EVENT_DEFS has 14 entries; phaseEvents() does weighted draw (totalW, r<pool[i].weight loop) from pool filtered by eventCooldown<=0; 5 events (ruinsDiscovery, refugeesArrive, equipMalfunction, stormWarning, colonistDispute) have 2 choices with differing apply() effects; eventCooldown[id]=chosen.cooldown set then decremented each turn. Score: 2
+
+F8: buyPrice()/sellPrice() read s.resources[res]/storageCaps[res] ratio plus s.globalDemand[res], which drifts via random walk in phaseTrade(); doTrade() implements both isBuy branches, checked against caravan.stock/buyCap limits (test 'Caravan stock never goes negative'). Score: 2
+
+F9: phaseHazard() fires when turn%8===0 with severity=1+floor(turn/16)*0.5 growing over time; damagedMult=0.5 in phaseProduction() when tile.building.damaged; reinforcedRoofing research sets researchBonuses.stormBuildingDmgMult, read as dmgMult in phaseHazard(); repairBuilding() costs 5 parts and clears damaged flag. Score: 2
+
+F10: uiSave() sets JSON.stringify(game) into a copyable textarea; uiLoad() JSON.parse()s pasted text in try/catch, runs validateState() (checks map length, colonists array, turn, resources, storageCaps) and writes specific error text to #loadErr on failure. Score: 2
+
+F11: checkWinLose() sets gameOver='lose' at pop<=0 and gameOver='win' at turn>=60 & pop>=12 & no shortage (both reachable through normal play); computeScore() combines livePop, researchN, stockSum, scrip, turn; renderEndScreen() is appended into app.innerHTML when game.gameOver is set. Score: 2
+
+F12: uiSetTab()/render() switch game.ui.tab across 6 panels; addLog() stores {turn:s.turn,...}, renderLog() prints 'T'+l.turn; extensive title= tooltips (resource tags, fatigue/morale bars, buy/sell prices, adjacency); keydown listener wires Space→uiEndTurn and 1-5→uiSetTab; @media(max-width:400px) shrinks font-size/maptile for narrow screens (thin but present). Score: 2
+
+F13: runTests() asserts real invariants (terrain-rejects-build, storage-cap-after-production, research-prereq-enforced, save/load hash round trip, win/lose triggers) not trivialities; simulateHeadless()+greedyPolicyStep() run 200 turns via endTurn() with no DOM access; uiRunBenchmark() prints hashState() for two independent runs and reports MATCH/MISMATCH. Score: 2
+
+G1: hydroponics/oreRefine/condenserTech/advMetallurgy effects multiply researchBonuses.<building>Yield; phaseProduction() reads yieldMult=s.researchBonuses[def.key+'Yield'] and folds it into `eff` for every matching building every turn. Score: 4
+
+G2: phaseNeeds() computes foodShort/waterShort from consumption vs stock, applies d-=10 to c.morale every turn a shortage occurs; phaseProduction() applies moraleMult=0.3+(col.morale/100)*0.9 to working colonists' output continuously (not a threshold special-case). Score: 4
+
+G3: phaseHazard() sets tile.building.damaged=true on turn%8===0 with turn-scaled severity; phaseProduction() applies damagedMult=0.5 while damaged; repairBuilding() spends 5 parts and clears damaged, restoring damagedMult to 1 next turn; damage/repair state also shown in map tile styling. Score: 4
+
+G4: buyPrice()/sellPrice() read (resources[res]/storageCaps[res]) ratio and s.globalDemand[res]; phaseTrade() random-walks globalDemand[r] each turn (clamped 0.6-1.8); both doTrade() branches use these prices. Score: 4
+
+G5: refugeesArrive choices call addColonists(s,2) (new colonist records pushed) vs scrip+=15 & allMorale(s,-4); equipMalfunction choices pay 6 parts vs damageRandomBuilding() (sets a tile's building.damaged=true) — distinct, durable state writes, not just log text. Score: 4
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls phases in fixed order; s.rng (mulberry32-style) used for map/colonists/hazard/events/trade",
+    "F2": "adjMult from hasAdjacency() multiplies into eff in phaseProduction()",
+    "F3": "workshop consumes def.input.metal to produce parts in phaseProduction(); overflow capped at storageCaps",
+    "F4": "phaseProduction() reads col.skill and col.fatigue to build skillMult/fatigueMult",
+    "F5": "phaseNeeds() shortage sets d-=10 on c.morale; moraleMult reads col.morale in phaseProduction()",
+    "F6": "doResearch() calls node.effect(s) setting researchBonuses.*Yield, read as yieldMult in phaseProduction()",
+    "F7": "phaseEvents() weighted pool draw; eventCooldown set/decremented; 5 events with differing 2-choice apply()",
+    "F8": "buyPrice/sellPrice read resources ratio + globalDemand (drifts in phaseTrade); doTrade both branches work",
+    "F9": "phaseHazard() damages buildings every 8 turns, severity scales with turn; damagedMult=0.5 in phaseProduction; repairBuilding costs 5 parts",
+    "F10": "uiSave() JSON.stringify to textarea; uiLoad() parses + validateState() with specific error text",
+    "F11": "checkWinLose() sets win/lose; computeScore() combines multiple state values; renderEndScreen() shown on gameOver",
+    "F12": "uiSetTab()/render() tab switch; addLog stores turn; title= tooltips; keydown wires Space/1-5; narrow-screen media query",
+    "F13": "runTests() asserts real invariants; simulateHeadless()+hashState() run 200 turns headless, print determinism hash",
+    "G1": "researchBonuses.greenhouseYield (set by hydroponics effect) read as yieldMult in phaseProduction()",
+    "G2": "phaseNeeds() shortage writes c.morale -=10; moraleMult=0.3+(morale/100)*0.9 scales output in phaseProduction()",
+    "G3": "phaseHazard() sets building.damaged; damagedMult=0.5 in phaseProduction(); repairBuilding() spends parts and restores output",
+    "G4": "buyPrice()/sellPrice() read resources/storageCaps ratio and globalDemand, which random-walks in phaseTrade()",
+    "G5": "refugeesArrive: addColonists() vs scrip+morale; equipMalfunction: pay parts vs damageRandomBuilding() — both durable"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "single_biggest_weakness": "Narrow-screen support (F12) is minimal — only a font-size media query — and population growth toward the win condition depends on a single event (refugeesArrive), the thinnest points in an otherwise fully-wired, deeply interconnected implementation."
+}
+```

@@ -1,0 +1,66 @@
+F1: game state object (line 463), seeded PRNG makeRng()/rngNext()/rngInt() (154-156) used throughout, endTurn() calls phases in documented fixed order (404-417: Production, Hazard, Needs, Fatigue, Events, Trade, Win/Lose, Turn++). Score: 2
+
+F2: genMap() creates 8x8 grid of 64 tiles (line 175), terrain derived from rng seed values (line 175: r<0.42→ash, etc), canBuild() enforces terrain checks (line 208), hasAdjacency() checks adjacency (line 164) and adjMult multiplies into eff (line 274) affecting output amounts (line 285). Score: 2
+
+F3: Production chains present: generator→power, forge consumes power→metal, workshop consumes metal→parts (lines 91-98), storage caps enforced at line 186, overflow handled and logged at line 285. Score: 2
+
+F4: Colonist records created with skill, fatigue, morale, job at line 176. In phaseProduction: skillMult reads skill (line 267), fatigueMult reads fatigue (line 269), moraleMult reads morale (line 268), each multiplied into eff. Score: 2
+
+F5: phaseNeeds() consumes food/water per turn (line 307), shortage sets flags (line 311) and lowers morale by 10 (line 317), moraleMult affects eff (line 268), recovery happens when needs met (line 317 else d+=1). Score: 2
+
+F6: RESEARCH_DEFS has 10 nodes (lines 102-113), canResearch() enforces prereq (line 245), doResearch() deducts cost (line 252), each effect modifies researchBonuses or unlocked flags (lines 103-112) which are read by phaseProduction (line 271) and canBuild (line 205). Score: 2
+
+F7: EVENT_DEFS has 14 events (lines 121-151), phaseEvents() uses weighted random selection (line 348-350: totalW, rngNext, weighted draw), 5 events offer 2 choices (ruinsDiscovery 131, refugeesArrive 135, equipMalfunction 139, stormWarning 143, colonistDispute 147) with different state outcomes, cooldown set and checked (lines 351, 343). Score: 2
+
+F8: buyPrice() reads player stockpile ratio and globalDemand (line 360), sellPrice() same (line 361), globalDemand drifts each turn (line 395), phaseTrade() creates limited caravan stock (line 387), doTrade() handles both buy (lines 365-374) and sell (lines 375-382). Score: 2
+
+F9: phaseHazard() fires every 8 turns (line 292), severity grows: 1+floor(turn/16)*0.5 (line 293), damaged buildings produce at 0.5 multiplier (line 273), reinforcedRoofing research multiplies stormBuildingDmgMult by 0.7 (line 110, read at 294), repairBuilding() costs 5 parts (line 223-224). Score: 2
+
+F10: uiSave() serializes full game to JSON (line 483), uiLoad() parses pasted text (line 488), validateState() checks required fields (line 495-503), error messages shown clearly (lines 490, 493). Score: 2
+
+F11: checkWinLose() checks both: lose at pop<=0 (line 400), win at turn>=60 AND pop>=12 AND no shortages (line 401), computeScore() uses population*10 + research*15 + stockSum*0.5 + scrip*0.3 + turn*2 (line 428), renderEndScreen() shows score and stats (lines 728-733). Score: 2
+
+F12: renderTabs() creates 6 tabs with uiSetTab() (lines 622-624), renderLog() lines include turn number (line 709: 'T'+l.turn), tooltips explain throughout (e.g., line 631 tile descriptions), keyboard shortcuts: Space for end turn, 1-5 for tabs (lines 750-751), media query adapts font at 400px (line 77). Score: 2
+
+F13: runTests() asserts real invariants: map size 64, resources non-negative, PRNG determinism, terrain enum, building terrain checks, cost deduction, storage caps, negative resources, population getter, assignment bidirectional links, research prereq, building unlock, fatigue/morale clamped 0-100, save/load hash match, event cooldown exclusion, caravan stock non-negative, turn increment, win/lose conditions, score non-negative (lines 507-572). uiRunBenchmark() runs 200 turns twice on same seed, compares state hashes for determinism (lines 580-595). Score: 2
+
+G1: condenserTech research modifies s.researchBonuses.condenserYield*=1.25 (line 103), phaseProduction reads yieldMult=s.researchBonuses[def.key+'Yield'] (line 271), yieldMult multiplies into eff (line 274), affects output amounts (line 285). Score: 4
+
+G2: phaseNeeds() consumes food/water (line 307), sets shortageFood/Water flags (line 311), if shortage then morale d-=10 (line 317), phaseProduction reads moraleMult=0.3+(morale/100)*0.9 (line 268), multiplies into eff affecting output (line 274). Score: 4
+
+G3: phaseHazard() fires every 8 turns (line 292), damages buildings setting damaged=true (line 299), phaseProduction applies damagedMult=0.5 for damaged (line 273) reducing eff and output (lines 274-285), repairBuilding() costs 5 parts (line 224) and sets damaged=false (line 224), next production cycle damagedMult becomes 1. Score: 4
+
+G4: buyPrice() computes from ratio=resources[res]/storageCaps[res] (line 360) and globalDemand[res], phaseTrade() drifts globalDemand by ±0.05 each turn (line 395), prices respond to both stockpile and demand. Score: 4
+
+G5: ruinsDiscovery choices: scavenge adds parts+scrip and fatigue (line 132), leave be does nothing (line 133); refugeesArrive choices: accept adds colonists (line 136), turn away adds scrip and lowers morale (line 137). All choices write durable state changes, not just logs. Score: 4
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "game object (463), rngNext(155), endTurn phases in order (404-417)",
+    "F2": "genMap 64 tiles (175), terrain from seed, canBuild terrain check (208), adjMult in eff (274)",
+    "F3": "power→metal→parts chains, storageCaps (186), overflow logged (285)",
+    "F4": "colonist records (176), skillMult/fatigueMult/moraleMult all read in phaseProduction (267-269)",
+    "F5": "consumption (307), shortage morale -10 (317), moraleMult in eff (268), recovery (317)",
+    "F6": "10 research nodes (102-113), prereq enforced (245), effects apply (103-112, read at 271/205)",
+    "F7": "14 events, weighted pool (348-350), 5 choice events with different outcomes, cooldown (351/343)",
+    "F8": "buyPrice reads ratio and demand (360), globalDemand drifts (395), limited caravan (387), buy+sell (365-382)",
+    "F9": "storm every 8 turns (292), severity grows (293), damaged 0.5 (273), research multiplier (294), repair 5 parts (224)",
+    "F10": "JSON serialize (483), parse (488), validate (495-503), error msg (490/493)",
+    "F11": "checkWinLose (400-401), computeScore multi-value (428), renderEndScreen (728-733)",
+    "F12": "renderTabs (622-624), log turn numbers (709), tooltips throughout, shortcuts (750-751), media (77)",
+    "F13": "runTests real invariants (507-572), benchmark 200 turns determinism check (580-595)",
+    "G1": "condenserYield*=1.25 (103), read in yieldMult (271), multiplies eff (274)",
+    "G2": "consumption flags shortage (311), morale -10 (317), moraleMult (268) in eff",
+    "G3": "storm damages (299), damagedMult 0.5 (273), repair -5 parts (224) unsets damaged",
+    "G4": "buyPrice reads resources/storageCaps ratio and globalDemand (360), demand drifts (395)",
+    "G5": "ruinsDiscovery scavenge adds parts/fatigue vs leave be (132-133), refugeesArrive add colonists vs scrip/morale (136-137)"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "single_biggest_weakness": "No weaknesses found in implementation; all 13 core systems are present with full mechanics, and all 5 interaction chains are fully wired from source to effect."
+}
+```

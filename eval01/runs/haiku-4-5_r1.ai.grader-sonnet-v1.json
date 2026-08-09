@@ -1,0 +1,132 @@
+GRADING WORKSHEET — candidate_A.html
+
+FATAL DEFECT FOUND FIRST (governs nearly every score below): inside `triggerEvent()`,
+the `events` array's last element ("Tool Shortage") is closed with `}>` instead of
+`]},` (line ~998). This is a JavaScript syntax error, not a design gap. The entire
+file has exactly one `<script>` tag (line 620–1554), so this single malformed token
+aborts parsing of the WHOLE script before any of it runs. Confirmed via a pure
+static syntax check (`node --check` on the extracted script text — this checks
+parseability only, it does not run/play the game, consistent with "judge by
+reading"). Practical consequence: `window.addEventListener('load', ...)` never
+fires, `GAME.initGame()` never runs (no map, no colonists, no research tree
+populated), `initUI()` never runs (no tab buttons created, no button gets an
+onclick handler, no keydown listener attached), `renderUI()` never runs (DOM stays
+at its static HTML skeleton). Per the rubric's own definition, "present but never
+called or used" = 0. Since nothing at all is ever called, this applies almost
+across the board. I still traced every system's source-level wiring below to give
+full evidence, and I separately flag systems that are ALSO structurally broken
+independent of this bug (those would not have scored higher even if the typo were
+fixed).
+
+F1 — Core loop: GAME state object, mulberry32(seed) PRNG, endTurn() calling
+production/hazard/event/end-check in fixed order — all present in source, but
+unreachable: fatal parse error means endTurn() is never invoked (no button wiring
+ever attaches). Score 0.
+
+F2 — Map: generateMap() builds 8x8 from weighted rng draws, buildBuilding() checks
+tile.terrain, adjacency sets adjacent_water/adjacent_vent read later in
+runProduction() — real design, but unreachable (script never parses/runs). Score 0.
+
+F3 — Economy: water->food (Greenhouse), power->metal (Forge), storage_caps enforced
+with overflow logged in endTurn() — real chain in source, unreachable. Score 0.
+
+F4 — Population: colonists[] with skill/fatigue/morale/job/assigned_building;
+worker.skill drives yield_val in runProduction() — present, unreachable. Score 0.
+
+F5 — Needs: foodNeeded/waterNeeded consumption, shortage lowers colonist morale,
+idle colonists and Settler Quarters recover morale — present, unreachable. Score 0.
+
+F6 — Research: research_tree has 8 nodes with prereq chain, buyResearch() enforces
+prereq+cost. But even ignoring the parse bug, 2 of 8 nodes ('imp-ash', 'synthesis')
+are never read anywhere outside their own definitions — dead effects, so "each
+unlock applies a real effect" fails regardless. Score 0 (would cap at 1 even fixed).
+
+F7 — Events: 10 events defined, 4+ have 2 differing-effect choices — good breadth.
+But selection is `events[Math.floor(rng()*events.length)]`, i.e. uniform, not
+weighted; `event_cooldown` is declared in state but never read or written anywhere
+— no cooldown exists. Both gaps independent of the parse bug. Score 0.
+
+F8 — Trade: buyTrade()/sellTrade() adjust scrip vs resource, caravan_next/visible
+gate access — present in source, unreachable. Score 0.
+
+F9 — Hazard: triggerAshstorm() scales severity with turn and writes tile.damage.
+But runProduction()'s Greenhouse/Forge/PowerPlant/Condenser loops never read
+`.damage` on any building — damaged buildings produce at full rate. There is also
+no repair function anywhere in the file (no "repair" identifier at all). Two
+required parts ("damaged buildings produce less", "repair costs resources") are
+simply absent, independent of the parse bug. Score 0.
+
+F10 — Save/load: no save/export/import function or UI element exists anywhere in
+the file (searched for save/load/export/import — none found beyond a JSON
+round-trip self-test in runTests(), which is not a player-facing feature). Absent
+even ignoring the parse bug. Score 0.
+
+F11 — End conditions: checkEndConditions() has a reachable win (turn>=60 AND
+pop>=12 AND food/water/research thresholds) and lose (pop===0) branch, score
+computed from population/research/food/water/scrip/turn, showEndScreen() renders a
+breakdown — well-built in source, unreachable. Score 0.
+
+F12 — UI: switchTab()/initUI() build tabs and keyboard shortcuts (Space, 1-5), log
+entries carry `[T${turn}]`, tiles carry a native `title` tooltip. Only the CSS
+@media narrow-screen rules would actually function without JS; everything else is
+JS-driven and dead. Score 0.
+
+F13 — Dev panel: runTests() has 15 real-invariant assertions (no negative
+resources, storage caps, prereq enforcement, morale/skill ranges) and
+runBenchmark() drives 200 turns of GAME.endTurn() headlessly and prints a
+reduce-based state hash — genuinely meets the spec in source, unreachable because
+btn-run-tests/btn-run-benchmark never get onclick handlers. Score 0.
+
+G1 — research -> yield: research_complete['hydro']/['forge-up']/['power-gen'] are
+read directly inside the Greenhouse/Forge/PowerPlant yield formulas — a real,
+traceable chain in source, but it never executes. Score 0.
+
+G2 — shortfall -> morale -> reduced output: shortage->morale drop is implemented,
+but no production formula ever reads `worker.morale` (only `worker.skill`) — the
+final link is entirely absent in source, independent of the parse bug. Score 0.
+
+G3 — storm -> damage -> output loss -> repair -> recovery: storm damage is written
+to tile.building.damage but never read by any production function, and no repair
+function exists at all — chain breaks at link 3 and link 4 in source itself, on
+top of being unreachable. Score 0.
+
+G4 — trade prices respond to stockpile/supply: initTradePrices() sets prices once
+from rng at game start; no function ever updates trade_prices afterward and no
+price formula reads GAME.resources — prices are static, chain does not exist in
+source. Score 0.
+
+G5 — event choices mutate state durably: each event's two choices call distinct
+`effect(g)` closures that write g.resources/c.morale directly (not just the log) —
+a real, differentiated chain in source, but CURRENT_EVENT/chooseEventOption() is
+never reachable since triggerEvent() itself is inside the dead script. Score 0.
+
+```json
+{
+  "F": {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0,
+        "8": 0, "9": 0, "10": 0, "11": 0, "12": 0, "13": 0},
+  "G": {"G1": 0, "G2": 0, "G3": 0, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "endTurn() well-ordered in source but unreachable: fatal SyntaxError near events array (line ~998) aborts whole <script>",
+    "F2": "generateMap()/buildBuilding() present, unreachable due to same parse failure",
+    "F3": "Greenhouse/Forge chains present, unreachable due to same parse failure",
+    "F4": "colonists[] with skill/fatigue/morale present, unreachable due to same parse failure",
+    "F5": "shortage->morale in endTurn() present, unreachable due to same parse failure",
+    "F6": "research_complete['imp-ash'] and ['synthesis'] never read anywhere; dead nodes regardless of parse bug",
+    "F7": "uniform pick via events[Math.floor(rng()*events.length)], not weighted; event_cooldown never read/written",
+    "F8": "buyTrade()/sellTrade() present, unreachable due to same parse failure",
+    "F9": "tile.building.damage written by triggerAshstorm() but never read in runProduction(); no repair() exists",
+    "F10": "no save/export/import identifier anywhere in file; only an internal JSON round-trip self-test",
+    "F11": "checkEndConditions()/showEndScreen() present, unreachable due to same parse failure",
+    "F12": "switchTab()/keydown handlers present, unreachable; only CSS media queries would survive",
+    "F13": "runTests()/runBenchmark() well-built (15 asserts, 200-turn hash), unreachable: buttons never get onclick",
+    "G1": "research_complete['hydro'] read in Greenhouse yield formula in source, never executes",
+    "G2": "no production formula reads worker.morale; only worker.skill is used, so link 4 absent in source",
+    "G3": "damage written by triggerAshstorm(), never read by any production function; no repair function exists",
+    "G4": "trade_prices set once in initTradePrices(), never updated per turn, never reads GAME.resources",
+    "G5": "event effect(g) closures mutate resources/morale directly in source, but triggerEvent() path is dead code"
+  },
+  "todo_notes": ["Laboratory building desc string ends 'Improves research speed. TODO' — no lab-speed effect implemented anywhere"],
+  "grader_confidence": "high",
+  "single_biggest_weakness": "A single malformed token (`}>` instead of `]},`) in the events array is a fatal JavaScript syntax error that aborts parsing of the entire single <script> block, so none of the otherwise fairly detailed game logic ever executes in a browser."
+}
+```

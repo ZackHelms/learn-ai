@@ -1,0 +1,64 @@
+F1: GAME object holds all state; mulberry32(seed) assigned to GAME.rng and used in generateMap/initColonists/initTradePrices/endTurn/triggerAshstorm/triggerEvent/runBenchmark (no Math.random found); endTurn() resolves decay -> consumption -> runProduction() -> triggerAshstorm() -> caravan -> triggerEvent() -> death-check -> cap -> checkEndConditions in a fixed order every call. Score: 2.
+
+F2: generateMap() builds an 8x8 grid from weighted this.rng() rolls; buildBuilding() checks `building.terrain.includes(tile.terrain)`; adjacent_water/adjacent_vent are computed in buildBuilding() and read in runProduction()'s yield formulas (*1.25/*1.3/*1.5). But that formula block only runs for a `worker` found via `colonist.assigned_building`, and no code anywhere outside the state-reverting runBenchmark() ever sets assigned_building, so the bonus never manifests in real play. Score: 1.
+
+F3: runProduction() consumes water to produce greenhouse food and power to produce forge metal, both capped with Math.min against storage_caps; endTurn()'s post-turn loop clamps every resource to storage_caps and logs overflow (reliably reachable). But both production blocks require the same unreachable `assigned_building` link found in F2, so the actual consume->produce chain never fires in real play; only the generic need-consumption and overflow-cap logic is dependable. Score: 1.
+
+F4: initColonists() gives each colonist id/name/job/skill/fatigue/morale/assigned_building/skill_exp; worker.skill and worker.fatigue are read/written inside runProduction()'s yield formulas. But (per F2/F3) that code path never executes in real play since assigned_building is never set by any UI/game-loop code; only morale decay/recovery (independent of assignment) reliably functions per colonist. Score: 1.
+
+F5: endTurn() computes foodNeeded/waterNeeded from colonist count and reduces c.morale proportional to any shortage; unassigned colonists and Settler-Quarters occupants regain +5 morale/turn (real recovery, not instant loss). But no production yield formula anywhere reads c.morale, so "morale changes output" is unimplemented. Score: 1.
+
+F6: research_tree has 8 nodes; researchUnlocked() enforces node.prereq before buyResearch(); buyResearch() deducts node.cost from scrip. 6 of 8 node effects are actually read somewhere (hydro/forge-up/power-gen/storm-shld/morale-tech/auto-farm all gated via research_complete[...] in runProduction/endTurn/triggerAshstorm), but imp-ash and synthesis are never read anywhere outside the tree definition - dead effects. Score: 1.
+
+F7: triggerEvent()'s array has 10 named events, each with 2 choices whose effect() functions apply distinct resource/morale deltas (verified Dust Storm, Equipment Failure, Water Discovery, etc.). But selection is `events[Math.floor(rng()*events.length)]` - uniform, not weighted - and `event_cooldown` is declared on GAME but never read or written anywhere, so no cooldown exists. Score: 1.
+
+F8: buyTrade()/sellTrade() both correctly move scrip against trade_prices with storage-cap clamping - both directions genuinely work. But trade_prices is set once in initTradePrices() via rng() and never mutated again (no read of GAME.resources or any supply variable in a price formula), and there is no caravan stock/inventory limit anywhere - BUY 1 / SELL HALF are unlimited. Score: 1.
+
+F9: hazard_next counter fires triggerAshstorm() every 8 turns; weather_severity = floor(turn/20)+1 grows with turn count; storm-shld research halves base_damage via damage_mult (real, reachable mitigation). But triggerAshstorm() increments `map[y][x].damage` (the tile, not `building.damage`), no code in runProduction reads any damage value to reduce yield, and there is no repair function or button anywhere in the file. Score: 1.
+
+F10: no save/export/textarea/import code found anywhere in the file. The only JSON.stringify(GAME) usages are an internal self-test round-trip check (runTests) and an internal benchmark snapshot/restore (runBenchmark) - neither is exposed to the player as copyable text, and there is no paste/import/validation path. Score: 0.
+
+F11: checkEndConditions() checks `colonists.length===0` (lose) and `turn>=60` with pop/food/water/research thresholds (win or lose) - both reachable from normal endTurn() progression; endGame() computes `score` from population, research, food, water, scrip and turn; showEndScreen() renders a real breakdown into #score-breakdown and toggles #end-screen visible. Score: 2.
+
+F12: switchTab()/dynamically-built tab buttons are wired via onclick; log entries carry `turn: this.turn` and render as `[T${e.turn}]`; map tiles carry a native `title` tooltip built from terrain/building/adjacency-bonus text; a keydown listener handles Space (end turn) and digit keys 1-5 (tab switch); @media queries at 768px/480px resize tiles/stats/tabs. Score: 2.
+
+F13: runTests() runs 15 checks covering real invariants (no negative resources, storage caps, unique colonist IDs, research prereqs, morale/skill ranges, map size, PRNG determinism, building-terrain validity, etc.), though test 14 unconditionally `return true`. runBenchmark() loops `GAME.endTurn()` 200 times with no try/catch and prints a reduce-based state hash - but endTurn() unconditionally calls `this.render()`, which is never defined as a GAME method anywhere (only the separate global renderUI() exists), so by source inspection the benchmark loop throws on its first iteration and never reaches the hash-printing/restore code. Score: 1.
+
+G1: research_complete['hydro']/['forge-up']/['power-gen']/['storm-shld'] are read directly inside the greenhouse/forge/power-plant yield formulas in runProduction() and multiply yield_val - the formula genuinely reads the unlock's effect. But that block only executes for an assigned worker, and assigned_building is only ever set inside the state-reverting runBenchmark(), so in real play the bonus only ever fires through that one special-cased sandbox path. Score: 2.
+
+G2: endTurn()'s shortage math (`shortage / colonists.length`) writes directly to `c.morale` - a real, working link, not merely logged. But no production formula (greenhouse/forge/power-plant/condenser) anywhere reads `c.morale`, so "reduced labor output" is entirely absent from the code and the chain never reaches its required final step. Score: 1.
+
+G3: triggerAshstorm() increments `map[y][x].damage` and removes water, scaling with weather_severity, and storm-shld research reduces damage_mult - storm-and-mitigation links are real. But no runProduction formula reads `.damage` to cut yield, and there is no repair function anywhere in the file, so damaged buildings produce at full rate and never recover via player action. Score: 1.
+
+G4: `trade_prices[r]` is set once in initTradePrices() from `100 + rng()*50` and read unchanged thereafter in showCaravan()/buyTrade()/sellTrade() - never written again after init, no read of GAME.resources or any drifting supply variable in a price formula. Score: 0.
+
+G5: chooseEventOption() calls `CURRENT_EVENT.choices[idx].effect(GAME)`, and distinct choice effects (e.g. Dust Storm's "Hunker down" -10 morale/-10 food vs "Push through" +5 morale; Equipment Failure's "Repair with parts" -30 parts vs "Jury-rig it" -5 parts/-10 morale) write different, durable deltas straight into GAME.resources/colonist.morale, then renderUI() reflects them immediately - not just logged. Score: 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 0, "11": 2, "12": 2, "13": 1},
+  "G": {"G1": 2, "G2": 1, "G3": 1, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "GAME.rng=mulberry32(seed) used everywhere; endTurn() resolves systems in fixed order",
+    "F2": "adjacent_water/adjacent_vent read in runProduction() yield formulas, but gated on unreachable assigned_building",
+    "F3": "runProduction() consumes water->food, power->metal; endTurn() clamps/logs overflow via storage_caps",
+    "F4": "worker.skill/worker.fatigue read in runProduction(), but only reachable via unset assigned_building",
+    "F5": "endTurn() shortage reduces c.morale and unassigned colonists recover +5/turn; morale never read by yield formulas",
+    "F6": "researchUnlocked()/buyResearch() enforce prereq+cost; imp-ash and synthesis effects never read anywhere",
+    "F7": "10-event array in triggerEvent() with real choice effects; selection is rng()*length (unweighted); event_cooldown unused",
+    "F8": "buyTrade()/sellTrade() work vs trade_prices, but trade_prices only set once in initTradePrices(), never drifts",
+    "F9": "triggerAshstorm() scales weather_severity, storm-shld halves damage_mult; no repair fn, damage never read by production",
+    "F11": "checkEndConditions() win/lose both reachable; endGame() computes score; showEndScreen() renders #score-breakdown",
+    "F12": "switchTab() wired via onclick; log uses turn field; tile title tooltip; keydown Space/1-5; @media breakpoints",
+    "F13": "runTests() 15 real-invariant checks; runBenchmark() loops GAME.endTurn() which calls undefined this.render()",
+    "G1": "research_complete[...] read inside runProduction() yield formulas, but only reachable via runBenchmark's assignment",
+    "G2": "endTurn() shortage writes c.morale directly; no production formula anywhere reads c.morale",
+    "G3": "triggerAshstorm() writes map[y][x].damage; no yield formula reads .damage; no repair function exists",
+    "G5": "chooseEventOption() -> choice.effect(GAME) writes distinct resource/morale deltas per choice, e.g. Dust Storm, Equipment Failure"
+  },
+  "todo_notes": ["Laboratory building desc: 'Improves research speed. TODO' - effect never implemented anywhere"],
+  "grader_confidence": "high",
+  "single_biggest_weakness": "A malformed events array (`}>` instead of `]}`) breaks the whole script per the separate automated check, and more importantly no code path anywhere ever sets colonist.assigned_building during real play (only the state-reverting runBenchmark() does), so the entire Greenhouse/Forge production chain and its adjacency/research bonuses never actually execute."
+}
+```
