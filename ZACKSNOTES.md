@@ -216,7 +216,7 @@ in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `ru
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r05.html` and write results to `runs/r05a.ai.json`
 
 
-claude --model claude-fable-5 -effort max --permission-mode auto
+claude --model claude-fable-5 --effort max --permission-mode auto
 # I keep trying to run ```in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r01.html` and write results to `runs/r01b.ai.json````
 # in sonnet-5(high) claude code cli sessions, but frequently they take a peek at eval_ashfall.py or other results and then learn (from GRADER_PROMPT.md) that they should not have, so they spin up a haiku subagent to do the grading in order to avoid bias...
 # can you update GRADER_PROMPT.md 
@@ -226,30 +226,45 @@ claude --model claude-fable-5 -effort max --permission-mode auto
 claude --model claude-opus-5 --effort xhigh --permission-mode auto
 # `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/hold/opus5xhigh.html`
 
-
+./eval01/grade.sh -s a -j 5 ./eval01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}a.ai.json
 ./eval01/grade.sh -s b -j 5 ./eval01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}b.ai.json
 ./eval01/grade.sh -s c -j 5 ./eval01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}c.ai.json
 ./eval01/grade.sh -s d -j 5 ./eval01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}d.ai.json
 ./eval01/grade.sh -s e -j 5 ./eval01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}e.ai.json
 
-for iii in r01{a,b,c,d,e}; do ./eval01/listscore.sh $iii; done
-for iii in r01{a,b,c,d,e}; do ./eval01/listscore.sh $iii; done
-
-./eval01/listscore.py r01a
-./eval01/listscore.py r01{a..e}
-./eval01/listscore.py r02{a..e}
-./eval01/listscore.py r03{a..e}
-./eval01/listscore.py r04{a..e}
-./eval01/listscore.py r05{a..e}
 ./eval01/listscore.py r0{1..5}{a..e}
 
-r05a: 39 + 24 =  63
-r05b: 39 + 30 =  69
-r05c: 39 + 29 =  68
-r05d: 39 + 29 =  68
-r05e: 39 + 23 =  62
-AVG:  39 + 27 =  66
+# opus5xhigh r21
+./eval01/eval_ashfall.py eval01/runs/r21.html --runtime # 34/54
+./eval01/grade.sh -s a -j 5 eval01/runs/r21*.html
+./eval01/listscore.py r21a
 
+claude --model claude-fable-5 --effort max --permission-mode auto
+# can you give me a script to streamline running my prompt 
+# ```
+# in `/home/zmhel/gitrepos/learn-ai/eval01/` do make-`game-ashfall-outpost.prompt.md` and save output to `runs/r11.html`
+# ```
+# where r11 corresponds to sonnet5-low, r12=sonnet5-medium, r13=sonnet5-high, r14=sonnet5-xhigh, r15=sonnet5-max.
+# One run of the script does the generation in parallel for all 5 effort levels of the chosen model, stagger start time of 
+# each to increase chances that server side caching might happen (start with max, then xhigh, high, medium, low).
+# Required command line args: arg1=model (e.g. sonnet5) arg2=prefix (e.g. r1*).
+# I'm concerned that when I run my prompt in a regular claude code interactive session that it loads all my .claude/** context files
+# and uses other historical memory that will bias my attempt to get a bare bones eval of the LLM & effort level.
+# For each model+effortlevel the script should also output: time taken, tokens used, estimated cost (api $).
+
+
+./eval01/generate.sh sonnet5 r1 # sonnet5-low,medium,high,xhigh,max -> eval01/runs/r1{1,2,3,4,5}.html
+
+claude --model claude-sonnet-5 --effort low    --permission-mode auto
+claude --model claude-sonnet-5 --effort medium --permission-mode auto
+claude --model claude-sonnet-5 --effort high   --permission-mode auto
+claude --model claude-sonnet-5 --effort xhigh  --permission-mode auto
+claude --model claude-sonnet-5 --effort max    --permission-mode auto
+`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r01.html`
+`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r02.html`
+`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r03.html`
+`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r04.html`
+`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r05.html`
 
 
 ```

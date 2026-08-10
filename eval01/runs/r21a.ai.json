@@ -1,0 +1,54 @@
+I'll now grade the ASHFALL OUTPOST candidate by reading through the source code directly, since I have the full file in context already—no additional exploration is needed for this analysis task.
+
+**Worksheet:**
+
+- F1: `newState()` builds one state obj; `rng(S)` seeded PRNG used throughout; `runTurn()` walks fixed `STEPS` array. Score 2.
+- F2: `MAP_W=8,MAP_H=8`; `genMap()` uses `rng(S)`; `buildBlocker()` checks `d.terrain.indexOf(t.terrain)`; `adjBonus()` feeds `ab.add[k]` into `runBuilding()` output math. Score 2.
+- F3: ash→soil (composter), soil→food (greenhouse), ore→metal (forge), metal→parts (workshop), inputs consumed via `takeRes`; caps enforced/overflow reported via `addRes`/`stepOverflow`. Score 2.
+- F4: colonist records `{skill,fatigue,morale,job,assign}`; `eff(c)` reads skill/morale/fatigue, summed as crew effort `W` in `runBuilding()`. Score 2.
+- F5: `stepConsume()` per-turn food/water; `stepPeople()` drops morale on shortage; `moraleMult(c.morale)` feeds `eff(c)` → production; recovery via `d+=3` when fed. Score 2.
+- F6: 13 `RESEARCH` nodes; `researchState()` enforces `pre`; `payCost` deducts; `recomputeMods()` writes `S.mods`, read in `runBuilding`/caps/trade. Score 2.
+- F7: 16 `EVENTS`; weighted roll in `stepEvents()`; 6 choice events (refugees, bearing, ventsurge, wanderer, raiders, festival) with 2-3 differentiated branches; `S.events.cd[id]` cooldown. Score 2.
+- F8: `priceBuy/priceSell` read `stockRatio()` + `S.market.drift` (drifts in `stepMarket`); caravan `stock` capped and decremented in `tradeBuy/tradeSell`. Score 2.
+- F9: `stepHazard()` every `STORM_INTERVAL`, severity grows with turn; `integ` multiplier in `runBuilding` reduces/disables output; `baffleMit`/research `stormDmg` reduce damage; `repairTile` costs parts. Score 2.
+- F10: `serialize()`/`packState` to textarea JSON; `loadFromText`→`unpackState` validates with `fail()`, shown in `#savemsg`. Score 2.
+- F11: win/lose both reachable in `stepEnd()`; `computeScore()` combines pop/research/stock/survival/victory; `renderModal()` shows summary. Score 2.
+- F12: `UI.tab`/`renderTabs`; log lines carry `e.t` turn numbers; extensive `tip()` derivations; keydown handles Space/1-6; media queries for narrow screens. Score 2.
+- F13: `runTests()` checks real invariants (no negative/overcap resources, save/load hash roundtrip, prereqs, etc.); `benchmark()` runs `greedyTurn`+`runTurn` headless, prints hash, wired to "RUN BENCHMARK" button. Score 2.
+- G1: `sifting.eff.out.collector=1.25` → `S.mods.out` via `recomputeMods`; `runBuilding` reads `outMul=S.mods.out[b.type]`. Score 4.
+- G2: `stepConsume` shortfall → `foodRatio` → `stepPeople` morale penalty → `moraleMult` in `eff(c)` → production `W`. Score 4.
+- G3: `stepHazard`→`damageTile`→`integ` cuts `runBuilding` output/disables <25%→`repairTile` costs parts, restores integrity. Score 4.
+- G4: `priceBuy/priceSell` read `stockRatio(S,g)` (player stock/cap) and `S.market.drift[g]` (random-walked in `stepMarket`). Score 4.
+- G5: `festival`/`refugees`/`bearing` choices mutate `S.res`, colonist `morale`, building `integrity`/removal — confirmed by `event-choice` self-test. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "newState() one state obj; rng(S) mulberry32 used everywhere; runTurn() iterates fixed STEPS array",
+    "F2": "genMap() seeds terrain via rng(S); buildBlocker() checks d.terrain; adjBonus() adds to output in runBuilding()",
+    "F3": "composter inp:{ash,water} out:{soil}; greenhouse inp:{soil,water} out:{food}; addRes clamps to S.caps, overflow logged",
+    "F4": "colonist {skill,fatigue,morale,assign}; eff(c) reads all three, summed as W in runBuilding()",
+    "F5": "stepConsume computes foodRatio/waterRatio; stepPeople applies morale delta from ratio; moraleMult(c.morale) feeds eff()",
+    "F6": "13 RESEARCH nodes; researchState() checks pre[]; recomputeMods() writes S.mods.out, read in runBuilding outMul",
+    "F7": "16 EVENTS; stepEvents weighted roll via deck/total; 6 choice events w/ 3 branches; events.cd[id] cooldown checked in deck filter",
+    "F8": "priceBuy/priceSell read stockRatio(S,g) and S.market.drift[g]; tradeBuy/tradeSell clamp to car.stock",
+    "F9": "stepHazard: sev=1+floor(turn/24)+rand; damageTile->integ multiplier in runBuilding; baffleMit/stormDmg mitigate; repairTile costs parts",
+    "F10": "serialize()/packState to #savebox; loadFromText->unpackState validates via fail(), errors shown in #savemsg",
+    "F11": "stepEnd sets over='win'/'lose'/'ended'; computeScore() sums population/research/stockpiles/survival/victory; renderModal shows summary",
+    "F12": "renderTabs/UI.tab switching; logMsg stores {t:S.turn}; tip() derivations throughout; keydown handles Space/digit tabs; @media rules",
+    "F13": "runTests() asserts resource bounds, roundtrip hash, prereqs, etc; benchmark() runs greedyTurn+runTurn headless, hash printed via fmtBench",
+    "G1": "sifting eff.out.collector=1.25 -> S.mods.out via recomputeMods, read as outMul in runBuilding()",
+    "G2": "stepConsume shortfall -> foodRatio -> stepPeople morale drop -> moraleMult(c.morale) inside eff(c) -> W in runBuilding",
+    "G3": "stepHazard->damageTile->integ cuts runBuilding output (disabled <25%)->repairTile spends parts, restores integrity=100",
+    "G4": "priceBuy/priceSell formulas read stockRatio(S,g) (player stock/cap) and S.market.drift[g] (random-walked each turn in stepMarket)",
+    "G5": "festival/refugees/bearing choice branches mutate S.res, colonist morale, building integrity/removal, confirmed by event-choice self-test"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "No detectable file-wide defects or disconnected systems; the main risk is subtle runtime bugs in the greedy benchmark policy or edge-case UI wiring that can't be confirmed without execution, which per the rules is out of scope for this static read."
+}
+```
