@@ -201,18 +201,24 @@ date +"%Y-%m-%d_%H:%M:%S_%Z"
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r04.html`
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r05.html`
 
-claude --model claude-sonnet-5 --effort high --permission-mode auto
-in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r01.html` and write results to `runs/r01.ai.json`
-in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r02.html` and write results to `runs/r02.ai.json`
-in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r03.html` and write results to `runs/r03.ai.json`
-in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r04.html` and write results to `runs/r04.ai.json`
-in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r05.html` and write results to `runs/r05.ai.json`
-
 ./eval01/eval_ashfall.py eval01/runs/r01.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r02.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r03.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r04.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r05.html --runtime
+
+claude --model claude-sonnet-5 --effort high --permission-mode auto
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r01.html` and write results to `runs/r01a.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r02.html` and write results to `runs/r02a.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r03.html` and write results to `runs/r03a.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r04.html` and write results to `runs/r04a.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r05.html` and write results to `runs/r05a.ai.json`
+
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r01.html` and write results to `runs/r01b.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r02.html` and write results to `runs/r02b.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r03.html` and write results to `runs/r03b.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r04.html` and write results to `runs/r04b.ai.json`
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r05.html` and write results to `runs/r05b.ai.json`
 
 
 
