@@ -186,10 +186,22 @@ Here is how I envision the "benchmark" process going:
 Before getting started, ask me questions to maximize alignment between my intent and how you are interpreting my intent and what is possible & practical. 
 
 ### Eval: Haiku 4.5 (low)
+```bash
+export REPOROOT=$( realpath ~/gitrepos/learn-ai )
+cd $REPOROOT/eval01
+
+MMMM=haiku-4-5; EEEE=low; RRRR=001
+date +"%Y-%m-%d_%H:%M:%S_%Z"
+claude --model claude-$MMMM --effort $EEEE --permission-mode auto
+
+./eval_ashfall.py /home/zmhel/gitrepos/learn-ai/ashfalloutpost.html --runtime
+claude --model claude-sonnet-5 --effort high --permission-mode auto
+`/home/zmhel/gitrepos/learn-ai/eval01/GRADER_PROMPT.md` the candidate is at `/home/zmhel/gitrepos/learn-ai/ashfalloutpost.html`
+mv /home/zmhel/gitrepos/learn-ai/ashfalloutpost.html /home/zmhel/gitrepos/learn-ai/eval01/runs/${MMMM}-${EEEE}-${RRRR}.html
 
 
 
-
+```
 
 
 

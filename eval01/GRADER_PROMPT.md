@@ -30,6 +30,13 @@ You will score 18 items by reading the code:
    is used. Under 15 words. Never paste long blocks of the candidate's code.
 10. If the file is truncated, empty, or not really a game, score whatever is actually present
     by its wiring; items whose code is simply missing score 0.
+11. Do NOT run `eval_ashfall.py` or any other scoring/test script, and do NOT open, read, or
+    otherwise let yourself see any existing `.eval.json`, `.ai.json`, or `RESULTS.md` row for
+    this candidate before or during grading. Those carry the deterministic score and prior
+    grades; seeing them first anchors your judgment. Grade from the HTML source alone.
+12. Do NOT infer, guess, or state which model, harness, or reasoning-effort level produced the
+    candidate. Ignore what the filename or file path seems to imply about authorship - grade
+    the code, not the label on it.
 
 ## Procedure
 
@@ -131,3 +138,17 @@ Before sending, check:
 - F values are only 0, 1, or 2. G values are only 0, 1, 2, 3, or 4.
 - There is an `evidence` entry for every item scored above 0.
 - The JSON code block is the last thing in your reply.
+
+## If you are grading agentically (file access, not paste-in-chat)
+
+Name output files generically from the candidate's own filename - never from a guessed model
+name, harness, or run id. Take the candidate's filename, strip its extension, and use that stem:
+
+- candidate `ashfalloutpost.html` -> reply saved as `ashfalloutpost.ai.json`
+- candidate `runs/haiku-4-5-low-001.html` -> reply saved as `runs/haiku-4-5-low-001.ai.json`
+
+Save your full reply (worksheet + trailing JSON block, verbatim) next to the candidate file
+using that name. Do not invent a different stem, do not rename or move the candidate, and do
+not create `<stem>.eval.json` yourself - that merged deterministic+model-graded file is
+produced by `eval_ashfall.py --merge`, run by the human after your reply, not by you (see rule
+11 - you do not run that script).
