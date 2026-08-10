@@ -232,6 +232,24 @@ claude --model claude-opus-5 --effort xhigh --permission-mode auto
 ./eval01/grade.sh -s d -j 5 ./eval01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}d.ai.json
 ./eval01/grade.sh -s e -j 5 ./eval01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}e.ai.json
 
+for iii in r01{a,b,c,d,e}; do ./eval01/listscore.sh $iii; done
+for iii in r01{a,b,c,d,e}; do ./eval01/listscore.sh $iii; done
+
+./eval01/listscore.py r01a
+./eval01/listscore.py r01{a..e}
+./eval01/listscore.py r02{a..e}
+./eval01/listscore.py r03{a..e}
+./eval01/listscore.py r04{a..e}
+./eval01/listscore.py r05{a..e}
+./eval01/listscore.py r0{1..5}{a..e}
+
+r05a: 39 + 24 =  63
+r05b: 39 + 30 =  69
+r05c: 39 + 29 =  68
+r05d: 39 + 29 =  68
+r05e: 39 + 23 =  62
+AVG:  39 + 27 =  66
+
 
 
 ```

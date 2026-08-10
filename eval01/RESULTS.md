@@ -29,16 +29,18 @@ as worked examples.
 
 ## Eval runs
 
-**Grader**: sonnet-5 (high), ai grader prompt v1.3 via grade.sh, each ai eval api cost equivalent is $0.95-$1.10 (110 input, 20.7k output, 622.0k cache read, 102.6k cache write)
+**Grader**: sonnet-5 (high), ai grader prompt v1.3 via grade.sh, each ai eval api cost equivalent is $0.95-$1.10 (110 input, 20.7k output, 622.0k cache read, 102.6k cache write).
+**Scores**: from command like `./eval01/listscore.py r0{1..5}{a..e}` that (for each rNN) is AVG of the ai grader runs.
+Each row is 1-shot to handle the prompt, 1 deterministic eval py, and 5 ai-grader runs average score.
 
 |                Datetime |     Harness | LLM (Reasoning effort) | Run |  Time |    Cost |  det+ai=Score | Notes |
 | ----------------------- | ----------- | ---------------------- | --- | ----- | ------- | ------------- | ----- |
-| 2026-08-09_22:37:30_EDT | Claude Code | claude-opus-5 (xhigh)  |   0 | 50m9s | $21.2300 | xx + xx = xxx | 731 input, 223.3k output, 25.0m cache read, 312.6k cache write ($21.23) |
-| 2026-08-09_17:11:22_EDT | Claude Code | claude-haiku-4-5 (low) |   1 | 1m57s |  $0.1742 | 32 + 18 =  50 | ai grader prompt v1.2, 3.4k input, 19.7k output, 0 cache read, 36.1k cache write ($0.1742) |
-| 2026-08-09_20:05:28_EDT | Claude Code | claude-haiku-4-5 (med) |   2 | 3m01s |  $0.2933 | 45 + 33 =  78 | ai grader prompt v1.2, 100 input, 21.9k output, 101.8k cache read, 86.8k cache write ($0.2933) |
-| 2026-08-09_20:05:35_EDT | Claude Code | claude-haiku-4-5 ( hi) |   3 | 2m44s |  $0.2755 | 31 + 34 =  65 | ai grader prompt v1.2, 1.3k input, 20.6k output, 98.1k cache read, 80.7k cache write ($0.2755) |
-| 2026-08-09_20:05:40_EDT | Claude Code | claude-haiku-4-5 (xhi) |   4 | 2m27s |  $0.2671 | 52 + 34 =  86 | ai grader prompt v1.2, 1.3k input, 20.1k output, 98.2k cache read, 77.7k cache write ($0.2671) |
-| 2026-08-09_20:05:46_EDT | Claude Code | claude-haiku-4-5 (max) |   5 | 2m28s |  $0.2536 | 39 + 24 =  63 | ai grader prompt v1.2, 1.3k input, 17.3k output, 98.7k cache read, 78.0k cache write ($0.2536) |
+| 2026-08-09_22:37:30_EDT | Claude Code | claude-opus-5 (xhigh)  |   0 | 50m9s | $21.2300 | xx + xxxx = xxxx | 731 input, 223.3k output, 25.0m cache read, 312.6k cache write ($21.23) |
+| 2026-08-09_17:11:22_EDT | Claude Code | claude-haiku-4-5 (low) |   1 | 1m57s |  $0.1742 | 32 + 18.8 =  50.8 | ai grader prompt v1.2, 3.4k input, 19.7k output, 0 cache read, 36.1k cache write ($0.1742) |
+| 2026-08-09_20:05:28_EDT | Claude Code | claude-haiku-4-5 (med) |   2 | 3m01s |  $0.2933 | 45 + 32.8 =  77.8 | ai grader prompt v1.2, 100 input, 21.9k output, 101.8k cache read, 86.8k cache write ($0.2933) |
+| 2026-08-09_20:05:35_EDT | Claude Code | claude-haiku-4-5 ( hi) |   3 | 2m44s |  $0.2755 | 31 + 34.0 =  65.0 | ai grader prompt v1.2, 1.3k input, 20.6k output, 98.1k cache read, 80.7k cache write ($0.2755) |
+| 2026-08-09_20:05:40_EDT | Claude Code | claude-haiku-4-5 (xhi) |   4 | 2m27s |  $0.2671 | 52 + 33.6 =  85.6 | ai grader prompt v1.2, 1.3k input, 20.1k output, 98.2k cache read, 77.7k cache write ($0.2671) |
+| 2026-08-09_20:05:46_EDT | Claude Code | claude-haiku-4-5 (max) |   5 | 2m28s |  $0.2536 | 39 + 27.0 =  66.0 | ai grader prompt v1.2, 1.3k input, 17.3k output, 98.7k cache read, 78.0k cache write ($0.2536) |
 
 
 
