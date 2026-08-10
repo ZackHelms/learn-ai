@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop:** Game class holds state; mulberry32 seeds rng; endTurn() has fixed step order — BUT triggerAshstorm() uses raw `Math.random()` instead of `this.rng()`, breaking "seeded PRNG for all randomness." Score 1.
+
+**F2 – Map:** 64-tile grid, generateTerrain() uses this.rng(); isValidBuild() checks building.terrain; adjBonus multiplies output in produceResources(). Score 2.
+
+**F3 – Economy:** forge consumes ore→metal, greenhouse consumes water→food; caps enforced via Math.min(..., caps[r]); BUT consume never gates production — output always produced even with 0 input stock. Score 1.
+
+**F4 – Population:** generateColonist() sets skill/fatigue/morale; buildingAssignments arrays exist but nothing ever pushes colonists into them, so skill/fatigue never actually affect production; person.job never set. Score 1.
+
+**F5 – Needs:** food/water decremented per colonist; shortage sets morale -=30 in endTurn(); recovery (+5/turn) exists; BUT morale is never read in produceResources() — no output effect. Score 1.
+
+**F6 – Research:** 12 nodes, prereq check + spend() in research_upgrade(); soil_enrichment/water_capture/metallurgy/ore_extraction/specialization/reinforced_walls/storm_shelter all read in produceResources/triggerAshstorm; but renewable_power, biotech, energy_storage, advanced_trading have zero call sites anywhere. Score 1.
+
+**F7 – Events:** exactly 10 in EVENTS_DECK; fireRandomEvent() selection is uniform (`rng()*available.length`), not weighted; 9 events have 2-3 choices with distinct effect() mutations; eventCooldown gates re-firing. Score 1.
+
+**F8 – Trade:** buyTrade/sellTrade wired to buttons, qty gated on buy; price = basePrice * random * tradeMultiplier — never reads player resources/stockpiles, tradeMultiplier only from one event then resets. Score 1.
+
+**F9 – Hazard:** triggerAshstorm() scales severity with turn, mitigated by reinforced_walls/storm_shelter/wall+shelter count; but damage = outright building deletion (`buildings[i]=null`), no partial-damage state or dedicated repair function/cost. Score 1.
+
+**F10 – Save/load:** serialize() → JSON via prompt(); loadBtn try/catches Game.deserialize(), alert(e.message) on bad input. Score 2.
+
+**F11 – End conditions:** win (turn>=60,pop>=12,food/water>=50) and lose (pop===0) both reachable; computeScore() sums researchCount*20+turn*2+resourceSum (population term silently dropped by operator-precedence bug but 3 other value sources still contribute); endGameModal renders summary. Score 2.
+
+**F12 – UI:** switchTab() wired to tabs and keydown 1-6; log entries show `Turn ${e.turn}`; tile-tooltip shows adjacency bonus text; Space ends turn; @media(max-width:600px) present. Score 2.
+
+**F13 – Dev panel:** runTests() checks caps/negative resources/prereqs/seeded-determinism/save-load roundtrip (real invariants); runBenchmark() runs 200 turns headless, prints state hash via serialize(). Score 2.
+
+**G1:** research.soil_enrichment/metallurgy/etc read directly in produceResources() output formula — solid link, but 4/12 techs (renewable_power, biotech, energy_storage, advanced_trading) never wired anywhere. Score 3.
+
+**G2:** shortfall writes p.morale -=30 in endTurn(), but produceResources() never reads morale — labor output unaffected by morale. Score 1.
+
+**G3:** triggerAshstorm() nulls buildings (produce 0 thereafter); rebuilding via build() spends resources and restores production — implemented as destroy+rebuild rather than damage-state+repair function. Score 2.
+
+**G4:** caravan price formula uses only basePrice*random*tradeMultiplier; tradeMultiplier set by one event then reset, never reads stockpiles. Score 1.
+
+**G5:** colonist_arrives choice pushes to population array; water_contamination choices differently mutate resources.water vs population morale — durable state writes via effect(g). Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 2, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 2, "G4": 1, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32 seeds rng, but triggerAshstorm() uses Math.random() not this.rng()",
+    "F2": "isValidBuild() checks terrain; adjBonus multiplies output in produceResources()",
+    "F3": "forge consume:['ore'] decremented in produceResources() but output not gated by stock",
+    "F4": "buildingAssignments arrays never populated; skill/fatigue read only via that dead path",
+    "F5": "resources.food<=0 sets p.morale-=30 in endTurn(); morale never read in produceResources()",
+    "F6": "research['soil_enrichment'] etc read in produceResources(); renewable_power/biotech unused",
+    "F7": "fireRandomEvent() uses Math.floor(rng()*available.length) — uniform not weighted",
+    "F8": "caravan price = basePrice*rng()*tradeMultiplier, never reads this.resources",
+    "F9": "triggerAshstorm() sets buildings[i]=null; no partial-damage or repair() function exists",
+    "F10": "serialize()/Game.deserialize() with try/catch and alert(e.message) in loadBtn handler",
+    "F11": "computeScore() sums researchCount*20+turn*2+resourceSum, shown in endGameModal",
+    "F12": "switchTab() wired to tabs and keydown handler; event-turn shown; media query present",
+    "F13": "runTests() asserts caps/determinism/roundtrip; runBenchmark() loops 200 turns, prints hash",
+    "G1": "research.metallurgy read in produceResources() forge branch; several other nodes unused",
+    "G2": "morale drop occurs on shortage but produceResources() never reads p.morale",
+    "G3": "triggerAshstorm nulls tile; build() re-spends cost to restore production on same tile",
+    "G4": "caravan price formula ignores this.resources; tradeMultiplier only from one event",
+    "G5": "colonist_arrives/water_contamination choices push population or mutate resources.water differently"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Colonist skill/fatigue/morale, damage state, and trade pricing are all scaffolded but never actually consumed by production or pricing formulas, so most cross-system feedback loops are cosmetic."
+}
+```

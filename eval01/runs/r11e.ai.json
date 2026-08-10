@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop:** `game` state object; `mulberry32(seed)` used for all rng calls; `endTurn()` calls updateProduction→updateColonists→updateCooldowns→checkAshstorm→updateTrade→fireEvent in fixed order. Score 2.
+
+**F2 — Map:** 8x8 `this.map` built with `this.rng()`; `canBuild()` checks `tile.terrain !== btype.terrain`; `calcAdjacencyBonus()` feeds `b.productivity`, read in `updateProduction()`. Score 2.
+
+**F3 — Economy:** storage caps/overflow enforced in `updateProduction()`; but only shallow chain (greenhouse subtracts a flat `waterUsed` constant, forge/refinery consume no inputs) — no real ore→metal/multi-resource transform. Score 1.
+
+**F4 — Population:** colonist records have skill/fatigue/morale/assigned; `c.skillLevel` read in `updateProduction()` skillBonus calc, but `fatigue` is never read directly by production, only indirectly via morale. Score 1.
+
+**F5 — Needs:** `produced.food/water -= popConsumption` each turn; `handleShortage()` cuts morale; `moraleMult` scales productivity in `updateProduction()`; idle colonists recover morale/fatigue. Score 2.
+
+**F6 — Research:** 8 nodes in `this.research`; `canResearch()` enforces prereq; `doResearch()` deducts cost; but `power_1`, `labor_1`, `automation` have no code effect anywhere (only farming_1/mining_1/water_1/storm_1/storage_1 are read). Score 1.
+
+**F7 — Events:** 10 entries in `eventDeck`; weighted pick in `fireEvent()`; cooldown map decremented in `updateCooldowns()`; only 3 events (`trade_opportunity`, `labor_strike`, `research_insight`) have `choices`, short of required 4+. Score 1.
+
+**F8 — Trade:** `caravanPrices` computed from `globalDemand` (drifts via rng) and `playerStock`; `caravanInventory` capped/limited; `tradeWithCaravan()` handles both buy/sell, wired to click handlers in `renderTrade()`. Score 2.
+
+**F9 — Hazard:** `checkAshstorm()` fires periodically, `severity` grows with `this.turn`; damages `b.health`; `updateProduction()` scales productivity by `b.health/100`; `storm_1` research and `shelter` building reduce damage; `repairBuilding()` costs parts and restores health. Score 2.
+
+**F10 — Save/load:** `saveToTextarea()` dumps full JSON state to textarea; `loadFromTextarea()` parses with try/catch and `alert()`s on parse failure, but does no schema validation of loaded fields. Score 1.
+
+**F11 — End conditions:** win check in `endTurn()` (turn/pop/resources); lose check in `updateColonists()` when `colonists.length===0`; `endGame()` computes score from pop/research/resources/turn and renders `#end-game-modal`. Score 2.
+
+**F12 — UI:** tab click listeners wired; `logEvent` stores `turn`, rendered as `T${entry.turn}`; tile tooltips show health/bonus source; keydown handler for Space and digit-key tab shortcuts; media queries at 768px/480px. Score 2.
+
+**F13 — Dev panel:** `runTests()` has 15 real invariant checks (caps, ranges, prereqs, exclusive assignment); `runBenchmark()` runs 200 turns calling core functions directly (no render calls in loop) and prints `computeStateHash()`. Score 2.
+
+**G1:** `researchDone.has('farming_1')`/`'mining_1'` checked as hardcoded special-cases inside `updateProduction()` building loop, bonus added to `produced.food`/`metal`. Score 2.
+
+**G2:** `handleShortage()` cuts `c.morale` on food/water deficit → `avgMorale` recomputed in `updateColonists()` → `moraleMult` scales productivity in `updateProduction()` every turn. Score 4.
+
+**G3:** `checkAshstorm()` cuts `b.health` → `updateProduction()` scales productivity by `b.health/100` → `repairBuilding()` spends `parts`, restores `b.health=100`. Score 4.
+
+**G4:** `caravanPrices[res] = basePrices*globalDemand[res]*stockFactor` where `stockFactor` derived from `this.resources[res]`; `globalDemand` drifts via rng each caravan visit. Score 4.
+
+**G5:** `labor_strike` choices both mutate morale differently; `trade_opportunity`/`research_insight` mutate on accept but no-op on decline. Score 3.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 1, "5": 2, "6": 1, "7": 1,
+        "8": 2, "9": 2, "10": 1, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 2, "G2": 4, "G3": 4, "G4": 4, "G5": 3},
+  "evidence": {
+    "F1": "endTurn() calls production/colonist/cooldown/storm/trade/event in fixed order using mulberry32 rng",
+    "F2": "calcAdjacencyBonus() sets b.productivity, read in updateProduction()",
+    "F3": "storage cap/overflow enforced in updateProduction(); greenhouse water consumption is a flat constant, not real transform",
+    "F4": "c.skillLevel read in updateProduction() skillBonus; fatigue never read directly by production",
+    "F5": "handleShortage() cuts morale; moraleMult scales productivity; idle colonists regen morale/fatigue",
+    "F6": "farming_1/mining_1/water_1/storm_1/storage_1 read in code; power_1/labor_1/automation never read",
+    "F7": "eventDeck has 10 entries, fireEvent() weighted picks, eventCooldown decremented; only 3 events have choices",
+    "F8": "caravanPrices formula uses globalDemand and this.resources[res]; tradeWithCaravan() handles buy/sell",
+    "F9": "checkAshstorm damages b.health; updateProduction scales by b.health/100; repairBuilding spends parts",
+    "F10": "saveToTextarea()/loadFromTextarea() with try/catch+alert, no field validation",
+    "F11": "endTurn() win check, updateColonists() lose check, endGame() computes score and shows modal",
+    "F12": "tab click listeners, logEvent turn tags, tile-tooltip, keydown shortcuts, @media queries",
+    "F13": "runTests() 15 invariant assertions; runBenchmark() 200-turn headless loop + computeStateHash()",
+    "G1": "researchDone.has('farming_1') hardcoded bonus added to produced.food in updateProduction()",
+    "G2": "handleShortage->c.morale, avgMorale recompute, moraleMult in updateProduction() every turn",
+    "G3": "checkAshstorm->b.health, updateProduction scales by health, repairBuilding restores health for parts cost",
+    "G4": "caravanPrices = basePrices*globalDemand*stockFactor(this.resources[res]) in updateTrade()",
+    "G5": "labor_strike choice branches mutate morale differently; trade_opportunity accept-only mutation"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Economy lacks real multi-resource transformation chains and several research nodes (power_1, labor_1, automation) have no coded effect at all."
+}
+```

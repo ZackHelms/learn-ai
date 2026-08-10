@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `gameState` single object; `mulberry32` seeded rng used for map/events/storms/caravan; `processTurn()` resolves consumption→production→power→water→morale→storm→caravan→event→win/lose in fixed order. Score 2.
+
+**F2 Map**: `generateMap` builds 64 tiles from rng; `canBuildAt` checks `building.terrains.includes(tile.terrain)`; adjacency bonus (`def.bonus`) added to `bonus` multiplier used in `prod` calc. Score 2.
+
+**F3 Economy**: water/power produced by condenser/reactor are consumed via `building.water`/`building.power` fields by other buildings same turn; caps enforced and overflow logged in production loop. Score 2 (buildings are placed for free — noted as weakness, but doesn't break the chain requirement).
+
+**F4 Population**: `createColonist` has skill/fatigue/morale/assigned; `col.skill` read in `baseOutput` calc, but `col.fatigue` is only written (+25), never read to affect output. Score 1.
+
+**F5 Needs**: `foodNeeded`/`waterNeeded` consumption; shortage sets `moraleDelta`; but `moraleDelta`/`col.morale` is never read anywhere in the production formula, so morale never changes output; passive recovery absent except one event. Score 1.
+
+**F6 Research**: 8 nodes in `RESEARCH_TREE`; `canResearch` enforces prereqs; `doResearch` deducts scrip/parts; 7/8 non-basic nodes have real effects read in code, but `population_growth` is never referenced anywhere else. Score 1.
+
+**F7 Events**: 10 entries in `EVENT_DECK`; `fireRandomEvent` uses `Math.floor(rng()*available.length)` — uniform, not weighted; 8 events have differentiated 2-choice effects; `eventCooldown` map enforces cooldown. Score 1 (weighted-selection requirement unmet).
+
+**F8 Trade**: `tradeSupply`/`tradeSupplyTrend` drift each caravan via rng, feed `demandFactor` into `tradePrices`; `tradeInventory` capped; `buyTrade`/`sellTrade` both wired to UI buttons. Score 2.
+
+**F9 Hazard**: `triggerAshstorm` scales `intensity` with turn, sets `gameState.stormDamage`; `storm_mitigation`/`windbreak` reduce damage count; repair button spends `parts`; but production loop never reads `stormDamage`, so damaged buildings produce at full rate. Score 1.
+
+**F10 Save/load**: `serializeGame`/`deserializeGame` round-trip via textarea+copy button; `deserializeGame` try/catch alerts on bad JSON; but omits `stormDamage`, `tradeSupply`/trend, `eventCooldown`, `nextEventTurn`/`nextCaravanTurn` — not full state. Score 1.
+
+**F11 End conditions**: lose at `population<=0`; win at `turn>=60 && population>=12 && food>0 && water>0` (population growable via refugee events); `calculateScore` combines pop/research/reserves/turn; `endGame` renders `gameOverModal`. Score 2.
+
+**F12 UI**: tab buttons + keydown `1`-`5`/Space wired to `currentTab`/`processTurn`; log entries prefixed `Turn ${gameState.turn}:`; media queries for 800px/480px; but `renderTileTooltip` only shows terrain/building name, doesn't explain number derivation. Score 1.
+
+**F13 Dev panel**: `runTests` has 15 real invariant checks (caps, prereqs, RNG reproducibility, save/load round-trip, etc.); `runBenchmark` runs 200 headless `processTurn()` calls and computes/prints a numeric state hash. Score 2.
+
+**G1**: `researchDone.has('greenhouse_yield')` etc. checked directly inside production loop, changes `bonus`→`prod` every turn; hardcoded per-name checks rather than generic effect data. Score 3.
+
+**G2**: shortage writes `moraleDelta`→`col.morale`, but morale is never read in the production formula (`baseOutput` only uses skill) — chain breaks at last link, matching the G3-example pattern. Score 1.
+
+**G3**: `triggerAshstorm` sets `stormDamage`; repair spends `parts` and clears the flag; but production formula never checks `stormDamage`, so damaged buildings output at full rate (UI-only "-20%" label). Score 1.
+
+**G4**: `tradeSupply`/`tradeSupplyTrend` drift via rng each caravan; `tradePrices[res]` computed from `demandFactor = 100/tradeSupply[res]`; visible/updated every 8 turns in trade tab. Score 4.
+
+**G5**: `dust_harvest`, `disease_outbreak`, `refugee_arrival` choice `effect(st)` callbacks each write different mutations directly to `gameState.resources`/`population`/`colonists`, invoked via `choice.effect(gameState)` on click. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 2, "9": 1, "10": 1, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "gameState + mulberry32 rng; processTurn() fixed-order resolution",
+    "F2": "generateMap() seeded terrain; canBuildAt() terrain check; adjacency bonus read in prod calc",
+    "F3": "water/power produced by one building consumed via building.water/power by others each turn; caps enforced",
+    "F4": "col.skill read in baseOutput; col.fatigue only written, never read to affect output",
+    "F5": "moraleDelta set on shortage but never read in production formula",
+    "F6": "8 RESEARCH_TREE nodes, canResearch enforces prereqs; population_growth effect never referenced elsewhere",
+    "F7": "10 EVENT_DECK entries; fireRandomEvent uses uniform rng pick, not weighted; eventCooldown enforced",
+    "F8": "tradeSupply/tradeSupplyTrend drift feed tradePrices; buyTrade/sellTrade both wired to UI",
+    "F9": "triggerAshstorm sets stormDamage but production loop never reads gameState.stormDamage",
+    "F10": "serializeGame/deserializeGame round-trip but omit stormDamage, tradeSupply, eventCooldown, turn counters",
+    "F11": "endGame() checks population<=0 / turn>=60&&pop>=12&&food/water>0, renders gameOverModal with calculateScore()",
+    "F12": "tab buttons + keydown handler wired; log lines carry Turn N; tooltip only shows name, no number breakdown",
+    "F13": "runTests() 15 invariant checks; runBenchmark() runs 200 headless processTurn() calls, prints state hash",
+    "G1": "researchDone.has('greenhouse_yield') etc. read directly in production loop bonus calc",
+    "G2": "moraleDelta writes col.morale but morale never read in production baseOutput formula",
+    "G3": "stormDamage set by triggerAshstorm, repaired via parts, but never read to reduce building output",
+    "G4": "tradeSupply/tradeSupplyTrend drift via rng each spawnCaravan(), read into tradePrices formula",
+    "G5": "dust_harvest/disease_outbreak/refugee_arrival choice.effect(gameState) writes differentiated resource/population/morale changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm damage and morale are tracked in state but never actually read by the production formula, so the game's two central feedback loops (hazard damage and needs-driven morale) are cosmetic rather than mechanically wired."
+}
+```

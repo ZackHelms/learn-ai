@@ -49,17 +49,22 @@ haiku-4-5 run via regular claude cli prompt which uses CLAUDE.md and .claude/** 
 sonnet5: eval01/generate.sh was created in order to get clean bare bones generation and first tried with sonent5-low/med/hi/xhi/max; this enables comparison of impact of context files.
 v1.2 & v1.3 correspond to grader updates (eval01/grade.sh), i.e. the back end grading work.
 generate.sh impacts the front end work by the LLM+effort, so I will eventually re-run haiku with it and call those runs something other than r0{1,2,3,4,5} like r5{1,2,3,4,5} or s0{1,2,3,4,5}
+Looks like haiku doesnt actually use reasoning effort levels (based on similarity between r11-r15) even though the claude code interface lets you select an effort level. The Claude desktop app lets you select for haiku a deeper thinking mode.
 
-| 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (max)      | t15 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
 |                Datetime |            Harness |   LLM (Reasoning effort) | Run |   Time |     Cost | det + ai  = Score | Notes |
 | ----------------------- | -------------------| -------------------------| --- | ------ | -------- | ----------------- | ----- |
 
+| 2026-08-09_17:11:22_EDT | Claude Code (bare) | claude-haiku-4-5 (low)   | r11 |  3m19s | $ 0.1771 | 37 + 38.6 =  75.6 |  14 input,  22.5k output,    37.7k cache read,  29.4k cache write ($ 0.1771) |
+| 2026-08-09_20:05:28_EDT | Claude Code (bare) | claude-haiku-4-5 (medium)| r12 |  2m36s | $ 0.1431 | 49 + 29.4 =  78.4 |  14 input,  17.8k output,    37.7k cache read,  24.4k cache write ($ 0.1431) |
+| 2026-08-09_20:05:35_EDT | Claude Code (bare) | claude-haiku-4-5 (high)  | r13 |  3m14s | $ 0.1739 | 50 + 30.6 =  80.6 |  14 input,  22.2k output,    37.7k cache read,  28.6k cache write ($ 0.1739) |
+| 2026-08-09_20:05:40_EDT | Claude Code (bare) | claude-haiku-4-5 (xhigh) | r14 |  2m50s | $ 0.1507 | 52 + 27.4 =  79.4 |  14 input,  19.1k output,    37.7k cache read,  24.9k cache write ($ 0.1507) |
+| 2026-08-09_20:05:46_EDT | Claude Code (bare) | claude-haiku-4-5 (max)   | r15 |  2m41s | $ 0.1500 | 41 + 32.2 =  73.2 |  14 input,  18.6k output,    36.9k cache read,  25.8k cache write ($ 0.1500) |
 
-| 2026-08-10_09:22:17_EDT | Claude Code (bare) | claude-sonnet-5 (low)    | s11 | 04m31s | $ 1.0978 | 48 + 45.0 =  93.0 |  46 input,  30.7k output,  1278.2k cache read,  42.0k cache write ($1.0978) |
-| 2026-08-10_09:21:57_EDT | Claude Code (bare) | claude-sonnet-5 (medium) | s12 | 10m11s | $ 2.2728 | 54 + 42.4 =  96.4 |  58 input,  60.5k output,  2461.2k cache read, 104.1k cache write ($2.2728) |
-| 2026-08-10_09:21:35_EDT | Claude Code (bare) | claude-sonnet-5 (high)   | s13 | 17m04s | $ 3.9825 | 32 + 45.8 =  77.8 |  88 input, 102.8k output,  5455.7k cache read, 133.5k cache write ($3.9825) |
-| 2026-08-10_09:21:14_EDT | Claude Code (bare) | claude-sonnet-5 (xhigh)  | s14 | 36m57s | $ 9.9160 | 34 + 42.4 =  76.4 | 228 input, 219.2k output, 17686.8k cache read, 219.9k cache write ($9.9160) |
-| 2026-08-10_09:20:54_EDT | Claude Code (bare) | claude-sonnet-5 (max)    | s15 | 43m05s | $ 9.2433 | 34 + 46.0 =  80.0 | 148 input, 250.4k output, 13214.4k cache read, 253.5k cache write ($9.2433) |
+| 2026-08-10_09:22:17_EDT | Claude Code (bare) | claude-sonnet-5 (low)    | s11 | 04m31s | $ 1.0978 | 48 + 45.0 =  93.0 |  46 input,  30.7k output,  1278.2k cache read,  42.0k cache write ($ 1.0978) |
+| 2026-08-10_09:21:57_EDT | Claude Code (bare) | claude-sonnet-5 (medium) | s12 | 10m11s | $ 2.2728 | 54 + 42.4 =  96.4 |  58 input,  60.5k output,  2461.2k cache read, 104.1k cache write ($ 2.2728) |
+| 2026-08-10_09:21:35_EDT | Claude Code (bare) | claude-sonnet-5 (high)   | s13 | 17m04s | $ 3.9825 | 32 + 45.8 =  77.8 |  88 input, 102.8k output,  5455.7k cache read, 133.5k cache write ($ 3.9825) |
+| 2026-08-10_09:21:14_EDT | Claude Code (bare) | claude-sonnet-5 (xhigh)  | s14 | 36m57s | $ 9.9160 | 34 + 42.4 =  76.4 | 228 input, 219.2k output, 17686.8k cache read, 219.9k cache write ($ 9.9160) |
+| 2026-08-10_09:20:54_EDT | Claude Code (bare) | claude-sonnet-5 (max)    | s15 | 43m05s | $ 9.2433 | 34 + 46.0 =  80.0 | 148 input, 250.4k output, 13214.4k cache read, 253.5k cache write ($ 9.2433) |
 
 | 2026-08-10_12:44:14_EDT | Claude Code (bare) | claude-opus-5 (low)      | t11 | 13m17s | $ 3.6710 | 48 + 46.0 =  94.0 |  53 input,  71.1k output,  2202.1k cache read,  79.1k cache write ($ 3.6710) |
 | 2026-08-10_12:43:52_EDT | Claude Code (bare) | claude-opus-5 (medium)   | t12 | 15m25s | $ 4.6256 | 34 + 45.8 =  79.8 |  74 input,  78.0k output,  3408.8k cache read,  96.9k cache write ($ 4.6256) |
@@ -67,6 +72,11 @@ generate.sh impacts the front end work by the LLM+effort, so I will eventually r
 | 2026-08-10_12:43:10_EDT | Claude Code (bare) | claude-opus-5 (xhigh)    | t14 | 32m23s | $10.0894 | 34 + 46.0 =  80.0 | 114 input, 166.4k output,  8288.4k cache read, 178.3k cache write ($10.0894) |
 | 2026-08-10_12:42:50_EDT | Claude Code (bare) | claude-opus-5 (max)      | t15 | 38m42s | $12.9251 | 29 + 45.8 =  74.8 | 152 input, 197.2k output, 12150.1k cache read, 191.8k cache write ($12.9251) |
 
+| 2026-08-09_17:11:22_EDT | Claude Code (bare) | claude-fable-5 (low)     | u11 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
+| 2026-08-09_20:05:28_EDT | Claude Code (bare) | claude-fable-5 (medium)  | u12 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
+| 2026-08-09_20:05:35_EDT | Claude Code (bare) | claude-fable-5 (high)    | u13 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
+| 2026-08-09_20:05:40_EDT | Claude Code (bare) | claude-fable-5 (xhigh)   | u14 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
+| 2026-08-09_20:05:46_EDT | Claude Code (bare) | claude-fable-5 (max)     | u15 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
 
 
 

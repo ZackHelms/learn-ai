@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: Game class/gameState (one state obj); mulberry32 seeds terrain/colonists/events, but `triggerAshstorm` uses `Math.random()` not `this.rng()` — not all randomness seeded. endTurn() resolves fixed steps. Score 1.
+
+**F2 – Map**: 64-tile grid, `generateTerrain()` seeded, `isValidBuild` checks terrain, adjacency `adjBonus` (condenser/water, forge/vent) multiplies output in `produceResources`. Score 2.
+
+**F3 – Economy**: mine→ore→forge→metal→reactor→power chains via `consume`/`produces`; caps enforced with `Math.min(…,this.caps[x])`. Score 2.
+
+**F4 – Population**: colonists have skill/fatigue/morale/job fields, but `buildingAssignments` is never populated by any code (no assignment UI/logic) and `p.fatigue` is never read in production — skill/fatigue effectively disconnected. Score 1.
+
+**F5 – Needs**: per-turn food/water consumption, shortage drops morale (`p.morale -= 30`), recovery (+5/turn) — but morale is never read in `produceResources`, so it never changes output. Score 1.
+
+**F6 – Research**: 12 nodes, prereqs enforced in `research_upgrade`, costs deducted; but `renewable_power`, `biotech`, `energy_storage`, `advanced_trading` have no effect anywhere in code. Score 1.
+
+**F7 – Events**: 10 events, 8+ with 2-3 choices with differing effects, cooldown via `eventCooldown`; but `fireRandomEvent` picks uniformly (`Math.floor(rng()*available.length)`) — not weighted. Score 1.
+
+**F8 – Trade**: buy/sell wired (`buyTrade`/`sellTrade`), caravan qty limited; but price formula `basePrice*(0.8+rng()*0.6)*tradeMultiplier` never reads player stockpiles, and tradeMultiplier resets every caravan (no real drift). Score 1.
+
+**F9 – Hazard**: storm severity scales with turn, reinforced_walls/storm_shelter/walls reduce damage; but buildings are simply deleted (`this.buildings[i]=null`), no partial-damage/repair state, `slowRepairTimer` set but never read anywhere. Score 1.
+
+**F10 – Save/load**: `serialize()`/`Game.deserialize()`, save via prompt copy, load via prompt + try/catch showing `alert('Invalid save data: '+e.message)`. Score 2.
+
+**F11 – End conditions**: win (`turn>=60 && pop>=12...`) and lose (`pop===0`) both reachable, `computeScore()` sums pop/research/turn/resources, `endGameModal` renders summary. Score 2.
+
+**F12 – UI**: `switchTab`, log lines show `Turn ${e.turn}`, tile tooltips show terrain/adjacency bonus, keys 1-6 & Space wired, `@media(max-width:600px)` responsive CSS. Score 2.
+
+**F13 – Dev panel**: `runTests()` has 15 real invariant checks (caps, prereqs, RNG determinism, save/load roundtrip); `runBenchmark()` runs 200 headless turns and prints a state hash. Score 2.
+
+**G1**: `research['metallurgy']` etc. read directly in `produceResources` multiplying output; several nodes unused (energy_storage etc.) as minor gap. Score 3.
+
+**G2**: shortage → `p.morale -= 30` is real, but morale is never read in `produceResources`, so morale never reduces labor output — chain breaks at final link. Score 1.
+
+**G3**: `triggerAshstorm` nulls out buildings (binary destroy, not partial damage); no distinct repair cost/state — rebuilding via normal `build()` is the only "recovery", a hardcoded special case. Score 2.
+
+**G4**: `triggerCaravan` price formula never reads `this.resources`, and `tradeMultiplier` resets every caravan visit instead of drifting. Score 0.
+
+**G5**: `colonist_arrives` "Yes" pushes into `population` array; `ashstorm_early`/`water_contamination` choices durably subtract resources or hit morale — real, differing, persistent mutations. Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 2, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "Game/gameState single state obj; mulberry32 used but triggerAshstorm uses Math.random() not seeded",
+    "F2": "adjBonus for condenser/water, forge/vent multiplies output in produceResources",
+    "F3": "forge consumes 'ore' (from mine) to produce metal; Math.min(...,caps[x]) enforces storage caps",
+    "F4": "buildingAssignments never populated anywhere; p.fatigue never read by produceResources",
+    "F5": "food/water shortage sets p.morale-=30 but morale never read in produceResources",
+    "F6": "metallurgy/water_capture/soil_enrichment applied in produceResources; biotech/energy_storage/advanced_trading unused",
+    "F7": "fireRandomEvent: Math.floor(rng()*available.length) is uniform, not weighted",
+    "F8": "buyTrade/sellTrade wired to caravan.qty; price formula never reads this.resources",
+    "F9": "triggerAshstorm sets buildings[i]=null; no partial damage/repair state, slowRepairTimer unread",
+    "F10": "serialize()/deserialize() with prompt copy/paste and try/catch alert on bad input",
+    "F11": "won/lost checked in endTurn, computeScore() sums stats, endGameModal renders summary",
+    "F12": "switchTab, event-log Turn numbers, tile tooltips, keys 1-6/Space, media query CSS",
+    "F13": "runTests() 15 invariant checks; runBenchmark() 200 headless turns + state hash",
+    "G1": "this.research['metallurgy'] read directly in produceResources output formula",
+    "G2": "p.morale-=30 on shortage is real, but produceResources never reads p.morale",
+    "G3": "triggerAshstorm nulls buildings (0 output); build() 'repair' = full rebuild cost",
+    "G4": "triggerCaravan price = basePrice*rng*tradeMultiplier, never reads this.resources",
+    "G5": "colonist_arrives pushes to population array; water_contamination durably alters resources/morale"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Population stats (skill/fatigue/morale) are stored but never actually feed production because buildingAssignments is never populated and morale/fatigue are never read in produceResources, disconnecting the people system from the economy."
+}
+```

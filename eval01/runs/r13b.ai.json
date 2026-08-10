@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: `gameState` single object; `mulberry32(seed)` → `gameState.rng` used throughout; `endTurn()` resolves cooldowns→fatigue→needs→production→events→trade→storm→departures→win/lose in fixed order. Score 2.
+
+**F2 – Map**: 8x8 (`64` tiles) via `generateMap(seed)` using seeded rng; `checkBuildable` checks `building.terrain.includes(terrain)`; `getAdjacencyBonus` feeds `totalMult` in `calculateProduction`, changing `b.output`. Score 2.
+
+**F3 – Economy**: `resolveBuildingProduction` computes produced/consumed but consumption failure never blocks that turn's production (no gating); caps/overflow handled via `resourceAccum`. Chain link broken. Score 1.
+
+**F4 – Population**: colonists have id/name/job/skill/fatigue/morale/assignment; `c.skill` and `c.fatigue` read in `calculateProduction` (skillMult, fatigueDebuff). Score 2.
+
+**F5 – Needs**: `resolvePopulationNeeds` consumes food/water, drops morale on shortfall; but `calculateProduction` never reads `c.morale` — morale never changes output. Score 1.
+
+**F6 – Research**: 8 nodes in `RESEARCH_NODES`; prereqs enforced in `unlockResearch`/`getAvailableResearch`; costs deducted; but `synthesis` node's `metalToWater` effect is never read anywhere. Score 1.
+
+**F7 – Events**: 10 entries in `EVENTS`; weighted pick in `fireEvent` (`totalWeight`, `rng()`); all have 2 differing choices; `eventState.cooldowns` decremented each turn, gates selection. Score 2.
+
+**F8 – Trade**: `globalPrices` set once in `initTrade`, never updated by trades or stockpiles — only random noise `randInt(-1,1)` per caravan; `item.quantity` limited; `tradeCaravanBuy`/`Sell` both work. Score 1.
+
+**F9 – Hazard**: `checkAndResolveStorm` fires periodically, `severity = turn/10+1` grows, research (`damageReduction`/`stormReduction`) reduces damage, `repairBuilding` costs parts — but `b.hp` is never read in `calculateProduction`, so damaged buildings don't produce less. Score 1.
+
+**F10 – Save/load**: `serializeState()` full JSON, copied via textarea+`execCommand`; `deserializeState` parses in try/catch, `alert('Invalid save data...')` on bad input. Score 2.
+
+**F11 – End conditions**: lose when `population===0`; win when `turn>=60 && population>=12`, both checked in `endTurn`; `showGameOver` computes `total_score` from population/research/resources/turn and renders summary. Score 2.
+
+**F12 – UI**: tab click handlers switch `.active`; log entries carry `entry.turn` (`T{turn}:`); tooltips are shallow (no breakdown of research/fatigue multipliers); `keydown` handles Space and 1-5; no `@media` query, only CSS grid auto-fill reflow. Score 1.
+
+**F13 – Dev panel**: `runTests()` has 15 real invariant assertions (caps, prereqs, terrain, save/load hash roundtrip); `runBenchmark()` runs 200 headless `endTurn()` calls and returns `hashState(gameState)`. Score 2.
+
+**G1**: `unlockResearch` pushes to `research.completed`; `calculateProduction` reads `node.effects.buildingBonus[b.type]` every turn into `researchBonus`; `metalToWater` branch unused (minor gap). Score 3.
+
+**G2**: `resolvePopulationNeeds` shortfall correctly drops `c.morale`, but morale is never read in `calculateProduction` — final link (morale→output) entirely absent. Score 1.
+
+**G3**: `checkAndResolveStorm` reduces `b.hp`; `calculateProduction` never reads `b.hp` (no output loss); `repairBuilding` defined but has zero call sites anywhere in UI (dead code). Score 1.
+
+**G4**: `generateCaravan` price = static `globalPrices[res] + randInt(-1,1)`; `globalPrices` never updated by stockpiles or over time. Link absent. Score 0.
+
+**G5**: `applyEventChoice` writes distinct resource/morale/population deltas per choice for `dust_storm_minor`, `water_shortage`, `visitor`, etc., directly into `gameState.resources`/`colonists`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 2, "5": 1, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 1, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() resolves cooldowns/fatigue/needs/production/events/storm/win-lose in fixed order",
+    "F2": "getAdjacencyBonus() result feeds totalMult in calculateProduction()",
+    "F3": "resolveBuildingProduction() computes consumed but never gates production on it",
+    "F4": "c.skill/c.fatigue read in calculateProduction() to build skillMult",
+    "F5": "resolvePopulationNeeds() drops morale on shortfall; calculateProduction() never reads morale",
+    "F6": "unlockResearch()/getAvailableResearch() enforce prereq+cost; synthesis.metalToWater never read",
+    "F7": "fireEvent() weighted pick from EVENTS filtered by eventState.cooldowns",
+    "F8": "generateCaravan() price = globalPrices+noise; globalPrices never updated by trades/stock",
+    "F9": "checkAndResolveStorm() reduces b.hp; calculateProduction() never reads b.hp",
+    "F10": "serializeState()/deserializeState() with try/catch alert on bad JSON",
+    "F11": "endTurn() sets gameState.gameStatus; showGameOver() renders total_score breakdown",
+    "F12": "tab click handlers + log entry.turn; no @media query for narrow screens",
+    "F13": "runTests() 15 invariant asserts; runBenchmark() runs 200 headless endTurn() calls, returns hashState",
+    "G1": "research.completed read in calculateProduction() via node.effects.buildingBonus",
+    "G2": "resolvePopulationNeeds() lowers c.morale but calculateProduction() never reads it",
+    "G3": "checkAndResolveStorm() sets b.hp but calculateProduction() ignores hp; repairBuilding() has no call site",
+    "G4": "generateCaravan() price formula uses only static globalPrices + random noise",
+    "G5": "applyEventChoice() writes distinct resource/morale/population deltas per choice branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Building HP damage and colonist morale are tracked but never fed back into the production formula, breaking the storm-damage and needs-shortfall consequence chains."
+}
+```

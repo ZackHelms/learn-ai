@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** Game class holds state; mulberry32 rng used for terrain/colonists/events/caravan; endTurn() runs fixed 8-step sequence. BUT triggerAshstorm() uses `Math.random()` instead of `this.rng()`, violating "seeded PRNG for ALL randomness." Score 1.
+
+**F2 (Map):** 8x8 (64-tile) grid; generateTerrain() uses this.rng(); isValidBuild() checks building.terrain vs getTerrain(); adjBonus 1.15x for condenser/water & forge/vent multiplies into output. Score 2.
+
+**F3 (Economy):** forge consumes 'ore' to produce 'metal' (multi-step chain via mine); Math.min(..., this.caps[resource]) caps and handles overflow everywhere in produceResources(). Score 2.
+
+**F4 (Population):** generateColonist() creates skill/fatigue/morale, but no `job` field ever set (only read as `person.job||'Unassigned'`); buildingAssignments object never populated by any function, so skill-read code in produceResources() is dead. Score 1.
+
+**F5 (Needs):** food/water consumed per colonist in endTurn(); shortage triggers morale -30; recovery +5/turn. But produceResources() never reads `p.morale` anywhere — morale never changes output. Score 1.
+
+**F6 (Research):** 12 nodes, prereqs enforced in research_upgrade(), cost deducted via spend(). But renewable_power, energy_storage, biotech, advanced_trading are defined and never referenced anywhere else — 4/12 nodes have no effect. Score 1.
+
+**F7 (Events):** 10 events in EVENTS_DECK; fireRandomEvent() uses uniform `available[Math.floor(rng()*len)]` — not weighted; eventCooldown blocks repeats until full cycle; 9 events have 2-3 choices with differing effect functions. Weighted-selection requirement unmet. Score 1.
+
+**F8 (Trade):** buyTrade/sellTrade both work, item.qty limited and decremented/incremented. But price formula `basePrice*(0.8+rng()*0.6)*tradeMultiplier` never reads stockpiles nor persists a drifting variable across turns (tradeMultiplier resets to 1.0 each caravan). Score 1.
+
+**F9 (Hazard):** triggerAshstorm() fires every stormInterval, severity scales with `this.turn`; reinforced_walls/storm_shelter research reduce damage/spike. But damaged tiles are simply set to `null` (destroyed), no partial-damage/reduced-output state, and "repair" is just calling build() again — no distinct repair-cost mechanic. Score 1.
+
+**F10 (Save/load):** serialize() dumps full JSON via prompt(); deserialize() does JSON.parse wrapped in try/catch showing alert on parse failure, but performs no schema validation of missing/malformed fields. Score 1.
+
+**F11 (End conditions):** win check (turn>=60,pop>=12,food/water>=50) and lose check (pop===0) both reachable; computeScore() combines research count, turn, resources (population term is nullified by an operator-precedence bug `a ? b : c` around `+`); endGameModal renders summary. Score 2.
+
+**F12 (UI):** switchTab() wired to tab clicks and 1-6 keys; eventLog entries carry `turn`; .tile-tooltip shows terrain/building/adjacency; Space ends turn; @media(max-width:600px) rules adapt layout. Score 2.
+
+**F13 (Dev panel):** runTests() checks 15 real invariants (caps, prereqs, RNG determinism, save/load roundtrip, morale/fatigue ranges); runBenchmark() runs 200 headless endTurn() calls and prints a state hash. Score 2.
+
+**G1:** research.soil_enrichment/metallurgy/etc read directly in produceResources() and multiply output before being added to resources; but 4/12 nodes unused. Score 3.
+
+**G2:** food/water shortfall writes `p.morale -= 30` (real state change), but produceResources() never reads morale — chain breaks before reaching output. Score 1.
+
+**G3:** triggerAshstorm() nulls buildings (output loss real), but "repair" reuses ordinary build() cost — no distinct damage/repair state. Score 2.
+
+**G4:** caravan price formula uses random noise * tradeMultiplier, never reads player resources, and tradeMultiplier resets every caravan (no persistent drift). Score 0.
+
+**G5:** colonist_arrives pushes real colonist into population; ore_deposit choices add differing ore amounts; water_contamination choices differently mutate water vs. morale — durable state changes across many events. Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 1, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 2, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "Game class + mulberry32; endTurn() fixed 8 steps; triggerAshstorm uses Math.random() not this.rng()",
+    "F2": "isValidBuild() checks building.terrain vs getTerrain(); adjBonus 1.15x applied to output",
+    "F3": "forge consumes 'ore' to produce 'metal'; Math.min(...,caps[resource]) caps all outputs",
+    "F4": "generateColonist has skill/fatigue/morale but no job set; buildingAssignments never populated",
+    "F5": "food<=0 sets p.morale-=30 in endTurn(); produceResources() never reads morale",
+    "F6": "research_upgrade enforces prereq/cost; renewable_power/energy_storage/biotech/advanced_trading never read",
+    "F7": "EVENTS_DECK has 10 entries; fireRandomEvent uses uniform Math.floor(rng()*len), not weighted",
+    "F8": "buyTrade/sellTrade adjust resources/qty; price = basePrice*(0.8+rng()*0.6)*tradeMultiplier, no stockpile/drift link",
+    "F9": "triggerAshstorm sets buildings[i]=null; no damaged-state/repair-cost distinct from build()",
+    "F10": "serialize()/deserialize() JSON round-trip; deserialize only try/catches parse errors, no schema check",
+    "F11": "endTurn win/lose checks reachable; computeScore() combines research/turn/resources (population term voided by precedence bug)",
+    "F12": "switchTab() wired to tabs and keys 1-6; eventLog carries turn; tile-tooltip shows bonus source; media query adapts layout",
+    "F13": "runTests() checks 15 invariants incl. RNG determinism & save/load roundtrip; runBenchmark() runs 200 headless turns, prints hash",
+    "G1": "research['soil_enrichment'] etc read in produceResources(), multiplies output added to resources",
+    "G2": "p.morale-=30 on shortage in endTurn(), but produceResources() never reads morale",
+    "G3": "triggerAshstorm nulls buildings (output loss real); rebuild via build() reuses normal cost, no repair state",
+    "G4": "triggerCaravan price uses rng()*tradeMultiplier only, never reads this.resources or persistent supply",
+    "G5": "colonist_arrives pushes to population; ore_deposit/water_contamination choices write different resource/morale changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Several systems (morale, job assignment, damage/repair, trade drift, 4 research nodes) are computed but never actually consumed by the production/output pipeline, leaving many cross-system chains cosmetic or broken."
+}
+```

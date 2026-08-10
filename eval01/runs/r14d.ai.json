@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `game` object; `createRng`/`game.rng` used for all randomness (terrain, events, trade, storms); `endTurn()` resolves steps 1-9 in fixed order. Score 2.
+
+**F2 Map**: 8x8 grid (`grid-8x8 strict`), terrain from seeded `rngFloat` in `initMap()`, `canBuild()` checks terrain — but `adjacencyBonus` data is never read anywhere (not in `getProductionOutput`), and actual building creation is broken: a second `function buildBuilding(...)` later in the file shadows the first and recursively calls itself (`buildBuilding.call({}, ...)`), so the real building-construction logic is dead code. Score 1.
+
+**F3 Economy**: caps + overflow clamp/log in `endTurn` step 3 work; but no genuine multi-step chain (all buildings are single input→single output; no ore/soil-style hop), and production never actually occurs since buildings can't be placed (see F2). Score 1.
+
+**F4 Population**: colonists have skill/fatigue/morale/job (`addColonist`); `skill` is read in `getProductionOutput` but only for `building.workers`, which is never populated anywhere; `fatigue` is never read by production code at all. Score 1.
+
+**F5 Needs**: `foodNeeded`/`waterNeeded` consumption and shortage→morale penalty in `endTurn`; but morale is never read by `getProductionOutput` or any output formula. Score 1.
+
+**F6 Research**: 12 nodes, `canResearch` enforces prereqs/cost for most nodes, but `population_tech.prereqs` references nonexistent id `'community_programs'` (actual id is `morale_1`), causing `game.research[prereq].done` to throw when the Research tab renders; only 3/12 node effects (`trade_tech`, `resilience_1/2`) are actually read anywhere in code. Score 1.
+
+**F7 Events**: 10 events in `EVENT_DEFINITIONS`, 6 offer differing 2-choice outcomes via `applyEventEffects`; `eventCooldown` decremented in `endTurn`, but selection is uniform `rngShuffle`, not weighted, and `fired` Set means each event can literally only ever fire once (cooldown is redundant). Score 1.
+
+**F8 Trade**: `generateCaravan` prices use `game.resources[res]` (stockpile) via `demandMod`; `offering.quantity` limits caravan stock; `trade()` implements both buy/sell branches, wired to UI buttons. Score 2.
+
+**F9 Hazard**: `triggerAshstorm` grows severity with `game.turn`, sets `building.damage`, read by `getProductionOutput` (`1 - damage*0.1`); `storm_shelter`/`resilience_1/2` reduce damage; `repairBuilding` spends `parts` and resets damage. All pieces wired (though buildings can't actually be placed, per F2). Score 2.
+
+**F10 Save/load**: `saveGame()` serializes most state to `#saveBox` textarea; `loadGame()` `JSON.parse` in try/catch with `alert` on bad input — but `game.hazards` is omitted from the save, and `game.events.fired` (a `Set`) is JSON-serialized to `{}`, breaking `.has()` after reload. Score 1.
+
+**F11 End conditions**: win (`turn>=60 && colonists>=12`) and lose (`colonists.length===0`) both checked in `endTurn`; `renderEndScreen` computes score from population/resources/research/turn. Score 2.
+
+**F12 UI**: tab click listener + `render()` switch; `addLog` stores turn, shown in `renderLogPanel`; keyboard shortcuts (`Space`, `Digit1-5`); tile tooltips exist but don't explain resource-number derivation, and `.two-column` responsive class is defined in CSS but never applied by any render function. Score 1.
+
+**F13 Dev panel**: `runTests()` has 15 real invariant checks (caps, prereqs, unique IDs, RNG reproducibility, save/load hash); `runBenchmark()` runs `endTurn()` 200x headlessly and prints `getGameHash()`. Score 2.
+
+**G1**: `resilience_1/2.done` read in `triggerAshstorm()` to scale `damage`, which `getProductionOutput` reads — only path connecting research to output; most nodes' claimed yield bonuses (water_tech, metal_tech, etc.) are never read anywhere. Score 2.
+
+**G2**: shortage writes real morale drop (`c.morale -= shortage*10` in `endTurn`), but morale is never read in `getProductionOutput` — chain breaks at final link. Score 1.
+
+**G3**: `triggerAshstorm`→`building.damage`→`getProductionOutput` reduction→`repairBuilding` reset, all coded — but buildings can never be created due to the `buildBuilding` recursion bug (F2), so the chain can't engage in real play. Score 2.
+
+**G4**: `generateCaravan` price formula reads `game.resources[res]` via binary `demandMod` threshold (`<20`); `globalSupply` field exists but never drifts over turns. Score 3.
+
+**G5**: `wanderer`/`discovery` choices each fully mutate distinct state (`addColonist`/`removeColonist`, `parts`/`metal`) via `applyEventEffects`; some other events' `effects.production` case is an empty stub loop (no-op), but the two traced chains are fully wired. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 2, "9": 2, "10": 1, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 2, "G2": 1, "G3": 2, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "createRng/game.rng used for all randomness; endTurn() steps 1-9 fixed order",
+    "F2": "canBuild checks terrain but buildBuilding() is shadowed by a self-recursive duplicate, adjacencyBonus never read",
+    "F3": "resourceCaps overflow clamp in endTurn works; no multi-hop chain, buildings never actually placed",
+    "F4": "colonist.skill read in getProductionOutput but building.workers never populated; fatigue never read by production",
+    "F5": "shortage lowers morale in endTurn but morale never read by getProductionOutput",
+    "F6": "canResearch enforces prereqs but population_tech prereq id 'community_programs' doesn't exist, throws on render",
+    "F7": "rngShuffle deck selection is uniform not weighted; fired Set means each event fires only once ever",
+    "F8": "generateCaravan demandMod reads game.resources[res]; trade() implements buy/sell both",
+    "F9": "triggerAshstorm sets building.damage read by getProductionOutput; repairBuilding resets it, resilience research reduces it",
+    "F10": "saveGame/loadGame JSON round-trip via textarea, but game.hazards omitted and fired Set becomes {} after JSON",
+    "F11": "endTurn checks turn>=60&&colonists>=12 and colonists.length===0; renderEndScreen computes score",
+    "F12": "tab click listener + render(); addLog turn numbers in renderLogPanel; .two-column CSS never applied in markup",
+    "F13": "runTests() 15 invariant checks; runBenchmark() runs endTurn() x200 headlessly, prints getGameHash()",
+    "G1": "resilience_1/2.done read in triggerAshstorm scales damage, consumed by getProductionOutput",
+    "G2": "shortage writes c.morale in endTurn, but getProductionOutput never reads morale",
+    "G3": "triggerAshstorm->damage->getProductionOutput->repairBuilding chain coded, but buildBuilding bug prevents buildings ever existing",
+    "G4": "generateCaravan finalPrice uses game.resources[res]<20 demandMod threshold, globalSupply static",
+    "G5": "wanderer/discovery choice branches durably change resources/colonists via applyEventEffects"
+  },
+  "todo_notes": [],
+  "grader_confidence": "medium",
+  "contamination": "none",
+  "single_biggest_weakness": "A duplicate function declaration causes buildBuilding() to recursively call itself, so the real building-placement logic is dead code and no building can ever actually be constructed, undermining Map/Economy/Hazard chains that depend on it."
+}
+```

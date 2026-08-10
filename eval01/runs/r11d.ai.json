@@ -1,0 +1,72 @@
+## Worksheet
+
+**F1 – Core loop**: `game` object; `mulberry32()` seeded PRNG used for all randomness (no `Math.random` found); `endTurn()` calls production/colonists/cooldowns/storm/trade/events in fixed order. Score 2.
+
+**F2 – Map**: 8x8 loop in `initMap()`; terrain via `this.rng()`; `canBuild()` checks `tile.terrain !== btype.terrain`; `calcAdjacencyBonus()` feeds `b.productivity`, read in `updateProduction()`. Score 2.
+
+**F3 – Economy**: greenhouse consumes water to produce food (`produced.water -= waterUsed`); `resourceCaps` enforced generically in `updateProduction()`; overflow logged and clamped. Score 2.
+
+**F4 – Population**: colonist records have skill/fatigue/morale/assignment; `skillLevel` read directly in `updateProduction()`, but `fatigue` only feeds morale in `updateColonists()`, never read directly by production code. Score 1.
+
+**F5 – Needs**: per-turn `produced.food/water -= popConsumption`; `handleShortage()` cuts morale; `moraleMult` scales productivity; morale recovers via idle `+5`/event bonuses. Score 2.
+
+**F6 – Research**: 8 nodes, `canResearch()` enforces `prereq`, `doResearch()` deducts cost; but `power_1`, `labor_1`, `automation` effects are never read anywhere outside their definitions (dead nodes). Score 1.
+
+**F7 – Events**: 10-entry `eventDeck`, weighted pick in `fireEvent()`, cooldown via `eventCooldown`; only 3/10 events have `choices` (need 4+); critically, `effect: () => {this.resources...}` arrow functions defined in the object literal bind `this` to `window`, not `game`, so every effect call throws instead of mutating state. Score 1.
+
+**F8 – Trade**: `updateTrade()` derives `caravanPrices` from `globalDemand` drift and `resources[res]` stock; `caravanInventory` capped; `tradeWithCaravan()` handles both buy/sell. Score 2.
+
+**F9 – Hazard**: `checkAshstorm()` fires periodically with cooldown; severity scales with turn; `b.health` read in `updateProduction()` to cut productivity; `storm_1` research reduces damage; `repairBuilding()` costs parts and restores health. Score 2.
+
+**F10 – Save/Load**: `saveToTextarea()` serializes full state to textarea; `loadFromTextarea()` parses JSON in try/catch and alerts on failure. Score 2.
+
+**F11 – End conditions**: win check in `endTurn()`; lose check `colonists.length===0` in `updateColonists()` → `endGame()`; score from pop/research/resources/turn; end-game modal rendered. Score 2.
+
+**F12 – UI**: tab-button listeners; log entries carry `entry.turn`; `.tile-tooltip` shows terrain/health/bonus; keyboard shortcuts (Space, 1-5) wired in `keydown` listener; media queries adapt layout. Score 2.
+
+**F13 – Dev panel**: 15 non-trivial invariant tests (`runTests()`); `runBenchmark()` runs 200 headless turns calling core update functions and prints `computeStateHash()`. Score 2.
+
+**G1**: `farming_1`/`mining_1` researchDone flags read in `updateProduction()` to boost greenhouse/forge yield each turn; but 3/8 nodes (power_1, labor_1, automation) are unwired. Score 3.
+
+**G2**: `produced.food -= popConsumption` shortage → `handleShortage()` cuts colonist morale → `avgMorale` drives `moraleMult` in `updateProduction()`. Full loop every turn. Score 4.
+
+**G3**: `checkAshstorm()` sets `b.health` → read in `updateProduction()` (`productivity *= b.health/100`) → `repairBuilding()` spends `parts`, restores `health=100`. Score 4.
+
+**G4**: `caravanPrices` computed from `globalDemand` (drifts via `rng()`) and `this.resources[res]` stockFactor in `updateTrade()`. Score 4.
+
+**G5**: `trade_opportunity`/`labor_strike` choices write different resource/morale deltas per branch, but their `effect` arrow functions have `this` bound to `window` (defined inside plain object literals), so `this.resources`/`this.colonists` access throws before mutating state — the branches never actually durably change state as written. Score 1.
+
+## Notable defect
+All `eventDeck` `effect`/`choice.effect` callbacks are arrow functions defined directly inside object literals (not inside a method), so their `this` is the global `window`, not `game`. Calling them throws a TypeError, meaning event effects never apply and — since `showEventModal()` calls non-choice `event.effect()` synchronously before opening the modal — this exception would abort `endTurn()` partway through whenever a non-choice event fires (~25% of turns), skipping turn increment/render for that call. This is a genuine (non-syntax) runtime bug found via reading, priced into F7 and G5.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 2, "6": 1, "7": 1,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 4, "G3": 4, "G4": 4, "G5": 1},
+  "evidence": {
+    "F1": "game object + mulberry32() rng; endTurn() calls systems in fixed order",
+    "F2": "calcAdjacencyBonus() sets b.productivity, read in updateProduction()",
+    "F3": "greenhouse water consumption feeds food output; cap enforced/logged in updateProduction()",
+    "F4": "c.skillLevel read in updateProduction(); c.fatigue only used in updateColonists(), not production",
+    "F5": "handleShortage() cuts morale; moraleMult scales productivity in updateProduction()",
+    "F6": "farming_1/mining_1/water_1/storm_1/storage_1 read elsewhere; power_1/labor_1/automation never read",
+    "F7": "eventDeck 10 entries, fireEvent() weighted pick, but effect arrow fns bind this=window not game",
+    "F8": "updateTrade() computes caravanPrices from globalDemand+resources; tradeWithCaravan() buy/sell",
+    "F9": "checkAshstorm() sets b.health; updateProduction() scales productivity by b.health; repairBuilding() spends parts",
+    "F10": "saveToTextarea()/loadFromTextarea() with try/catch and alert on bad JSON",
+    "F11": "endTurn() win check + updateColonists() pop==0 lose check both call endGame(), score computed, modal rendered",
+    "F12": "tab-button listeners, log entry.turn, tile-tooltip, keydown shortcuts, media queries",
+    "F13": "runTests() 15 invariant checks; runBenchmark() 200-turn headless loop + computeStateHash()",
+    "G1": "researchDone.has('farming_1'/'mining_1') read in updateProduction() production formula",
+    "G2": "produced.food shortfall -> handleShortage() morale cut -> moraleMult in updateProduction()",
+    "G3": "checkAshstorm() damages b.health -> productivity cut in updateProduction() -> repairBuilding() restores",
+    "G4": "caravanPrices formula reads globalDemand (drifts) and resources[res] stockFactor in updateTrade()",
+    "G5": "trade_opportunity/labor_strike choice branches differ but effect() this=window throws, mutation never applies"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "eventDeck effect/choice callbacks are arrow functions in plain object literals, so `this` binds to window not game, meaning event/choice effects throw instead of mutating state and can abort endTurn() mid-resolution."
+}
+```

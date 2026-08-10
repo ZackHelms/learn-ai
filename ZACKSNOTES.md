@@ -281,28 +281,17 @@ PPP=s; QQQ=1; MODEL=sonnet5
 ./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
 ```
 
+
+
 ```bash
-# sonnet5-low,medium,high,xhigh,max -> eval01/runs/s1{1,2,3,4,5}.html
+PPP=r; QQQ=1; MODEL=haiku45
 PPP=s; QQQ=1; MODEL=sonnet5
-./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
-./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
-./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
-./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
-
-# opus5-low,medium,high,xhigh,max -> eval01/runs/t1{1,2,3,4,5}.html
 PPP=t; QQQ=1; MODEL=opus5
+PPP=u; QQQ=1; MODEL=fable5
 ./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
 ./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
 ./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
 ./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
-
-PPP=r; QQQ=1; MODEL="haiku-4-5"
-./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
-./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
-./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
-./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
-
-
 
 
 # TODO: .claude/plans/20260810124155.00-eval01-first-pass-review.md

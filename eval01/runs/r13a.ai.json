@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop:** `gameState` single object; `mulberry32(seed)` seeds `gameState.rng`, used in `fireEvent`/`generateCaravan`/`randInt`; `endTurn()` resolves needs→production→events→trade→hazards→win/lose in fixed order. Score 2.
+
+**F2 – Map:** `generateMap(seed)` builds 64-tile terrain from seeded rng; `checkBuildable` checks `building.terrain.includes(terrain)`; `getAdjacencyBonus` feeds `totalMult` in `calculateProduction`. Score 2.
+
+**F3 – Economy:** condenser→water consumed by farm/greenhouse, powergen→power consumed by forge/lab (multi-step chains); caps enforced and overflow reset to 0 in `resolveBuildingProduction`. Score 2.
+
+**F4 – Population:** colonist records have skill/fatigue/morale/job/assignment; fatigue+job read in `calculateProduction`, but `skill` is hardcoded to 2 for every colonist and never changes. Score 1.
+
+**F5 – Needs:** `resolvePopulationNeeds` consumes food/water, drops morale on shortage; but `calculateProduction`'s `skillMult` never reads `c.morale` — morale doesn't change output. Score 1.
+
+**F6 – Research:** 8 nodes in `RESEARCH_NODES`; `unlockResearch` enforces prereq+cost; `buildingBonus`/`damageReduction`/`stormReduction` all consumed, but `synthesis`'s `metalToWater` effect is never read anywhere. Score 1.
+
+**F7 – Events:** 10 events in `EVENTS`; `fireEvent` does real weighted selection; all 10 have 2 differing-effect choices; `eventState.cooldowns` set/decremented. Score 2.
+
+**F8 – Trade:** `tradeCaravanBuy`/`tradeCaravanSell` both function and are wired via inline `onclick`; caravan qty limited and decremented; but `globalPrices` is set once in `initTrade` and never drifts, price = static base + independent random noise, not stockpile/turn-driven. Score 1.
+
+**F9 – Hazard:** `checkAndResolveStorm` fires periodically, severity = `floor(turn/10)+1`, defense building + research reduce damage; but `calculateProduction` never reads `b.hp` (damaged buildings produce at full rate) and `repairBuilding()` has no call site anywhere. Score 1.
+
+**F10 – Save/load:** `serializeState()` → JSON copied via textarea/`execCommand('copy')`; `deserializeState` parses, wrapped in try/catch with `alert('Invalid save data...')` on bad JSON. Score 2.
+
+**F11 – End conditions:** win (`turn>=60 && population>=12`) and lose (`population===0`) both checked in `endTurn`; `showGameOver` computes `total_score` from population/research/resources/turns. Score 2.
+
+**F12 – UI:** tab click handlers work; log entries carry `entry.turn`; tooltips show output/HP/staff; Space/1-5 keyboard shortcuts wired; no `@media` queries or flex-wrap anywhere for narrow screens. Score 1.
+
+**F13 – Dev panel:** `runTests()` has 15 real invariant assertions (caps, prereqs, terrain, save/load hash equality, ranges); `runBenchmark()` runs 200 headless turns and returns `stateHash` from `hashState`. Score 2.
+
+**G1:** `hydro1` etc. write `effects.buildingBonus`; `calculateProduction` sums `researchBonus` into `totalMult` every turn, visible via tile tooltip output. Score 4.
+
+**G2:** shortage writes `c.morale -=1` (real state change) but `calculateProduction` never reads morale directly; only indirect path is morale=0 → 30% chance colonist departs → less labor. Score 2.
+
+**G3:** storm reduces `b.hp`, but production formula never reads `b.hp` (damaged buildings produce full output) and `repairBuilding()` is never called from any UI element. Score 1.
+
+**G4:** `generateCaravan` price = static `globalPrices[res]` + `randInt(-1,1)` noise; `globalPrices` never updated across turns, never reads player resources. Score 0.
+
+**G5:** `applyEventChoice` mutates `gameState.resources`/`morale`/`population` differently per choice (e.g. water_shortage: Ration vs Deep Drilling), reachable via `showEvent` click handlers. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 4, "G2": 2, "G3": 1, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32(seed) drives gameState.rng; endTurn() calls systems in fixed order",
+    "F2": "generateMap(seed) sets terrain; checkBuildable reads terrain; getAdjacencyBonus feeds calculateProduction",
+    "F3": "condenser water consumed by farm/greenhouse; resourceCaps enforced in resolveBuildingProduction",
+    "F4": "c.fatigue/c.job read in calculateProduction; c.skill hardcoded to 2, never modified",
+    "F5": "resolvePopulationNeeds drops morale on shortage; morale never read in calculateProduction",
+    "F6": "unlockResearch enforces prereq/cost; buildingBonus read in calculateProduction; metalToWater unused",
+    "F7": "fireEvent weighted selection over EVENTS; eventState.cooldowns set on fire, decremented in endTurn",
+    "F8": "tradeCaravanBuy/Sell wired via onclick; globalPrices static, never drifts across turns",
+    "F9": "checkAndResolveStorm damages b.hp; calculateProduction never reads b.hp; repairBuilding has no call site",
+    "F10": "serializeState copied via textarea+execCommand; deserializeState try/catch alerts on bad JSON",
+    "F11": "endTurn sets gameStatus won/lost; showGameOver sums population/research/resources/turn scores",
+    "F12": "tab click handlers + Space/1-5 keydown wired; no @media/flex-wrap for narrow screens",
+    "F13": "runTests 15 invariant asserts; runBenchmark loops 200 turns headless, returns stateHash",
+    "G1": "node.effects.buildingBonus summed into totalMult in calculateProduction every turn",
+    "G2": "resolvePopulationNeeds lowers morale; only indirect link is morale===0 triggering departure loss",
+    "G3": "checkAndResolveStorm lowers b.hp but calculateProduction ignores hp; repairBuilding never called",
+    "G4": "generateCaravan price = static globalPrices + random noise, no stockpile/turn dependency",
+    "G5": "applyEventChoice mutates resources/morale/population differently per choice branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Building HP damage and colonist morale are tracked but never actually feed back into the production formula, so hazards and morale drops are largely cosmetic to output."
+}
+```

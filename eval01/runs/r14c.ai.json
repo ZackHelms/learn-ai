@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** Single `game` object; `createRng`/mulberry32 used via `rngFloat`/`rngInt` throughout; `endTurn()` resolves consumption→production→morale→trade→events→hazards→end-check in fixed order. Score 2.
+
+**F2 (Map):** `initMap()` builds 8x8 via seeded `rngFloat`; `canBuild()` checks terrain; but `adjacencyBonus` fields and `getAdjacentTiles()` are never read by any production code — dead data. Score 1.
+
+**F3 (Economy):** production chain data exists (power→water→food etc.) and storage caps/overflow are enforced in `endTurn()`, but building `consumption` (water, power costs) is computed (`powerNeeded`) and only logged — never subtracted from `game.resources`, so output is effectively free. Score 1.
+
+**F4 (Population):** colonists have skill/fatigue/morale/job; `getProductionOutput()` reads `colonist.skill` but only for `building.workers`, which no code ever populates; `fatigue` is never read by production. Score 1.
+
+**F5 (Needs):** `endTurn()` computes food/water shortfall and lowers `c.morale`; recovery only via event effects; but `getProductionOutput()` never reads `morale`, so it never changes output. Score 1.
+
+**F6 (Research):** 12 nodes, `canResearch()` enforces prereqs, `doResearch()` deducts costs; but only `resilience_1/2` (storm damage) and `trade_tech` (caravan interval) are actually read elsewhere — 9 of 12 node effects (water_tech, food_tech, industry_1/2, etc.) are unused text. Score 1.
+
+**F7 (Events):** 10 defs in `EVENT_DEFINITIONS`; selection is a shuffled non-repeating deck (`rngShuffle`), not weighted; 6 events have 2 choices with distinct `applyEventEffects` outcomes; `eventCooldown` exists but is moot since `fired` Set permanently excludes each event after one use. Score 1.
+
+**F8 (Trade):** `generateCaravan()` prices from `game.resources[res]` (demandMod) and `globalSupply`; `trade()` handles both buy/sell with limited `offering.quantity`. Score 2.
+
+**F9 (Hazard):** `triggerAshstorm()` fires periodically, severity scales with `game.turn`, `building.damage` reduces `getProductionOutput()`, storm_shelter/resilience research mitigate damage; but `repairBuilding()` has no call site anywhere in the UI — dead code, repair unreachable. Score 1.
+
+**F10 (Save/load):** `saveGame()` serializes full state to textarea; `loadGame()` parses with try/catch and `alert()` on bad JSON. Score 2.
+
+**F11 (End conditions):** both `endGame(false,...)` (pop 0) and `endGame(true,...)` (turn≥60 & pop≥12) reachable in `endTurn()`; `renderEndScreen()` computes multi-factor `score`. Score 2.
+
+**F12 (UI):** tab click handler + `render()`; log lines show `Turn ${entry.turn}`; tile tooltips explain terrain/damage; Space/Digit1-5 keyboard shortcuts wired; several panels use `auto-fit` grids for narrow screens (though `.two-column` CSS class itself is unused). Score 2.
+
+**F13 (Dev panel):** `runTests()` has 15 real invariant checks (caps, prereqs, RNG reproducibility, save/load roundtrip); `runBenchmark()` runs 200 `endTurn()` calls headlessly and prints `getGameHash()`. Score 2.
+
+**G1:** production-yield research nodes (water_tech, food_tech, industry_1/2, etc.) never read in `getProductionOutput()`; only non-yield effects (storm resist, caravan timing) are wired. Score 0.
+
+**G2:** shortage writes real `c.morale -= shortage*10`, but `getProductionOutput()` never reads `morale` — final link absent. Score 1.
+
+**G3:** `triggerAshstorm()` sets `building.damage`, read by `getProductionOutput()` to cut output — real pipeline; but `repairBuilding()` (cost+recovery) has no call site anywhere. Score 2.
+
+**G4:** `generateCaravan()` demandMod reads live `game.resources[res]` via hardcoded <20 threshold; `globalSupply` never drifts (static). Score 2.
+
+**G5:** disease/wanderer choices durably mutate `game.colonists`/`game.resources` via `applyEventEffects`; but `effects.fatigue` and `effects.production` fields are silently no-ops (empty loop / unhandled key) for some branches. Score 3.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 0, "G2": 1, "G3": 2, "G4": 2, "G5": 3},
+  "evidence": {
+    "F1": "game object; rngFloat used in initMap/fireEvent; endTurn() fixed 9-step order",
+    "F2": "canBuild() checks terrain; getAdjacentTiles()/adjacencyBonus never read by production",
+    "F3": "def.consumption summed as powerNeeded but never subtracted from game.resources",
+    "F4": "getProductionOutput reads colonist.skill but building.workers never populated anywhere",
+    "F5": "c.morale -= shortage*10 in endTurn but getProductionOutput never reads morale",
+    "F6": "canResearch/doResearch enforce prereqs+cost; only resilience_1/2, trade_tech read elsewhere",
+    "F7": "EVENT_DEFINITIONS has 10; rngShuffle deck (unweighted); 6 events w/ branching applyEventEffects",
+    "F8": "generateCaravan() demandMod reads game.resources[res]; trade() handles buy/sell w/ offering.quantity cap",
+    "F9": "building.damage cuts output in getProductionOutput; repairBuilding() has no onclick call site",
+    "F10": "saveGame() serializes to textarea; loadGame() try/catch JSON.parse + alert on error",
+    "F11": "endGame(false/true,...) both reachable in endTurn(); renderEndScreen computes multi-term score",
+    "F12": "tab click listener + render(); Digit1-5/Space keydown; log entries show entry.turn",
+    "F13": "runTests() 15 invariant checks; runBenchmark() loops endTurn() 200x, prints getGameHash()",
+    "G1": "no production-yield research id (water_tech etc.) appears outside RESEARCH_NODES/prereqs",
+    "G2": "shortage writes c.morale; getProductionOutput has no morale term",
+    "G3": "triggerAshstorm sets building.damage read by getProductionOutput; repairBuilding unreachable",
+    "G4": "generateCaravan demandMod reads game.resources[res] via hardcoded <20 threshold",
+    "G5": "disease/wanderer choices mutate game.colonists/resources via applyEventEffects; fatigue/production effects no-op"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "buildBuilding() is redefined lower in the file to recursively call itself, breaking the core building-placement mechanic at runtime, and building consumption (power/water costs) is computed but never deducted, making production effectively free."
+}
+```

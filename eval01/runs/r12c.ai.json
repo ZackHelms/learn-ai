@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: Game class holds all state; mulberry32 seeds terrain/colonists/events, but `triggerAshstorm()` uses raw `Math.random()` — not all randomness seeded. endTurn() has fixed step order. Score 1.
+
+**F2 Map**: 64-tile grid, `generateTerrain()` uses `this.rng()`; `isValidBuild()` checks `building.terrain.includes(terrain)`; adjacency `adjBonus=1.15` for condenser/water & forge/vent multiplies `output`. Score 2.
+
+**F3 Economy**: mine→ore, forge consumes ore→metal, reactor consumes metal→power; caps enforced via `Math.min(...,this.caps[r])` everywhere. Score 2.
+
+**F4 Population**: colonists have skill/fatigue/morale/job fields, but `buildingAssignments` is initialized and read in `produceResources()` yet never populated by any function — skill never actually affects output. Score 1.
+
+**F5 Needs**: food/water consumed per colonist; shortage sets `morale-=30`; morale recovers `+5`/turn; but morale never feeds into `produceResources()` output formula. Score 1.
+
+**F6 Research**: 12 nodes, prereqs checked in `research_upgrade()`, costs spent; but `renewable_power`, `biotech`, `energy_storage`, `advanced_trading` flags are never read anywhere else. Score 1.
+
+**F7 Events**: 10 events, several with 2-3 choices writing different state (`resolveEventChoice`); `eventCooldown` gates repeats; but `fireRandomEvent()` selection is uniform `Math.floor(rng()*available.length)`, not weighted. Score 1.
+
+**F8 Trade**: `triggerCaravan()` prices = `basePrice*(0.8+rng()*0.6)*tradeMultiplier` — pure randomization, not stockpile-based nor a persisting drift; qty limited and buy/sell both work. Score 1.
+
+**F9 Hazard**: `triggerAshstorm()` scales severity with `turn`, destroys buildings outright (no partial-damage state), `reinforced_walls`/walls/shelters reduce damage; no repair function exists anywhere. Score 1.
+
+**F10 Save/load**: `serialize()`→JSON shown via `prompt()`; `loadBtn` handler parses with try/catch, `alert('Invalid save data...')` on failure. Score 2.
+
+**F11 End conditions**: win (`turn>=60 && pop>=12 && food/water>=50`) and lose (`pop===0`) both reachable; `computeScore()` has an operator-precedence bug dropping the population term but still combines research/turn/resources; `endGameModal` renders summary. Score 2.
+
+**F12 UI**: `switchTab()` wired to tab clicks and keys `1-6`; log entries show `Turn ${e.turn}`; tile tooltips show terrain/building/adjacency bonus; Space ends turn; `@media(max-width:600px)` responsive rules. Score 2.
+
+**F13 Dev panel**: `runTests()` checks real invariants (caps, prereqs, RNG determinism, save/load round-trip); `runBenchmark()` runs 200 headless turns and prints a `State hash`. Score 2.
+
+**G1**: `research['soil_enrichment']` etc. set by `research_upgrade()`, read directly in `produceResources()` multiplying `output` every turn. Score 3.
+
+**G2**: food/water consumption real; shortage sets `p.morale-=30` (real state change); but `produceResources()` never reads `p.morale`, so labor output is never reduced. Score 1.
+
+**G3**: `triggerAshstorm()` nulls out buildings (real output loss since `produceResources` skips null tiles); but no repair function anywhere spends resources to restore a damaged building. Score 1.
+
+**G4**: `triggerCaravan()` price uses `basePrice*rng*tradeMultiplier`; `tradeMultiplier` carries over from a trade event choice but resets after one use — no stockpile term, weak drift. Score 2.
+
+**G5**: `colonist_arrives` "Yes" pushes to `g.population`; `water_contamination` choices differently mutate `resources.water` vs. all colonists' `morale` — durable, distinct state writes. Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 1, "G4": 2, "G5": 4},
+  "evidence": {
+    "F1": "Game class + endTurn() fixed order; triggerAshstorm uses Math.random() not this.rng()",
+    "F2": "isValidBuild() checks terrain; adjBonus=1.15 for condenser/water read in produceResources()",
+    "F3": "mine ore consumed by forge (buildDef.consume) to make metal, capped via this.caps",
+    "F4": "buildingAssignments initialized but never pushed to; skillBonus branch never triggers",
+    "F5": "food/water shortage sets p.morale-=30 in endTurn(), but morale unread in produceResources()",
+    "F6": "research_upgrade() enforces prereq/cost; renewable_power/biotech/energy_storage/advanced_trading never read",
+    "F7": "fireRandomEvent() uses uniform rng index, not weighted; eventCooldown gates repeats",
+    "F8": "triggerCaravan() price = basePrice*rng*tradeMultiplier, no stockpile term; buyTrade/sellTrade work",
+    "F9": "triggerAshstorm() nulls buildings by severity, no repair() function found anywhere",
+    "F10": "serialize()/deserialize() via prompt(); loadBtn try/catch shows alert on bad JSON",
+    "F11": "endTurn() win/lose checks; computeScore() precedence bug drops population term but still multi-value",
+    "F12": "switchTab() wired to clicks/keys 1-6; tile-tooltip shows adjacency bonus; media query for narrow screens",
+    "F13": "runTests() checks RNG determinism & save/load roundtrip; runBenchmark() loops 200 turns, prints hash",
+    "G1": "research['soil_enrichment'] etc read directly in produceResources() output formula each turn",
+    "G2": "resources.food-- causes p.morale-=30, but produceResources() never reads p.morale",
+    "G3": "triggerAshstorm nulls buildings (output loss real) but no repair function exists to restore/cost",
+    "G4": "triggerCaravan price uses rng*tradeMultiplier; tradeMultiplier set once by trade_opportunity event then reset",
+    "G5": "colonist_arrives 'Yes' pushes to g.population; water_contamination choices differently mutate water vs morale"
+  },
+  "todo_notes": [],
+  "grader_confidence": "medium",
+  "contamination": "none",
+  "single_biggest_weakness": "Several systems wire correctly in isolation (research bonuses, terrain, trade limits) but key cross-system links are missing or dead code: colonist skill/job assignment is never populated, morale never feeds back into production, and there is no repair mechanic for storm-destroyed buildings."
+}
+```

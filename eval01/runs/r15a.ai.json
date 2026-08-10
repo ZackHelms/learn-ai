@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** gameState object; mulberry32(seed) used for map/events/storms/caravan; processTurn() resolves consumption→production→power→water→morale→storm→caravan→event→win/lose in fixed order. Score 2.
+
+**F2 (Map):** generateMap(rng) makes 64 tiles from weighted terrain; canBuildAt() checks building.terrains vs tile.terrain; def.adjacent/def.bonus added into `bonus` multiplying baseOutput in processTurn(). Score 2.
+
+**F3 (Economy):** reactor produces `power`, other buildings consume `power`/`water` (def.power/def.water) each turn to produce food/metal/parts/research; resourceCaps enforced with overflow logged and clamped. Score 2.
+
+**F4 (Population):** createColonist() has skill/fatigue/morale/assigned; colonistSkill read in production formula, but col.fatigue is only read inside the population-morale block, never by production math. Score 1.
+
+**F5 (Needs):** foodNeeded/waterNeeded consumption; shortage sets moraleDelta -=30 applied to col.morale; but no code reads col.morale in the production formula, so morale never changes output; no active regen (population_growth effect unused). Score 1.
+
+**F6 (Research):** 8 nodes in RESEARCH_TREE; canResearch() enforces prereqs; doResearch() deducts scrip/parts; 7 of 8 non-basic nodes have real effects wired (greenhouse_yield/condenser_yield/forge_yield/storm_mitigation/power_efficiency/advanced_parts all checked in code) but population_growth's "morale recovery +50%" is never referenced anywhere. Score 1.
+
+**F7 (Events):** 10 entries in EVENT_DECK; 8 events offer 2 choices with distinct effect() branches; eventCooldown Map blocks reuse within 8 turns; but fireRandomEvent() picks uniformly (`available[Math.floor(rng()*available.length)]`) — no weighting field or weighted pick exists. Score 1.
+
+**F8 (Trade):** tradeSupply/tradeSupplyTrend drift each spawnCaravan(); tradePrices = basePrice*demandFactor(supply); tradeInventory capped and decremented in buyTrade/incremented in sellTrade, both wired to UI buttons. Score 2.
+
+**F9 (Hazard):** triggerAshstorm() fires every 12 turns, intensity scales with turn/20; stormDamage Map set per building; storm_mitigation research halves damage; repairBtn spends parts and clears stormDamage — but production loop never reads gameState.stormDamage, so damaged buildings produce at full rate (damage % shown is UI-only text). Score 1.
+
+**F10 (Save/load):** serializeGame() JSON.stringify's core fields (turn, resources, colonists, buildings, research keys); deserializeGame() try/catches JSON.parse and alerts on failure; but omits stormDamage, tradeSupply/trend, nextEventTurn/nextCaravanTurn, eventCooldown — not truly "full state", and no field-level validation beyond the parse. Score 1.
+
+**F11 (End conditions):** population<=0 → endGame(false,...); turn>=60 && population>=12 && food>0 && water>0 → endGame(true,...); calculateScore() combines population/research/resources/turn; gameOverModal renders summary. Score 2.
+
+**F12 (UI):** currentTab tab-switching wired to buttons; log entries prefixed `Turn ${gameState.turn}:`; keydown listener wires Space and keys 1-5; @media queries adapt layout; but showTooltip/renderTileTooltip only shows terrain/building name, never explains any numeric value. Score 1.
+
+**F13 (Dev panel):** runTests() checks real invariants (no negative resources, storage caps, research prereqs, unique IDs, save/load round-trip) wired to a button; runBenchmark() runs 200 headless processTurn() calls and prints a computed state hash. Score 2.
+
+**G1:** researchDone.has('greenhouse_yield') etc. read inside processTurn() production loop, adding to `bonus` that multiplies baseOutput — real pipeline but hardcoded per-building name checks. Score 3.
+
+**G2:** food/water shortfall sets moraleDelta, applied to col.morale (real state change), but no code anywhere reads col.morale to reduce production output — chain breaks at the final link. Score 1.
+
+**G3:** triggerAshstorm() sets stormDamage per building, repairBtn spends parts and clears it, but production loop never reads stormDamage so damaged buildings still produce at full rate (matches explicit "at most 1" rule). Score 1.
+
+**G4:** tradeSupply drifts via tradeSupplyTrend each spawnCaravan(); tradePrices computed from tradeSupply via demandFactor, displayed and used in buyTrade/sellTrade cost math. Score 4.
+
+**G5:** dust_harvest and disease_outbreak choice.effect(gameState) branches mutate different resource/population fields durably (not just logged), executed via showEventModal button onclick. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 2, "9": 1, "10": 1, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "processTurn() runs consumption->production->power->water->morale->storm->caravan->event in fixed order, all via gameState.rng",
+    "F2": "canBuildAt() checks tile.terrain; def.adjacent/def.bonus added to bonus in processTurn() production calc",
+    "F3": "reactor produces power, forge/greenhouse consume power/water each turn; resourceCaps clamp with overflow logged",
+    "F4": "col.skill used as colonistSkill in baseOutput calc; col.fatigue never read outside population block",
+    "F5": "moraleDelta -=30 on food/water crisis writes col.morale, but no production code reads col.morale",
+    "F6": "6 of 7 non-basic nodes checked (e.g. researchDone.has('forge_yield')); population_growth effect never referenced",
+    "F7": "EVENT_DECK has 10 entries, 8 with 2 choices; fireRandomEvent() picks uniformly with Math.floor(rng()*available.length), no weights",
+    "F8": "tradeSupply drifts in spawnCaravan(), tradePrices from demandFactor, buyTrade/sellTrade both wired to UI",
+    "F9": "stormDamage.set(pos,...) in triggerAshstorm(), but production loop over gameState.buildings never reads stormDamage",
+    "F10": "serializeGame()/deserializeGame() cover core fields only, missing stormDamage/tradeSupply/timers; try/catch alert on parse failure",
+    "F11": "endGame(false) on population<=0, endGame(true) on turn>=60 conditions; calculateScore() combines multiple fields, modal renders",
+    "F12": "currentTab switching + keydown 1-5/Space wired; renderTileTooltip only shows terrain/building name, no numeric breakdown",
+    "F13": "runTests() checks 15 real invariants; runBenchmark() loops processTurn() 200x headless and prints stateStr hash",
+    "G1": "researchDone.has('greenhouse_yield') read in processTurn() production loop, adds to bonus multiplier",
+    "G2": "moraleDelta writes col.morale on shortage, but no production formula reads col.morale afterward",
+    "G3": "stormDamage set by triggerAshstorm() and cleared by repairBtn, but production loop ignores stormDamage entirely",
+    "G4": "tradeSupply/tradeSupplyTrend updated in spawnCaravan(), tradePrices = basePrice*demandFactor(tradeSupply), used in buyTrade/sellTrade",
+    "G5": "dust_harvest/disease_outbreak choice.effect(gameState) mutate resources/population directly via button onclick"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm damage and morale are tracked in state but never actually feed back into the production formula, so hazard and needs-shortage penalties are largely cosmetic despite real-looking state mutations."
+}
+```
