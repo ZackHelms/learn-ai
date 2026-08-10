@@ -109,6 +109,7 @@ Grader column; a prompt edit is a grader change (see rules below).
 ```bash
 python3 eval_ashfall.py runs/<candidate>.html --runtime --merge runs/<candidate>.ai.json
 python3 eval_ashfall.py --report runs/     # compare everything scored so far
+./listscore.py r01a r01b ...               # quick "det + ai = total" per grading run
 ```
 
 Add a row to `RESULTS.md`. Every row records the candidate config AND the grader config.

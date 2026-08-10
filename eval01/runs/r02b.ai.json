@@ -1,0 +1,69 @@
+# Worksheet
+
+**F1 Core loop**: `GameState` single state object; `PRNG` (Mulberry32) used for all randomness (map, trade, events, skill gain) — no `Math.random()` found; `endTurn()` calls produce→consume→updateColonists→storm→trade→event→turn++ in fixed order. Score 2.
+
+**F2 Map**: 64-tile `generateMap()` seeded via `this.prng.next()`; `canBuild()` checks `tile.terrain`; `getAdjacencyBonus()` feeds `output = baseOutput*bonus` in `produceResources()`. Score 2.
+
+**F3 Economy**: water consumed→food (`greenhouse`), power consumed→metal (`forge`), power itself produced by `generator`/`solar` feeding forge — real chain; caps via `resourceCaps`+`Math.min` in `produceResources`/`trade`, overflow discarded. Score 2.
+
+**F4 Population**: colonist records have id/skill/fatigue/morale/job/assigned; `produceResources` reads `c.skill` and `c.morale` directly, but `c.fatigue` is never read inside the production formula (only indirectly via a separate morale penalty in `updateColonists`). Score 1.
+
+**F5 Needs**: `consumeResources()` computes food/water need per colonist, shortage cuts morale (`-5`/`-3`); morale feeds `avgMorale` in production; recovery via idle colonists gaining `+2` morale/turn. Score 2.
+
+**F6 Research**: 8 nodes in `initializeResearch()`, prereq enforced in `research()`, cost deducted — but only `efficiency` (`output*=1.2`) and `storm_defense` (`damage*=0.7`) are ever read elsewhere; `vent_tech`, `water_purify`, `population`, `advanced_farm`, `power_plant`, `final_tech` have zero call sites outside the tree. Score 1.
+
+**F7 Events**: 10 entries in `eventDetails`; 6 events have 2 differing-effect choices (`dust_storm`, `new_settler`, `equipment_failure`, `illness`, `collapse`, `solar_flare`); selection is `prng.choice(eventList)` — uniform, not weighted; `eventCooldowns[key]=turn` check `<this.turn` is satisfied again the very next turn, so cooldown is effectively non-functional. Score 1.
+
+**F8 Trade**: `generateTradePrices()` = `base + prng.randInt(-2,2)`, not derived from stockpiles/supply; displayed "stock available" is cosmetic only — `trade()` never checks it, so caravan inventory isn't actually limited; buy/sell both work. Score 1.
+
+**F9 Hazard**: `ashStorm()` fires on `turn%15===0`, severity scales with turn, `storm_defense` cuts damage 30%; but `tile.building.hp` is never read in `produceResources`, so damaged buildings produce at full rate; no function restores hp (event "repair" choices only spend parts, never touch hp). Score 1.
+
+**F10 Save/load**: `serialize()` full JSON incl. resources/colonists/research/buildings/trade; `confirmLoad()`→`GameState.deserialize()` try/catch, `alert('Invalid save data')` on failure. Score 2.
+
+**F11 End conditions**: `checkEndConditions()` has both win (turn≥60, pop≥12, needs met) and lose (`colonists.length===0`, reachable via morale-driven removal in `updateColonists`); `showEndScreen()` sums `scorePopulation/scoreResearch/scoreResources/scoreTurns`. Score 2.
+
+**F12 UI**: `switchTab()` wired to `.tab-btn` clicks; log entries store `turn:` shown as `[T{turn}]`; `showTooltip()` on hover; keydown handles Space + `1`-`5` tab keys; `@media (max-width:600px)` adjusts grid/tabs. Score 2.
+
+**F13 Dev panel**: `runTests()` checks non-trivial invariants (caps, prereqs, save/load hash round-trip, ranges); `runBenchmark()` builds a fresh headless `GameState`, loops `endTurn()` 200x with no DOM calls, prints `gs.getHash()`. Score 2.
+
+**G1**: `research.efficiency.done` read directly in `produceResources()` as `output*=1.2`, hardcoded single constant but applied every relevant turn to real formula. Score 3.
+
+**G2**: `consumeResources()` shortage → `c.morale -= 5/3`; `produceResources()` uses `avgMorale` in `baseOutput = avgSkill*avgMorale` every turn. Score 4.
+
+**G3**: `ashStorm()` sets `tile.building.hp -= damage`, but `hp` is never read by `produceResources`, and no repair function restores hp — chain breaks at output-loss/recovery. Score 1.
+
+**G4**: `generateTradePrices()` uses only `base + prng.randInt(-2,2)`, never reads `this.resources` or a persistent drifting supply variable. Score 0.
+
+**G5**: `dust_storm` (parts-10 vs colonist morale-5) and `new_settler` (adds colonist+scrip cost vs no-op) both call `choice.effect(this.gs)` from `chooseEvent()`, writing real state, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 2, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 4, "G3": 1, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "PRNG used exclusively (no Math.random found); endTurn() fixed-order pipeline",
+    "F2": "generateMap() seeded terrain; getAdjacencyBonus() multiplies into produceResources() output",
+    "F3": "greenhouse consumes water->food, forge consumes power->metal; resourceCaps enforced via Math.min",
+    "F4": "c.skill/c.morale read in produceResources(); c.fatigue never read there, only via updateColonists()",
+    "F5": "consumeResources() shortage cuts morale; avgMorale factors into baseOutput each turn",
+    "F6": "only research.efficiency and research.storm_defense have any call site outside the tree; 6 nodes unused",
+    "F7": "10 eventDetails entries, 6 with differing-effect choices; eventCooldowns check never blocks past same-turn",
+    "F8": "generateTradePrices() = base+prng.randInt only; stock display not enforced in trade()",
+    "F9": "ashStorm() decrements building.hp but produceResources() never reads hp; no repair-to-hp function exists",
+    "F10": "serialize()/GameState.deserialize() with try/catch and alert('Invalid save data') on parse failure",
+    "F11": "checkEndConditions() sets gameOver/gameResult; showEndScreen() sums 4 score components",
+    "F12": "switchTab() wired to tab-btn clicks; keydown handles Space/1-5; media query at 600px",
+    "F13": "runTests() asserts caps/prereqs/ranges/save-load hash; runBenchmark() loops endTurn() 200x headless, prints getHash()",
+    "G1": "research.efficiency.done read as output*=1.2 inside produceResources()",
+    "G2": "consumeResources() morale penalty feeds avgMorale used in baseOutput formula",
+    "G3": "building.hp is damaged by ashStorm() but never read by produceResources(); no repair-to-hp code",
+    "G4": "generateTradePrices() ignores this.resources and has no persistent drifting supply variable",
+    "G5": "dust_storm and new_settler choice.effect(gs) branches write distinct resource/colonist state, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Building hp from storms and most research node effects are tracked but never read by the production formula, so damaged buildings and 6 of 8 research nodes have no real gameplay effect."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: `GameState` single state object; `Mulberry32` used for colonists/storm/events/caravan; but `generateMap()` uses `Math.random()`, not the seeded rng — breaks "seeded PRNG for all randomness." `endTurn()` runs fixed order (produce→consume→morale→storm→event→caravan). Score 1.
+
+**F2 – Map**: 64-tile grid; `canBuild()` checks `terrain !== required`. Terrain comes from `Math.random()`, not seed. `getAdjacencyBonus()` exists but is only reached after `if (!colonist) continue` in `produceTurn`, and no UI ever sets `colonist.assignedBuilding`, so it never actually executes in play. Score 1.
+
+**F3 – Economy**: real chains (greenhouse water→food, forge ore+power→metal, etc.), caps via `Math.min(..., resourceCaps[k])`. But `produceTurn()`'s per-building work is gated by `colonist.assignedBuilding === idxNum`, and no UI code anywhere sets `assignedBuilding` (only `runBenchmark`'s internal policy does). Real gameplay never produces. Score 1.
+
+**F4 – Population**: colonist records have skill/fatigue/morale/job/assignedBuilding; `colonist.skill`/`fatigue` read in `produceTurn`, but that code path is unreachable in real play (same assignment gap). Score 1.
+
+**F5 – Needs**: `consumeTurn()` computes shortage and lowers `c.morale`; `updateMorale()` allows recovery (`fatigue<30` → morale+3). But morale is never read anywhere inside `produceTurn`'s output formula — "morale changes output" is absent. Score 1.
+
+**F6 – Research**: 8 `RESEARCH_NODES`; prereqs checked in `research()`; costs deducted; effects (`stormDamageMult`, `colonistMoraleMult`) applied and `stormDamageReduction` read in `stormTurn`. Onclick call site `game.research(${node.id})` exists (a local `status` scoping bug doesn't count as file-wide per rules). Score 2.
+
+**F7 – Events**: 10 entries in `EVENTS_DECK`; selection is `rngInt(EVENTS_DECK.length)` — uniform, not weighted; cooldown via `eventCooldowns[e.id]`. `handleEventChoice()` has **zero call sites** anywhere in the file — no button/onclick renders `game.lastEvent` or invokes it. Score 1.
+
+**F8 – Trade**: caravan inventory has limited `qty`, `buy()`/`sell()` wired via real onclick handlers and both work. Prices are pure `rngRandom()` per arrival — never read `this.resources` or a persisted supply variable. Score 1.
+
+**F9 – Hazard**: `stormTurn()` fires every 8 turns, severity grows with `turn`, flags `building.damage`; `produceTurn` skips damaged buildings (`if (building.damage>0) continue`); `repairBuilding()` spends `parts` and clears damage; `stormDamageReduction` mitigates via research/event. Score 2.
+
+**F10 – Save/load**: `saveState()`/`loadState()` wired to buttons; JSON round-trips, but omits `map`, rng state, `eventCooldowns`, `lastEvent`; `loadState` only try/catches JSON parse errors, no schema validation. Score 1.
+
+**F11 – End conditions**: win (`turn>60 && colonists.length>=12`) and loss (`colonists.length===0`) both checked in `endTurn()`; `getScore()` sums population/research/stockpiles/turns; `showEndScreen()` renders summary. Score 2.
+
+**F12 – UI**: tab buttons wired; `.log-turn` shows `entry.turn`; map tile tooltip shows terrain/damage; Space/1-5 keyboard shortcuts trigger real actions; `@media(max-width:600px)` adjusts layout. Score 2.
+
+**F13 – Dev panel**: `runTests()` asserts real invariants (research prereq validity, resource caps, save/load hash match); `runBenchmark()` runs 200 headless turns on a separate `benchGame` and prints `stateHash()`. Score 2.
+
+**G1**: research effects (`stormDamageMult`, `colonistMoraleMult`) don't touch the skill×adjacency yield formula; only indirect effect is unlocking new building types via `researchLock`. Score 1.
+
+**G2**: shortage→morale drop is real (`consumeTurn`→`c.morale`), but morale is never read in the output formula in `produceTurn` — final link absent. Score 1.
+
+**G3**: `stormTurn` sets `building.damage`; `produceTurn` gates output on damage flag; `repairBuilding` spends `parts`, resets damage, restoring eligibility — full pipeline coded, minor gap (instant full repair, storm morale hit not tied to specific building). Score 3.
+
+**G4**: caravan prices computed from `rngRandom()` only, never reference `this.resources` or a persistent drifting variable. Score 0.
+
+**G5**: `handleEventChoice()` correctly mutates resources/morale/population/research per branch, but has no call site anywhere in the file (no UI renders choices) — unreachable. Score 0.
+
+```json
+{
+  "F": {"1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 2, "7": 1,
+        "8": 1, "9": 2, "10": 1, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 1, "G2": 1, "G3": 3, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "generateMap() uses Math.random() not this.rng; endTurn() fixed order of 6 calls",
+    "F2": "canBuild() checks terrain; getAdjacencyBonus() unreachable since assignedBuilding never set",
+    "F3": "produceTurn() chains exist but gated by colonist.assignedBuilding, never set by any UI",
+    "F4": "colonist.skill/fatigue read in produceTurn, but that path never executes in real play",
+    "F5": "consumeTurn() writes shortage to c.morale; morale never read in produceTurn output calc",
+    "F6": "research() checks prereqs/costs/effects; onclick=\"game.research(${node.id})\" call site exists",
+    "F7": "EVENTS_DECK has 10 entries; handleEventChoice() has zero call sites in the file",
+    "F8": "buy()/sell() wired to real buttons; caravan.inventory prices from rngRandom() only",
+    "F9": "stormTurn() damages buildings; produceTurn skips damage>0; repairBuilding() spends parts",
+    "F10": "saveState()/loadState() wired to buttons; omits map/rng/eventCooldowns; only catches JSON errors",
+    "F11": "endTurn() returns 'win'/'loss'; getScore() sums 4 factors; showEndScreen() renders summary",
+    "F12": "tab-button listeners, log entry.turn, Space/1-5 keydown handler, @media query",
+    "F13": "runTests() checks research/save-load invariants; runBenchmark() 200-turn headless loop + stateHash",
+    "G1": "researchLock in canBuild() gates building types; no yield-multiplier read in produceTurn",
+    "G2": "consumeTurn shortage -> c.morale real; morale never appears in produceTurn output formula",
+    "G3": "building.damage set in stormTurn, gates produceTurn, cleared by repairBuilding() spending parts",
+    "G4": "caravan.inventory prices = 0.8+rngRandom()*0.4 etc, never reads this.resources",
+    "G5": "handleEventChoice() mutates state correctly but is never called anywhere in the file"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "No UI ever sets colonist.assignedBuilding, so produceTurn()'s entire economy never runs during real play, only inside the dev benchmark."
+}
+```

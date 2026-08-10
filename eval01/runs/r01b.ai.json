@@ -1,0 +1,80 @@
+I'll grade this by reading through the code systematically against each rubric item.
+
+**F1 — Core loop:** `Game` class holds all state; `mulberry32(seed)` seeds `this.rng`, used throughout (map gen, colonists, events); `endTurn()` resolves production→consumption→colonist states→storm→trade→win/lose in fixed order. Score: 2
+
+**F2 — Map:** 8x8 grid in `generateMap()`, terrain from `this.rng()`; `buildBuilding()` checks `tile.terrain !== building.terrain`; `getAdjacencyBonuses()` returns 15/20% read in `runProduction()` via `building.adjBonus`. Score: 2
+
+**F3 — Economy:** Buildings have `needs`/`produces` but it's single-resource-in-single-resource-out (e.g., forge needs power→produces metal), not multi-step ore→metal→parts chains as literally described; storage caps enforced in `runProduction()` with overflow logged and clamped. No true multi-hop chain (ash→soil→food doesn't exist, it's just water→food). Score: 1
+
+**F4 — Population:** Colonists are individual objects with `skill`, `fatigue`, `morale`, `job`, `assigned`; `skill` read in `runProduction()` via `skillSum`; fatigue/morale updated in `updateColonistStates()` but fatigue itself is never read by production (only health%, not fatigue or morale factor into output formula). Score: 1
+
+**F5 — Needs:** `runConsumption()` deducts food/water per turn, shortage triggers `c.morale -= 5`; recovery possible (morale can rise via events); but morale drop is never read by `runProduction()` — no morale→output link exists. Score: 1
+
+**F6 — Research:** 12 nodes in `RESEARCH_NODES`, prereq structure in `initResearch()`, but the "Research" button in `renderResearch()` calls `alert('TODO: Research mechanics')` — no purchase function exists at all, nodes can never become `done`. Score: 0
+
+**F7 — Events:** 15 events in `EVENTS`; selection is `EVENTS[Math.floor(this.rng() * EVENTS.length)]` — uniform, not weighted despite `weight` fields existing unused; 5 events have `choices` with `resolveEvent` branching, but many outcomes (isolation, medicineNeeded, equipmentDamage, resourceCost, cropLoss, resourceStress, scrapLoss, ashIncrease, stormPause) are all just logged as "(outcome TBD)" via TODO — fewer than 4 choice-events have actually differentiated state changes (only outbreak/desertion effectively resolve state via popLoss/moraleLoss/moraleBuff-style outcomes, others are stubs). No cooldown tracking (`eventCooldown` declared, never read/written). Score: 1
+
+**F8 — Trade:** `renderTrade()` shows caravan goods with hardcoded price/stock array recreated each render (not persisted/limited); Buy button calls `alert('TODO: Buy/sell mechanics')` — no buy or sell function exists. Score: 0
+
+**F9 — Hazard:** `triggerStorm()` fires via countdown `stormCounter`; severity scales with `this.turn`; damages `building.health`; `runProduction()` reads `building.health/maxHealth` reducing output — that link works; shield buildings reduce damage (`shieldCount * 5`); but no repair function exists anywhere (Repair button is `alert('TODO')`), so damage is never reversible/no repair cost. Score: 1
+
+**F10 — Save/load:** `getSaveState()`/`loadFromState()` exist and used in `runTests()` round-trip test and in `runBenchmark()`/`hashState()`, but there is no UI textarea, no export/import button, no user-facing save/load feature (despite HTML mentioning "Save/load via JSON textarea" in comments) — text-area class exists in CSS but no `<textarea>` element or button wired for save/load in the HTML body. Score: 0
+
+**F11 — End conditions:** Win check `turn>=60 && colonists.length>=12` and lose check `colonists.length===0` both in `endTurn()`, both reachable; `showEndScreen()` computes `score` from colonists, research, resources, turn and renders summary via modal. Score: 2
+
+**F12 — UI:** `switchTab()` wires tab buttons and keyboard shortcuts 1-5; Space triggers `endTurn()`; log entries carry `entry.turn` via `addLog`; media query adapts sidebar/tile/grid layout for narrow screens; but no tooltips exist anywhere (no `.tooltip` element ever populated/shown despite CSS class defined). Score: 1
+
+**F13 — Dev panel:** `runTests()` has 15 assertions checking real invariants (non-negative resources, storage caps, health caps, research prereqs, morale/fatigue ranges, RNG reproducibility) — not trivial; `runBenchmark()` runs a headless 200-turn loop with a separate `Game` instance and prints `hashState()`. Score: 2
+
+Now the G items.
+
+**G1 — research→production:** No research purchase function exists (F6=0), so `node.done` never becomes true, and `runProduction()` has a literal `// TODO: Apply research bonuses from unlocked techs` — the read side doesn't exist either. Score: 0
+
+**G2 — shortfall→morale→labor:** `runConsumption()` writes `c.morale -= 5` on shortage; but `runProduction()`'s output formula never reads `c.morale` (only `c.skill` and `building.health`) — morale drop has no effect on production. Score: 1
+
+**G3 — storm→damage→output→repair→recovery:** `triggerStorm()` damages `building.health`; `runProduction()` multiplies output by `health/maxHealth` (works); but no repair function exists anywhere in the codebase (Repair button is a stub alert) — damage is permanent, no recovery path. Score: 2
+
+**G4 — trade prices respond to stockpiles/supply:** `renderTrade()` uses a hardcoded `caravanGoods` array with fixed `price` values recreated identically every render; no read of `this.resources` or any drifting supply variable in price calc. Score: 0
+
+**G5 — event choices durably mutate state:** `resolveEvent()` for `outbreak`/`desertion` choices actually differ in outcome mapping, but the actual choice-driven distinctive state mutation is thin — e.g. `outbreak`'s two outcomes (`isolation`, `medicineNeeded`) both fall into the generic TODO stub branch that only logs "(outcome TBD)" with no state change; `desertion`'s outcomes (`popLoss`, `moraleLoss`) do mutate state distinctly (splice colonist vs morale -20) via real branches. Only one event pair (desertion) truly has two distinct state-mutating branches; most other choice events resolve to no-op TODO logging. Score: 1
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 1, "5": 1, "6": 0, "7": 1,
+        "8": 0, "9": 1, "10": 0, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 0, "G2": 1, "G3": 2, "G4": 0, "G5": 1},
+  "evidence": {
+    "F1": "Game class + mulberry32(seed) rng; endTurn() calls production/consumption/storm in fixed order",
+    "F2": "generateMap() uses rng for terrain; buildBuilding() checks terrain; adjBonus read in runProduction()",
+    "F3": "runProduction() consumes bdef.needs, storage caps enforced with overflow log; no multi-hop chain",
+    "F4": "colonist.skill read via skillSum in runProduction(); fatigue/morale updated but never read by production",
+    "F5": "runConsumption() deducts food/water, morale -=5 on shortage; morale never feeds back into output",
+    "F6": "renderResearch() 'Research' button calls alert('TODO: Research mechanics'), no purchase fn exists",
+    "F7": "fireEvent() picks uniformly from EVENTS ignoring weight; most choice outcomes hit generic TODO stub",
+    "F8": "renderTrade() Buy button calls alert('TODO: Buy/sell mechanics'), no buy/sell function exists",
+    "F9": "triggerStorm() damages building.health, severity scales with turn; no repair fn (alert TODO) ever restores it",
+    "F10": "getSaveState()/loadFromState() only used internally in runTests()/runBenchmark(), no UI export/import",
+    "F11": "endTurn() checks colonists.length===0 and turn>=60&&pop>=12; showEndScreen() computes and renders score",
+    "F12": "switchTab() + keydown shortcuts 1-5/Space wired; media query adapts layout; no tooltip ever rendered",
+    "F13": "runTests() asserts 15 real invariants; runBenchmark() runs headless 200-turn Game and prints hashState()",
+    "G1": "no research purchase exists; runProduction() has literal TODO to apply research bonuses, never reads research",
+    "G2": "runConsumption() writes c.morale-=5 on shortage but runProduction() output formula never reads c.morale",
+    "G3": "triggerStorm() sets building.health, runProduction() scales output by health/maxHealth; no repair fn exists",
+    "G4": "renderTrade() caravanGoods array has fixed hardcoded price/stock, never reads resources or a supply var",
+    "G5": "desertion event's popLoss/moraleLoss branches mutate state distinctly; most other choice outcomes are TODO stubs"
+  },
+  "todo_notes": [
+    "buildBuilding(): TODO Desalination research allows condenser anywhere",
+    "runProduction(): TODO Apply research bonuses from unlocked techs",
+    "updateColonistStates(): TODO Implement proper defection with chance/event",
+    "fireEvent(): TODO Select from weighted pool, avoid recently-fired events",
+    "resolveEvent(): TODO Implement remaining outcomes (isolation, medicineNeeded, equipmentDamage, resourceCost, cropLoss, resourceStress, scrapLoss, ashIncrease, stormPause)",
+    "showBuildingInfo(): Repair button alert('TODO: Repair/dismantle mechanics')",
+    "renderResearch(): Research button alert('TODO: Research mechanics')",
+    "renderTrade(): Buy button alert('TODO: Buy/sell mechanics')"
+  ],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research, trade, and repair are all UI stubs wired only to alert('TODO...'), so three whole systems and their cross-system chains never actually execute."
+}
+```

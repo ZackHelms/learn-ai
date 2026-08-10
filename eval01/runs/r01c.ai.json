@@ -1,0 +1,76 @@
+## Worksheet
+
+**F1 Core loop** — Game class = single state object; mulberry32 seeds all RNG use (map, colonists, events, storms); endTurn() runs fixed order (event→production→consumption→colonist update→storm→trade→win/loss). Score 2.
+
+**F2 Map** — generateMap() builds 8x8 from seeded rng; buildBuilding() checks tile.terrain vs building.terrain; getAdjacencyBonuses() returns +15/+20%, stored as adjBonus, read in runProduction(). Score 2.
+
+**F3 Economy** — power(reactor)→metal(forge/smelter, needs power)→parts(partsFab, needs metal+power) chain; storageCaps enforced with overflow logged in runProduction(). Input consumption is a flat -1/turn (shallow) but chain and caps are real. Score 2.
+
+**F4 Population** — colonists have skill/fatigue/morale/job/assigned; skill read via skillSum in runProduction(), but fatigue is only read by updateColonistStates() (affects morale), never by production code. Score 1.
+
+**F5 Needs** — runConsumption() computes food/water deficit, drops colonist.morale by 5; but morale is never read anywhere in runProduction() so it never changes output. Score 1.
+
+**F6 Research** — 12 RESEARCH_NODES defined, but "Research" button is `onclick="alert('TODO: Research mechanics')"` — no function ever sets research[id].done=true or applies node.effect (explicit `// TODO: Apply research bonuses`). Score 0.
+
+**F7 Events** — 15 events, fireEvent() called from endTurn() and resolveEvent() mutates state for several outcomes, but selection is uniform (`EVENTS[Math.floor(rng()*EVENTS.length)]`, weight field unused), eventCooldown is set but never checked, and only 1 event (desertion) has both choice branches produce distinct real mutations — rest are TODO stubs. Score 1.
+
+**F8 Trade** — caravan open/close toggled by tradeCaravanTurns, caravanGoods rendered, but "Buy" button is `onclick="alert('TODO: Buy/sell mechanics')"` — no buy or sell function exists. Score 0.
+
+**F9 Hazard** — triggerStorm() called from endTurn(), severity scales with turn, health penalty read in runProduction(), shield buildings reduce damage; but "Repair" button is `alert('TODO: Repair/dismantle mechanics')` — no repair function anywhere, damage is permanent. Score 1.
+
+**F10 Save/load** — getSaveState()/loadFromState() exist and are used by the self-test round-trip, but no textarea or export/import UI exists anywhere in the HTML for the player. Score 0.
+
+**F11 End conditions** — endTurn() checks colonists.length===0 (loss) and turn>=60 && pop>=12 (win), both reachable; showEndScreen() computes score from colonists/research/resources/turn and renders modal. Score 2.
+
+**F12 UI** — switchTab() wired to all tab buttons; addLog() stores turn, renderLog() shows "T{turn}:"; keydown listener wires Space and 1-5; @media query adapts sidebar/tile size; but .tooltip CSS class is never instantiated anywhere in JS. Score 1.
+
+**F13 Dev panel** — runTests() has 15 real invariant checks (caps, ranges, prereqs, save/load roundtrip, PRNG determinism); runBenchmark() runs a headless 200-turn loop with a greedy policy and prints hashState() output. Score 2.
+
+**G1** — research effects never applied (F6=0), runProduction has literal `// TODO: Apply research bonuses from unlocked techs`. Score 0.
+
+**G2** — runConsumption() writes deficit→morale-=5 (real state change), but runProduction() never reads colonist.morale, so labor output is unaffected. Score 1.
+
+**G3** — triggerStorm() damages building.health; runProduction() scales output by health/maxHealth (real link); shield building mitigates damage; but no repair function exists anywhere, so "repair cost"/"recovery" links are absent. Score 2.
+
+**G4** — caravanGoods prices in renderTrade() are hardcoded literals (2,3,8,5,15), never derived from this.resources or a drifting supply variable. Score 0.
+
+**G5** — resolveEvent() case 'desertion' has both choices (popLoss splice, moraleLoss on all colonists) durably mutate state differently; most other choice events (outbreak, equipment, mostly mutation/outsiders/accident) have at least one branch reduced to `// TODO: Implement remaining outcomes` log-only stub. Score 2.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 0, "7": 1,
+        "8": 0, "9": 1, "10": 0, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 0, "G2": 1, "G3": 2, "G4": 0, "G5": 2},
+  "evidence": {
+    "F1": "mulberry32 seeds map/colonists/events/storms; endTurn() fixed order of system calls",
+    "F2": "getAdjacencyBonuses() sets adjBonus, read by runProduction() output formula",
+    "F3": "partsFab needs metal+power, produces parts; storageCaps overflow handled in runProduction()",
+    "F4": "skillSum read in runProduction(); c.fatigue only read by updateColonistStates(), not production",
+    "F5": "runConsumption() drops morale on deficit; morale never read in runProduction()",
+    "F6": "Research button onclick=alert('TODO: Research mechanics'); no research[id].done=true anywhere",
+    "F7": "fireEvent() uniform index pick ignoring event.weight; eventCooldown set but never read",
+    "F8": "Buy button onclick=alert('TODO: Buy/sell mechanics'); no buy/sell function",
+    "F9": "triggerStorm() scales severity by turn; Repair button alert('TODO...'), no repair function",
+    "F10": "getSaveState/loadFromState used only by runTests() round-trip; no textarea/export UI in DOM",
+    "F11": "endTurn() checks pop===0 and turn>=60&&pop>=12; showEndScreen() renders score modal",
+    "F12": "switchTab()/keydown listener wired; .tooltip CSS class never instantiated in JS",
+    "F13": "runTests() 15 invariant checks; runBenchmark() 200-turn headless loop + hashState()",
+    "G2": "runConsumption() writes morale-=5 on deficit, but runProduction() never reads morale",
+    "G3": "triggerStorm() sets building.health, runProduction() scales by health ratio, but no repair function exists",
+    "G5": "resolveEvent() 'desertion' choices popLoss vs moraleLoss both mutate state distinctly"
+  },
+  "todo_notes": [
+    "TODO: Desalination research allows condenser anywhere (buildBuilding)",
+    "TODO: Apply research bonuses from unlocked techs (runProduction)",
+    "TODO: Implement proper defection with chance/event (updateColonistStates)",
+    "TODO: Select from weighted pool, avoid recently-fired events (fireEvent)",
+    "TODO: Implement remaining outcomes (resolveEvent switch: isolation, medicineNeeded, equipmentDamage, resourceCost, cropLoss, resourceStress, scrapLoss, ashIncrease, stormPause)",
+    "alert('TODO: Repair/dismantle mechanics') (showBuildingInfo)",
+    "alert('TODO: Research mechanics') (renderResearch)",
+    "alert('TODO: Buy/sell mechanics') (renderTrade)"
+  ],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Several core systems (research purchase, trade buy/sell, building repair) are stubbed as alert('TODO...') buttons, so they never actually mutate game state despite being fully rendered in the UI."
+}
+```

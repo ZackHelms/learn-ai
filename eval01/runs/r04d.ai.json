@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop:** `Game` class holds all state; `SeededRandom` (`this.rng.next()`) used in genMap/genPeople/fireEvent/spawnCaravan; `endTurn()` runs numbered steps 1-9 in fixed order. Score 2.
+
+**F2 — Map:** `genMap()` builds 8x8 grid from seed; `canBuild()` checks `tile.terrain !== building.terrain`. Adjacency (`config.adjacency`, `has_adj`) only used in `showTileTooltip()` text, never multiplies actual production in `endTurn()`. Score 1.
+
+**F3 — Economy:** Greenhouse consumes `requirements.water` to produce `food` (real 1-step chain), caps/overflow enforced. But `FORGE` requires ore+power yet has empty `production: []` — metal is never produced by anything, breaking the intended ore→metal chain. Score 1.
+
+**F4 — Population:** `people[]` records with skill/fatigue/morale/job; `worker.skill`, `worker.fatigue`, `worker.morale` read in `endTurn()` production loop to set `output_mult`. Score 2.
+
+**F5 — Needs:** `food_shortage`/`water_shortage` computed each turn; writes `p.morale -= 10*(...)`; `worker.morale < 50` reduces `output_mult`; recovery via events/`morale-focus` research, not instant. Score 2.
+
+**F6 — Research:** 8 nodes in `RESEARCH_TREE`; `queueResearch()` enforces prereqs/costs. Effects mostly hardcoded checks (`research_done['better-farming']` etc.) work, but `water-retention` (`water_cap_mult`) and `ore-refining` (`ore_to_metal_mult`) effect objects are never read anywhere — 2 of 8 nodes are dead. Score 1.
+
+**F7 — Events:** 10 entries in `event_list`, all with 2 choices with differing `action()` state changes; `events_cooldown[event.name]=turn+10` enforced. But selection is `Math.floor(rng.next()*available.length)` — uniform, not weighted. Score 1.
+
+**F8 — Trade:** `caravan_prices` computed from `this.resources[item]/storage_caps[item]` plus rng jitter; `caravan_inventory` limited and decremented; `tradeWith()` implements both buy/sell branches. Score 2.
+
+**F9 — Hazard:** `turn % 8 === 0` triggers storm, `storm_severity` grows every turn and scales damage; `storm-shelter` research reduces `storm_dmg`; repair spends `parts` and restores `health`. But production loop's `output_mult` never reads `building.health` — damaged buildings produce at full rate. Score 1.
+
+**F10 — Save/load:** `serializeState()`/`hashState()` exist only for internal test/benchmark use; no export-to-text UI, no paste/import parser anywhere. Score 0.
+
+**F11 — End conditions:** win check `turn>=60 && people.length>=12` and lose check `people.length===0` both in `endTurn()`; `endGame()` computes `score` from pop/research/resources/turn and renders `endGameModal`. Score 2.
+
+**F12 — UI:** `switchTab()` wired to tab buttons and keydown Digit1-5; log entries show `T${entry.turn}:`; `showTileTooltip()` explains costs/bonuses; `@media (max-width:600px)` adapts layout. Score 2.
+
+**F13 — Dev panel:** `devRunTests()` has real invariant checks (health 0-100, skill 1-5, fatigue 0-100, prereq consistency, hash roundtrip) mixed with a couple of trivial ones. `devBenchmark()` runs 200 `sim.endTurn()` calls and prints `hashState()`, but `sim.newGame()`/`sim.updateUI()` writes to the *same* DOM ids as the live game (`mapGrid`, `stats`, etc.), so it is not actually headless/without-UI. Score 1.
+
+**G1 — research → yield:** `research_done['better-farming']` etc. read directly inside the `endTurn()` production formula (`amount *= 1.2`), hardcoded per-id special case rather than generic effect application. Score 2.
+
+**G2 — shortfall → morale → output:** `food_shortage`/`water_shortage` → `p.morale -= 10*(1-p.morale/100)` → `worker.morale < 50` triggers `output_mult *= 0.7` in same `endTurn()`. Binary threshold rather than continuous curve. Score 3.
+
+**G3 — storm → damage → output → repair:** `buildings[idx].health` reduced by storm; repair spends `parts` and restores `health`; but production `output_mult` never references `health`, so damage never reduces output. Score 1.
+
+**G4 — trade prices ↔ stockpiles:** `caravan_prices[item]` computed from `supply_mod = 1 + (resources[item]/storage_caps[item])*0.5`, recalculated each caravan spawn (every 15 turns). Score 3.
+
+**G5 — event choices mutate state:** `Settler Arrival` choice pushes to `this.people` and deducts `resources.food`; `Morale Boost` choice deducts food and raises all `p.morale`; both durable, applied via `choice.action()` on click. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 2, "5": 2, "6": 1, "7": 1,
+        "8": 2, "9": 1, "10": 0, "11": 2, "12": 2, "13": 1},
+  "G": {"G1": 2, "G2": 3, "G3": 1, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "Game class + SeededRandom.next() used throughout; endTurn() runs steps 1-9 in fixed order",
+    "F2": "canBuild() checks terrain; adjacency only used in showTileTooltip(), never in production math",
+    "F3": "Greenhouse consumes water->food via requirements; FORGE requires ore+power but production:[] is empty, metal never produced",
+    "F4": "worker.skill/worker.fatigue/worker.morale read in endTurn() to compute output_mult",
+    "F5": "food_shortage/water_shortage lower p.morale; morale<50 cuts output_mult; recovery via events/research",
+    "F6": "8 RESEARCH_TREE nodes, queueResearch() enforces prereqs, but water_cap_mult/ore_to_metal_mult effects never read anywhere",
+    "F7": "10 events in event_list with cooldown via events_cooldown, but selection is uniform Math.floor(rng*length), not weighted",
+    "F8": "caravan_prices reads this.resources[item]/storage_caps[item]; tradeWith() implements buy and sell",
+    "F9": "storm_severity grows per turn, damages building.health, storm-shelter reduces dmg, repair spends parts, but output_mult never reads health",
+    "F10": "serializeState()/hashState() only used internally by devRunTests/devBenchmark, no export/import UI found",
+    "F11": "endTurn() checks people.length===0 and turn>=60&&pop>=12; endGame() computes score and shows endGameModal",
+    "F12": "switchTab() wired to tabs and Digit1-5 keys; log shows T${turn}; media query adapts layout <600px",
+    "F13": "devRunTests() checks real ranges (health/skill/fatigue) plus hash roundtrip; devBenchmark() writes to live DOM ids via sim.updateUI(), not truly headless",
+    "G1": "research_done['better-farming'] etc. read directly in endTurn() production amount *= 1.2",
+    "G2": "shortage writes p.morale -=; worker.morale<50 multiplies output_mult by 0.7 same function",
+    "G3": "buildings[idx].health damaged by storm and restored by repair, but never read in output_mult calc",
+    "G4": "caravan_prices[item] formula reads resources[item]/storage_caps[item] each caravan spawn",
+    "G5": "Settler Arrival and Morale Boost choice.action() directly mutate people[]/resources, not just logged"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Building health/damage never affects production output, so the storm->repair loop (F9/G3) is cosmetic beyond the repair cost itself."
+}
+```

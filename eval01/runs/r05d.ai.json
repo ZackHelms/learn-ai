@@ -1,0 +1,55 @@
+Grading based on source-level wiring, without executing the file.
+
+**Worksheet**
+
+- F1: GameState holds all state; Mulberry32 seeded RNG used for colonists/production/storms/events/caravan, but `generateMap()` uses raw `Math.random()`, not `this.rng` — breaks "all randomness seeded". endTurn() runs produce→consume→morale→storm→event→caravan in fixed order. Score 1.
+- F2: 8x8 grid (64 tiles) confirmed; `canBuild()` checks terrain via `requires`; `getAdjacencyBonus()` feeds into `output` in `produceTurn()`. But terrain comes from unseeded `Math.random()` in `generateMap()`, not the seed. Score 1.
+- F3: chains ore→metal(forge), metal+power→parts(refinery), water→food(greenhouse), food→scrip(market); caps enforced via `Math.min(x, resourceCaps[k])`; overflow discarded at cap. Score 2.
+- F4: colonists have skill/fatigue/morale/job/assignedBuilding; `colonist.skill` read in `produceTurn()` output formula, but `fatigue` is only read by `updateMorale()`, never by production. Score 1.
+- F5: `consumeTurn()` deducts food/water, shortage lowers morale; but morale is never read anywhere in `produceTurn()`'s output formula, so "morale changes output" is absent. Score 1.
+- F6: 8 `RESEARCH_NODES`; prereqs checked in `research()`; costs deducted; unlocks gate buildings via `researchLock` in `canBuild()`, effects (`stormDamageMult`, `colonistMoraleMult`) applied. Score 2.
+- F7: 10 events in `EVENTS_DECK`; selection is uniform `rngInt(EVENTS_DECK.length)`, not weighted; ≥4 events with differing branch effects via `handleEventChoice`; `eventCooldowns` enforce 10-turn cooldown. Missing weighting. Score 1.
+- F8: caravan `inventory` qty decremented on `buy`/decremented resources, incremented on `sell`, both functional; prices are `0.8+rng()*0.4` etc, freshly randomized each arrival — not derived from stockpiles or a drifting supply variable. Score 1.
+- F9: storms fire every 8 turns (`stormTurn`); severity grows with `turn`; `if (building.damage>0) continue;` stops damaged output; Storm Shield research/`stormDamageReduction` reduces damage; `repairBuilding()` spends parts and resets damage. Score 2.
+- F10: `saveState()`/`loadState()` serialize/parse via JSON, try/catch shows alert on bad input; but `map`, `eventCooldowns`, `nextStormModifier`, `lastEvent` are omitted from the save, so it's not a "full" state dump. Score 1.
+- F11: win = `turn>60 && colonists.length>=12`; loss = `colonists.length===0`, both in `endTurn()`; `getScore()` combines population/research/stockpiles/turns; `showEndScreen()` renders summary. Score 2.
+- F12: tab buttons wire `.active` toggling; log entries carry `entry.turn`; `.tile-tooltip` only shows terrain/building name+damage, no explanation of production math; Space/1-5 keyboard shortcuts wired; `@media (max-width:600px)` only tweaks font sizes. Tooltip depth too shallow. Score 1.
+- F13: `runTests()` checks real invariants (caps, prereq consistency, skill/morale ranges, save/load round trip via `stateHash()`); `runBenchmark()` runs 200 turns headless via `endTurn()` with no UI and prints `stateHash()`. Score 2.
+
+- G1: research nodes gate building unlocks (`researchLock` in `canBuild`) enabling new production sources, and `stormDamageMult` indirectly protects yield by reducing storm damage — but no research effect is read directly inside the production-yield formula itself. Score 2.
+- G2: `consumeTurn()` shortage → morale drop confirmed; but production formula never reads morale, so degradation only occurs via colonist departure at morale===0 (`filter` in `updateMorale`), a binary special case rather than continuous reduced output. Score 2.
+- G3: `stormTurn()` sets `building.damage`; `produceTurn()` skips (zero output) if `damage>0`; `repairBuilding()` spends parts and resets damage to restore output. Fully traceable chain, though output loss is binary (0%) rather than scaled to damage severity. Score 3.
+- G4: caravan prices (`0.8+rng()*0.4` etc.) are freshly randomized each arrival with no read of `this.resources` or a persistent drifting supply value. Score 0.
+- G5: `handleEventChoice()` writes resources, colonist morale, population (push/splice), `researchProgress`, `stormDamageReduction`/`nextStormModifier` for real state, e.g. `dust_storm_mild` and `refugee_arrival` both mutate different state fields, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 1, "3": 2, "4": 1, "5": 1, "6": 2, "7": 1,
+        "8": 1, "9": 2, "10": 1, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 2, "G2": 2, "G3": 3, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() fixed order produce/consume/morale/storm/event/caravan; generateMap() uses Math.random(), not this.rng",
+    "F2": "canBuild() checks terrain, getAdjacencyBonus() used in produceTurn(); map not seed-derived",
+    "F3": "forge consumes ore+power->metal, market consumes food->scrip; Math.min(...,resourceCaps[k]) caps overflow",
+    "F4": "colonist.skill read in produceTurn() output; fatigue only read by updateMorale(), never production",
+    "F5": "consumeTurn() shortage lowers morale; morale never read in produceTurn() output formula",
+    "F6": "8 RESEARCH_NODES, prereqs checked in research(), researchLock gates canBuild()",
+    "F7": "EVENTS_DECK has 10 entries; selection via uniform rngInt(); eventCooldowns enforce 10-turn cooldown",
+    "F8": "buy()/sell() adjust caravan.inventory qty; prices randomized fresh each arrival, no stockpile/drift read",
+    "F9": "stormTurn() damages buildings, produceTurn() skips damaged buildings, repairBuilding() spends parts",
+    "F10": "saveState()/loadState() JSON round-trip with try/catch alert; map/eventCooldowns omitted from save",
+    "F11": "endTurn() returns 'win'/'loss'; getScore() sums population/research/stockpiles/turns; showEndScreen() renders",
+    "F12": "tab-button click handlers toggle .active; log entries show entry.turn; tile-tooltip shallow, no math breakdown",
+    "F13": "runTests() checks caps/prereqs/ranges/save-load hash; runBenchmark() runs 200 headless turns, prints stateHash()",
+    "G1": "researchLock in canBuild() gates new production buildings; no direct yield-coefficient read in produceTurn()",
+    "G2": "consumeTurn() shortage cuts morale; production ignores morale; only morale===0 departure reduces labor",
+    "G3": "stormTurn() sets damage, produceTurn() zeroes output if damage>0, repairBuilding() spends parts to restore",
+    "G4": "caravan.inventory prices randomized per arrival, no read of this.resources or persistent supply variable",
+    "G5": "handleEventChoice() mutates resources/colonists/researchProgress/stormDamageReduction for real state changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Map terrain generation uses unseeded Math.random() instead of the seeded RNG, breaking determinism, and colonist morale is never read by the production formula, leaving the needs->morale->output feedback loop incomplete."
+}
+```

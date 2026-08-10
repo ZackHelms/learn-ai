@@ -1,0 +1,55 @@
+Looking through the candidate file now, tracing each system's wiring before scoring.
+
+**Worksheet**
+
+- F1: `GameState` single state object; `SeededRNG` (mulberry32-style) used in generateMap/generateColonists/endTurn/fireEvent; `endTurn()` resolves steps 1-9 in fixed order. Score 2.
+- F2: 64-tile 8x8 `generateMap()` seeded via rng; `canBuild()` checks `tile.terrain !== building.terrain`; `getBuildingBonus()` gives 1.25x, multiplied into `baseOutput` in production. Score 2.
+- F3: forge's `productionMetalNeeded` consumed from `this.resources.power` to produce metal (real input→output chain); `getStorageCapacity()` caps food/water/metal/parts via `Math.min`. Note: greenhouse's declared `consumes: 'water'` is never actually deducted anywhere. Score 2.
+- F4: colonists have `skill, fatigue, morale, job, assigned` fields, but production formula in `endTurn()` never reads `skill`/`fatigue`/`assigned` at all — `.assigned` only affects fatigue drift, not output. Score 1.
+- F5: consumption via `consumption = colonists.length`; shortage (`food===0`) drops `this.morale -= 10`; recovery via medicalBay +1/turn. But `moraleMod` is computed in endTurn and never used anywhere — morale never changes output. Score 1.
+- F6: 8 nodes in `RESEARCH_TREE`; `completeResearch()` checks prereq + deducts cost; each unlock read via `research.find(...).completed` checks that alter `baseOutput` or ashstorm damage. Score 2.
+- F7: 12 events in `EVENTS_DECK`, selection via `rng.nextInt(0, validEvents.length-1)` — uniform, no weights field anywhere. 5 choice events (5,6,9,10,12) mutate state differently. `recentEvents` Set caps at 4 for cooldown. Missing weighting. Score 1.
+- F8: prices in `renderTrade`/`executeTrade` computed from `this.state.resources[res]/20`; buy and sell both adjust `scrip`/resource. No caravan stock limit — `max` on buy input is derived from player's own scrip, not caravan supply. Score 1.
+- F9: `handleAshstorm()` fires via `ashstormTurnsLeft` countdown; `severity = min(3, floor(turn/20))`; `shelter`/`shielding` research reduce `damageMultiplier`; damaged buildings only cut off entirely at `hp<=0` (`if (tile.hp<=0) continue`), no graduated loss; no `repair` function anywhere in the file — repair cost/recovery entirely absent. Score 1.
+- F10: `serialize()` produces JSON shown in `saveLoadArea` (selected for copy); `deserialize()` wraps `JSON.parse` in try/catch, `loadBtn` alerts "Failed to load: invalid game state JSON" on failure. Score 2.
+- F11: win check `turn>=60 && colonists>=12 && food>=5 && water>=5`; loss check `colonists.length===0`; `showEndGame()` computes score from colonists/research/resources/turn and renders `endGameModal`. Score 2.
+- F12: tab buttons wired via `attachEventListeners`/`switchTab`; log entries carry `entry.turn`; tile tooltips show HP/bonus text explaining numbers; keypress handler for Space/1-5; `@media (max-width:600px)` layout rules. Score 2.
+- F13: `runTests()` has 15 real invariant checks (negative resources, storage cap, prereq enforcement, serialization round-trip, HP bounds, etc.), not trivial; `runBenchmark()` runs 200 turns headlessly via `benchState.endTurn()` and prints `getStateHash()` before/after. Score 2.
+
+- G1: `research.find(r=>r.id==='irrigation')?.completed` etc. directly modify `baseOutput` inside the per-tile production loop every turn, consumed into food/power/metal totals — fully wired across 5+ nodes. Score 4.
+- G2: shortage → `this.morale -= 10` works, but `moraleMod` computed in endTurn is dead code — morale never multiplies/reduces any production output. Chain breaks at last link. Score 1.
+- G3: storm damages `tile.hp`; production only stops at `hp<=0` (binary, not graduated loss); no `repair` function exists anywhere — no repair cost, no recovery. Score 1.
+- G4: `renderTrade`/`executeTrade` price formulas read live `this.state.resources[res]`, recomputed each render, both buy/sell use same base. Score 3.
+- G5: Event 5 "Welcome them" → `state.colonists.push(...)` (durable pop change) vs "Turn them away" → `morale -=10`; Event 9 sets `state.tradeMultiplier` which is later read in `renderTrade`/`executeTrade` price calc. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 2, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 1, "G3": 1, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "GameState + SeededRNG drive endTurn()'s 9 numbered steps",
+    "F2": "getBuildingBonus() 1.25x multiplier feeds baseOutput in endTurn() production loop",
+    "F3": "forge's productionMetalNeeded consumed from resources.power; getStorageCapacity() caps overflow",
+    "F4": "colonist.skill/.fatigue never read in production formula, only .assigned affects fatigue drift",
+    "F5": "moraleMod computed in endTurn() but never used anywhere afterward",
+    "F6": "completeResearch() enforces prereq/cost; irrigation/refinement/etc. read via .completed in production",
+    "F7": "fireEvent() uses rng.nextInt uniformly, no weight field in EVENTS_DECK; recentEvents Set caps at 4",
+    "F8": "renderTrade() prices from resources[res]/20; buy qty capped by player scrip not caravan stock",
+    "F9": "handleAshstorm() damages tile.hp; production only checks hp<=0; no repair() function found",
+    "F10": "serialize()/deserialize() with try/catch and alert() on JSON.parse failure",
+    "F11": "endTurn() win/loss checks both reachable; showEndGame() computes score from state",
+    "F12": "switchTab()/attachEventListeners wire tabs; keypress handler for Space/1-5; @media rule",
+    "F13": "runTests() 15 real invariants; runBenchmark() runs 200 headless turns, prints getStateHash()",
+    "G1": "research.completed flags read every turn inside production loop, modify baseOutput directly",
+    "G2": "morale drops on shortage (morale-=10) but moraleMod dead variable never reduces output",
+    "G3": "tile.hp damaged by storm, production binary cutoff at hp<=0, no repair mechanic exists at all",
+    "G4": "prices in renderTrade/executeTrade recomputed live from this.state.resources each call",
+    "G5": "event 5 choice.effect pushes colonist or cuts morale; event 9 sets tradeMultiplier read by trade formulas"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale and colonist skill/fatigue are tracked but never feed back into the production formula (moraleMod and colonist.assigned are dead reads), breaking the core needs->morale->output feedback loop."
+}
+```

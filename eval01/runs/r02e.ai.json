@@ -1,0 +1,71 @@
+Grading the pasted ASHFALL OUTPOST HTML directly from source — this is a read-only analysis task (grading a single pasted file, no repo, nothing to implement), so I'm answering directly rather than treating it as a plan-mode coding task.
+
+## Worksheet
+
+**F1 Core loop** — GameState holds all state; `PRNG` (Mulberry32) used via `this.prng`, no `Math.random` found; `endTurn()` calls produce→consume→updateColonists→storm→events in fixed order. Score 2.
+
+**F2 Map** — `generateMap()` builds 64 tiles from `prng.next()`; `canBuild()` checks `req.terrain.includes(tile.terrain)`; `getAdjacencyBonus()` multiplies into `output` in `produceResources()`. Score 2.
+
+**F3 Economy** — greenhouse consumes water→food, forge consumes power→metal; caps enforced via `Math.min(..., resourceCaps[k])`. Score 2.
+
+**F4 Population** — colonists have skill/fatigue/morale/job; `avgSkill`/`avgMorale` read in `produceResources()`, but `fatigue` is never read by production, only indirectly nudges morale later. Score 1.
+
+**F5 Needs** — `consumeResources()` docks morale on shortage; `avgMorale` feeds `produceResources()`; morale recovers +2/turn when resting. Score 2.
+
+**F6 Research** — 8 nodes, prereqs enforced, costs deducted, but only `efficiency` and `storm_defense` actually alter behavior; `vent_tech`, `water_purify`, `population`, `advanced_farm`, `power_plant`, `final_tech` are never read anywhere. Score 1.
+
+**F7 Events** — 10 entries in `eventDetails`; selection is `prng.choice(eventList)` — plain uniform, not weighted (unused `weights` var exists only for terrain); cooldowns via `eventCooldowns`; 6+ events have real divergent-effect choices. Score 1.
+
+**F8 Trade** — `generateTradePrices()` is base+random noise regenerated per caravan, never reads `resources`; displayed "stock" is cosmetic and not enforced as a buy limit. Score 1.
+
+**F9 Hazard** — `ashStorm()` fires every 15 turns, severity scales with turn, `storm_defense` cuts damage 30%; but `produceResources()` never reads `building.hp`, and nothing in code ever restores `hp` (repair text in `dust_storm` event only spends parts, touches no building). Score 1.
+
+**F10 Save/load** — `serialize()`/`deserialize()` round-trip via JSON textarea; `confirmLoad()` alerts "Invalid save data" on parse failure. Score 2.
+
+**F11 End conditions** — `checkEndConditions()` has reachable win (turn≥60, pop≥12, needs met) and lose (pop=0); `showEndScreen()` sums population/research/resources/turn score. Score 2.
+
+**F12 UI** — `switchTab()` wired to tab buttons; log entries show `[T${entry.turn}]`; `showTooltip()` on map tiles; keydown handles Space + digit tab shortcuts; `@media (max-width:600px)` reflows layout. Score 2.
+
+**F13 Dev panel** — `runTests()` has 15 real invariant checks (caps, ranges, prereqs, save/load hash match); `runBenchmark()` runs 200 turns headless on a fresh `GameState`, prints `getHash()`. Score 2.
+
+**G1 research→yield** — `research.efficiency.done` read in `produceResources()`, but the line does `const output = ...; output *= 1.2;` — reassigning a `const` throws a TypeError at runtime, so the multiplier never actually applies once triggered. Score 1.
+
+**G2 shortfall→morale→output** — `consumeResources()` docks morale on shortage; `produceResources()` (next turn) reads `avgMorale` into `baseOutput`; real one-turn-lag pipeline, fixed-magnitude penalty. Score 3.
+
+**G3 storm→damage→output→repair** — `ashStorm()` sets `building.hp` down, but `produceResources()` never checks `hp`, and no code path ever restores `hp` — damaged buildings produce at full rate forever. Score 1.
+
+**G4 trade prices vs stockpile/supply** — `generateTradePrices()` = fixed base + fresh random noise per caravan cycle; never reads `this.resources` or any persisting drift variable. Score 0.
+
+**G5 event choices mutate state** — `new_settler`'s "Recruit" pushes a durable colonist and spends scrip; `dust_storm`'s two branches durably spend parts vs. drop morale array-wide; effects go straight into `gs.resources`/`gs.colonists`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 2, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 1, "G2": 3, "G3": 1, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "GameState + PRNG(seed) in this.prng; endTurn() runs produce/consume/update/storm/events in order",
+    "F2": "getAdjacencyBonus() multiplied into output in produceResources()",
+    "F3": "greenhouse water->food, forge power->metal; caps via Math.min(...,resourceCaps)",
+    "F4": "avgSkill/avgMorale read in produceResources(); c.fatigue never read there",
+    "F5": "consumeResources() -5/-3 morale on shortage; morale +2/turn recovers when resting",
+    "F6": "only research.efficiency (buggy) and storm_defense read anywhere; other 6 nodes unused",
+    "F7": "prng.choice(eventList) is uniform, not weighted; eventCooldowns[key] gates re-fire",
+    "F8": "generateTradePrices() base+noise never reads this.resources; stock display unused as cap",
+    "F9": "ashStorm() sets building.hp but produceResources() never reads hp; hp never restored",
+    "F10": "serialize()/deserialize() JSON roundtrip; confirmLoad() alerts on parse failure",
+    "F11": "checkEndConditions() win/lose branches; showEndScreen() sums 4 score components",
+    "F12": "switchTab() wired to .tab-btn; keydown Space/1-5; @media(max-width:600px) reflow",
+    "F13": "runTests() 15 invariant asserts incl. save/load hash match; runBenchmark() 200 headless turns + getHash()",
+    "G1": "research.efficiency.done gates `output *= 1.2` but output is const -> throws TypeError, never applies",
+    "G2": "consumeResources() drops morale on shortage; produceResources() reads avgMorale next turn",
+    "G3": "ashStorm() damages building.hp; produceResources() never checks hp; no repair code restores it",
+    "G4": "tradePrices regenerated as base+random noise, no read of this.resources or persisting supply var",
+    "G5": "new_settler 'Recruit' pushes colonist + spends scrip; dust_storm branches spend parts vs drop morale"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Most tracked state never feeds back into gameplay: 6 of 8 research effects and all building-hp damage are read nowhere, and the one research effect that is wired (efficiency) reassigns a const and throws at runtime."
+}
+```

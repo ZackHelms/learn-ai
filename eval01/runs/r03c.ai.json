@@ -1,0 +1,71 @@
+The Write tool isn't available in this session, so I'll present the full grading worksheet and final JSON directly here instead of writing to a plan file.
+
+## Worksheet
+
+**F1 Core loop** — GameState holds all state; SeededRNG (`this.rng`) drives map gen, colonist gen, ashstorm timing, event chance, skill drift. `endTurn()` resolves consumption→production→fatigue→ashstorm→caravan→events→departures→end-check in fixed order. Minor flaw: colonist `id: Math.random()` unseeded (non-gameplay). **Score: 2**
+
+**F2 Map** — 64-tile 8x8 grid; terrain from seeded `rng.nextInt`; `canBuild()` checks `tile.terrain !== building.terrain`; `getBuildingBonus()` 1.25x multiplier applied via `baseOutput *= bonus`, changes real output. **Score: 2**
+
+**F3 Economy** — Forge power→metal chain (`productionMetalNeeded` capped by `resources.power`, power decremented). Storage cap enforced via `getStorageCapacity()`, all production `Math.min`'d. Greenhouse's declared `consumes:'water'` is dead data, but forge chain is real. **Score: 2**
+
+**F4 Population** — Colonist records have skill/fatigue/job/assigned, but `endTurn` production loop never reads any of them — buildings produce regardless of staffing; "medicalStaffed" only checks building existence. **Score: 1**
+
+**F5 Needs** — Per-turn consumption; shortage drops morale -10; medical bay allows recovery (+1/turn). But `moraleMod` is computed in `endTurn` and never used anywhere — morale never feeds back into production. **Score: 1**
+
+**F6 Research** — 8 nodes; `completeResearch()` enforces prereq, deducts cost; all 8 have real effects applied in `endTurn`/`handleAshstorm` via `.completed` reads. **Score: 2**
+
+**F7 Events** — 12-event deck, 5 choice events with distinct branch effects, cooldown via `recentEvents` Set. But selection (`validEvents[rng.nextInt(...)]`) is uniform, not weighted. **Score: 1**
+
+**F8 Trade** — Prices from live `resources.*` plus `tradeMultiplier`; buy qty capped at 10 (caravan-limit proxy); `executeTrade()` does both buy and sell. **Score: 2**
+
+**F9 Hazard** — `handleAshstorm()` fires periodically, severity grows with turn, shelter/shielding research reduce multiplier. But damage only stops output at binary `hp<=0`, and **no repair function exists anywhere** — hp is never restored. **Score: 1**
+
+**F10 Save/load** — `serialize()`→textarea `.select()`; `deserialize()` try/catch JSON.parse with alert on failure. Validation shallow but functional. **Score: 2**
+
+**F11 End conditions** — Win/loss checks both present and reachable in `endTurn()`; `showEndGame()` computes multi-factor score, renders modal. **Score: 2**
+
+**F12 UI** — Tab switching wired, log entries carry turn numbers, tooltips, keyboard shortcuts (Space, 1-5), `@media` narrow-screen layout. **Score: 2**
+
+**F13 Dev panel** — `runTests()` has 15 real invariant checks; `runBenchmark()` runs 200 headless `endTurn()` calls without UI, prints start/end state hash. **Score: 2**
+
+**G1 research→yield** — `research.find('irrigation').completed` (and 5 others) read every `endTurn()` in production loop, changes output every relevant turn. **Score: 4**
+
+**G2 shortfall→morale→output** — Shortage sets morale -10 (real), but `moraleMod` dead variable never reduces output — chain breaks at final link. **Score: 1**
+
+**G3 storm→damage→repair→recovery** — `tile.hp` reduced by storm (real); binary output cutoff only at hp=0; no repair function anywhere restores hp or spends resources. **Score: 1**
+
+**G4 trade prices↔stockpile** — Both render and execute paths derive price from live `resources.*` and `tradeMultiplier`, recomputed continuously. **Score: 4**
+
+**G5 event choices→durable state** — Wanderer event: push colonist vs morale cut; Trading Opportunity sets `tradeMultiplier` consumed later by trade pricing; Medical Crisis parts vs morale. All real durable mutations. **Score: 4**
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 2, "7": 1,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 1, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "GameState + SeededRNG(this.rng) drive map/colonists/events; endTurn() fixed 9-step order",
+    "F2": "canBuild() checks tile.terrain; getBuildingBonus() 1.25x read into baseOutput calc",
+    "F3": "forge power->metal: productionMetalNeeded capped by resources.power, then deducted",
+    "F4": "colonist.skill/fatigue/assigned never read by endTurn production loop",
+    "F5": "moraleMod computed in endTurn but never referenced/used afterward",
+    "F6": "8 RESEARCH_TREE nodes; completeResearch() enforces prereq/cost; all read via .completed in endTurn",
+    "F7": "fireEvent() uses rng.nextInt uniform pick, not weighted; recentEvents Set gives cooldown",
+    "F8": "prices formula reads this.state.resources.* and tradeMultiplier; executeTrade does buy+sell",
+    "F9": "handleAshstorm reduces tile.hp; no repair() function exists anywhere in source",
+    "F10": "serialize()/deserialize() with try/catch JSON.parse and alert() on failure",
+    "F11": "win/loss checks in endTurn(); showEndGame() computes multi-factor score",
+    "F12": "switchTab() wiring, keypress handler for Space/1-5, @media narrow-screen CSS",
+    "F13": "runTests() 15 invariant checks; runBenchmark() runs 200 headless endTurn() calls, prints hash",
+    "G1": "research.find('irrigation').completed read in endTurn() per-tile loop, changes baseOutput every turn",
+    "G2": "shortage sets morale-=10 (real) but moraleMod dead variable never reduces output",
+    "G3": "tile.hp reduced by handleAshstorm; binary hp<=0 skip only; no repair fn ever restores hp",
+    "G4": "renderTrade/executeTrade both derive price from live resources.* and tradeMultiplier",
+    "G5": "wanderer event pushes colonist or cuts morale; tradeMultiplier set by choice, consumed in G4"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale-to-output and storm-damage-to-repair feedback loops are stubbed (dead moraleMod variable, no repair function anywhere), so two of the five interaction chains break at their final link despite otherwise complete-looking systems."
+}
+```

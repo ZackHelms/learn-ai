@@ -1,0 +1,71 @@
+Grading the ASHFALL OUTPOST candidate now by reading through the pasted source against each rubric item.
+
+**F1 — Core loop:** `Game` class holds all state; `SeededRandom` (mulberry32-style, but actually uses `Math.sin`) used via `this.rng` for map gen, people, events, caravan; `endTurn()` resolves consumption→production→rest→storm→repair→morale→events→trade→win-check in fixed order. Score 2.
+
+**F2 — Map:** 8x8 grid (`for y<8,x<8`), terrain from `this.rng.next()` weighted by seed; `canBuild` checks `tile.terrain !== building.terrain`; adjacency bonus text shown in tooltip (`showTileTooltip`) but never applied to actual production math in `endTurn()` — cosmetic only. Score 1.
+
+**F3 — Economy:** Forge/requirements consume ore+power but produces nothing (`production: []`), so ore→metal chain is broken (metal never produced anywhere, no consumer of metal either). Only real chains are simple 1-input building outputs, no true multi-step chain executes. Storage caps enforced (`cap` check in production loop) with overflow log. Score 1.
+
+**F4 — Population:** `people` array has id, skill, fatigue, morale, job records; `assigned` maps to building; skill/fatigue read in `endTurn()` output_mult calc. Score 2.
+
+**F5 — Needs:** food/water consumed each turn; shortage lowers morale (`p.morale -= 10*(1-p.morale/100)`); morale affects output_mult (`if worker.morale<50 output_mult*=0.7`); recovery possible via rest/events. Score 2.
+
+**F6 — Research:** 8 nodes in `RESEARCH_TREE`; prereqs checked in `queueResearch`; costs deducted; effects applied via hardcoded checks in `endTurn()` (`research_done['better-farming']` etc.) — effect functions defined but never called (`config.effect` unused, only string names checked directly). Real effects apply though. Score 2 (effects do apply somewhere, even if `.effect()` closures are dead code).
+
+**F7 — Events:** 10 events in `event_list`; selection is uniform random among non-cooldown (`Math.floor(this.rng.next()*available.length)`) — not weighted. All 10 have 2 choices with differing state changes. Cooldown via `events_cooldown[event.name] = turn+10`. Score 1 (weighted random requirement not met).
+
+**F8 — Trade:** `spawnCaravan` sets `caravan_prices` from `this.resources[item]/cap` (supply-based) plus rng drift; inventory limited (`caravan_inventory`); `tradeWith` handles buy/sell both reducing/increasing caravan stock and scrip. Score 2.
+
+**F9 — Hazard:** storm every 8 turns, severity grows via `storm_severity += 0.5` each turn feeding into `storm_dmg_base`; damages building `.health`; but damaged buildings are NOT read anywhere to reduce production (output_mult ignores `building.health`) — so damage has no output effect. storm-shelter research reduces damage; repair costs 5 parts/building, restores health. Score 1 (missing "damaged buildings produce less" — output formula never reads `.health`).
+
+**F10 — Save/load:** `serializeState()` exists but no UI textarea/export/import button or paste-parsing code found anywhere. Score 0.
+
+**F11 — End conditions:** win (`turn>=60 && people>=12`) and lose (`people.length===0`) both checked in `endTurn`; score computed from pop/research/resources/turn; `endGame()` renders modal summary. Score 2.
+
+**F12 — UI:** tab switching (`switchTab`) wired to buttons and keys 1-5 (only 5 of 6 tabs get shortcuts, Dev tab has none); log entries carry turn (`T${entry.turn}`); tooltips show terrain/building/adjacency info; media query for narrow screens exists in CSS. Score 2.
+
+**F13 — Dev panel:** `devRunTests()` has 15 checks, several real invariants (caps, health bounds, skill bounds, prereq consistency) not trivial; `devBenchmark()` runs a fresh headless `Game`, 200 turns via `sim.endTurn()`, prints `hashState`. Score 2.
+
+Now Category G.
+
+**G1 (research→yield):** `research_done['better-farming']` read directly in production loop multiplying food amount; `advanced-parts`/`research-lab` similarly hardcoded. Applied every turn, real pipeline, but only via if-checks not via generic effect application (effect() functions dead). Score 3.
+
+**G2 (shortfall→morale→output):** shortage lowers morale (`endTurn` shortage block); morale<50 multiplies output_mult by 0.7 in production loop — full chain traceable and applies every relevant turn. Score 4.
+
+**G3 (storm→damage→output loss→repair→recovery):** storm damages `.health`; repair spends parts and restores health; but output_mult calculation never references `building.health`, so damaged buildings produce at full rate. Weakest link breaks chain. Score 1.
+
+**G4 (trade prices↔stockpiles):** `caravan_prices[item]` computed from `this.resources[item]/this.storage_caps[item]` supply_mod plus rng noise, recalculated each caravan spawn. Score 3 (only updates on spawn, not continuously drifting turn-to-turn, but real formula).
+
+**G5 (event choices mutate state):** e.g. "Settler Arrival" pushes to `this.people` and deducts food; "Water Contamination" purify adds water/deducts parts vs. alternative loses water — both branches write differing state changes, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 2, "5": 2, "6": 2, "7": 1,
+        "8": 2, "9": 1, "10": 0, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 4, "G3": 1, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "Game class + SeededRandom used throughout; endTurn() fixed 9-step pipeline",
+    "F2": "8x8 genMap() from rng; canBuild() checks terrain; adjacency text in showTileTooltip never applied to production",
+    "F3": "Forge consumes ore/power but production:[] — no metal ever produced; caps enforced in endTurn() overflow block",
+    "F4": "people[] with skill/fatigue/morale read in endTurn() output_mult calc",
+    "F5": "food/water shortage reduces p.morale; morale<50 cuts output_mult 0.7x in endTurn()",
+    "F6": "8 RESEARCH_TREE nodes; prereqs checked in queueResearch(); effects applied via hardcoded research_done[...] checks in endTurn()",
+    "F7": "10 events in fireEvent(); uniform (not weighted) random pick; events_cooldown[name]=turn+10",
+    "F8": "spawnCaravan() prices from resources[item]/storage_caps[item]; tradeWith() handles buy/sell both directions",
+    "F9": "storm damages building.health every 8 turns but output_mult in production loop never reads .health",
+    "F10": "serializeState() exists but no export textarea, copy button, or import/parse code found",
+    "F11": "endTurn() checks people.length===0 (lose) and turn>=60&&pop>=12 (win); endGame() renders modal with computed score",
+    "F12": "switchTab() wired to tab buttons and keydown Digit1-5; log entries show T${turn}; tooltip via showTileTooltip; @media(max-width:600px) in CSS",
+    "F13": "devRunTests() 15 real invariant checks (caps, health, skill bounds); devBenchmark() runs fresh headless Game 200 turns, prints hashState",
+    "G1": "research_done['better-farming'] read directly in production amount calc, applied every relevant turn",
+    "G2": "shortage block reduces p.morale; morale<50 multiplies output_mult 0.7x in same endTurn() production loop",
+    "G3": "buildings[idx].health damaged by storm and restored by repair, but output_mult formula never references building.health",
+    "G4": "caravan_prices[item] = base*(resources[item]/storage_caps[item]*0.5+1+rng noise) in spawnCaravan()",
+    "G5": "Settler Arrival pushes new person + deducts food; Water Contamination purify adds water/deducts parts vs. alt loses water"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Building damage from storms never reduces production output since output_mult formula ignores building.health, breaking the hazard-recovery chain (G3), and Forge produces nothing so the ore→metal chain is dead."
+}
+```
