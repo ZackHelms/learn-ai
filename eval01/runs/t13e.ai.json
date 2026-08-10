@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** State object `S`; PRNG `rnd()`/mulberry32 seeded via `S.rng`, no `Math.random()` calls; `endTurn()` calls phases in fixed order (storm→produce→consume→morale→growth→market→event→checkEnd). Score 2.
+
+**F2 (Map):** `MAPW/MAPH=8`; `genMap(seed)` via seeded `makeGen`; `buildCheck()` checks `d.terr.indexOf(tile.terr)`; `adjBonus()` feeds into `runBld()` give() amounts, changing yields. Score 2.
+
+**F3 (Economy):** ore→metal (`mine`→`forge`), ash→soil→food inside `gh` case of `runBld`; caps via `caps()`; `addRes()` clamps and logs overflow. Score 2.
+
+**F4 (Population):** `makeColonist()` gives skill/fatigue/morale/job; `skillMult()`/`fatigueMult()` read those in `labourOf()`. Score 2.
+
+**F5 (Needs):** `phaseConsume()` computes food/water shortfall; `phaseMorale()` applies -9/-11 morale on shortage; `moraleMult()` feeds `labourOf()`; resting recovers morale (+2/turn). Score 2.
+
+**F6 (Research):** 12 `TECH` nodes; `techState()`/`actResearch()` gate prereqs and spend cost; every tech id checked (`S.tech.x`) somewhere in `runBld`/`stormMitigation`/`housing`/`phaseMarket`. Score 2.
+
+**F7 (Events):** 15 entries in `EVENTS`; weighted draw in `phaseEvent()`; 5 events (`wanderers`,`tunnel`,`ashlung`,`broadcast`,`bidding`) have 2-3 choices with distinct state writes; `S.events.cd` cooldown. Score 2.
+
+**F8 (Trade):** `scarcity()` reads `S.res`, `market.idx` drifts in `phaseMarket()`; `car.goods[].qty` finite, decremented/incremented by `tradeBuy`/`tradeSell`. Score 2.
+
+**F9 (Hazard):** `phaseStorm()` fires on schedule, `sev` grows with `S.turn`; `dmgMult(tile)` reduces `eff` in `runBld`; `stormMitigation()` reads baffle count + `S.tech.shutters`; `actRepair()` spends parts + idle colonist. Score 2.
+
+**F10 (Save/load):** `serialize()`→JSON into `#savebox` textarea; `deserialize()` validates fields with specific errors, shown via `flash()`. Score 2.
+
+**F11 (End conditions):** `checkEnd()` win (`turn>WIN_TURN` & pop & `needsMet`) and lose (`pop.length<=0`) both reachable; `scoreOf()` combines pop/skill/tech/stock/scrip/turns/buildings; `renderModal()` shows summary. Score 2.
+
+**F12 (UI):** tab click handler toggles `UI.tab`/sections; `logAdd` stores `S.turn`; extensive `data-tip` tooltips; keydown handler for Space/1-6; `@media max-width:560px` CSS. Score 2.
+
+**F13 (Dev panel):** `runTests()` 22 non-trivial assertions (caps, PRNG, prereqs, repair-labour, save round-trip); `runBenchmark()` runs `greedyTurn` headlessly 200 turns, prints `stateHash()`. Score 2.
+
+**G1:** `S.tech.sifting` read directly in sifter's `give('ash',...*1.3)` inside `runBld`, output consumed by greenhouse. Score 4.
+
+**G2:** `phaseConsume` sets `R.foodShort`; `phaseMorale` applies -9 morale; `moraleMult(c)` used in `labourOf()` → `runBld` eff. Score 4.
+
+**G3:** `phaseStorm` sets `tile.dmg`; `dmgMult` cuts `eff` in `runBld`; `repairCost` scales with `dmg`, `actRepair` spends parts+idle colonist and resets `dmg=0` restoring output. Score 4.
+
+**G4:** `priceBuy/priceSell` read `scarcity(S,res)` (stockpile-based) and `S.market.idx[res]` (drifts each turn in `phaseMarket`). Score 4.
+
+**G5:** `wanderers` and `tunnel` choice branches each mutate `S.pop`, `S.res`, colonist morale differently, not just logged. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls phaseStorm/Produce/Consume/Morale/Growth/Market/Event in fixed order, using rnd(S) seeded PRNG",
+    "F2": "adjBonus() computed from neighbours(), added into runBld() give() yields (e.g. sifter ash output)",
+    "F3": "runBld 'gh' case: ash+water->soil (take/give), soil+water->food, capped via addRes",
+    "F4": "skillMult(c,bld) and fatigueMult(c) read c.skill/c.fatigue, used in labourOf()",
+    "F5": "phaseConsume computes foodShort; phaseMorale applies -9 morale; moraleMult feeds labourOf",
+    "F6": "S.tech.sifting/coils/bore/refract/etc each read inside runBld or stormMitigation/housing",
+    "F7": "phaseEvent: weighted roll over deck filtered by S.events.cd; 5 events have choices[] with distinct run()",
+    "F8": "scarcity(S,res) reads S.res; market.idx drifts in phaseMarket; car.goods qty limited",
+    "F9": "phaseStorm sev grows with S.turn; dmgMult(tile) cuts runBld eff; actRepair spends parts+idle colonist",
+    "F10": "serialize()/deserialize() round-trip via #savebox textarea, deserialize returns descriptive err strings",
+    "F11": "checkEnd() sets S.over on pop<=0 or turn>WIN_TURN+needsMet; scoreOf() combines multiple state fields",
+    "F12": "click handler toggles UI.tab; keydown handles Space/1-6; data-tip tooltips throughout; media query for narrow screens",
+    "F13": "runTests() 22 assertions (e.g. cap enforcement, repair-needs-idle-labour); runBenchmark() prints stateHash headlessly",
+    "G1": "S.tech.sifting multiplies ash yield in runBld 'sifter' case, ash consumed downstream by greenhouse",
+    "G2": "R.foodShort/waterShort -> phaseMorale delta -9/-11 -> moraleMult(c) -> labourOf() -> runBld eff",
+    "G3": "phaseStorm sets tile.dmg -> dmgMult cuts runBld eff -> repairCost/actRepair resets dmg=0 restoring eff",
+    "G4": "priceBuy/priceSell = BASE_PRICE * S.market.idx[res] (drifts in phaseMarket) * scarcity(S,res) (stockpile-based)",
+    "G5": "wanderers/tunnel choice.run() functions each write distinct S.pop/S.res/morale mutations"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Map generation's hardcoded fallback tile indices (e.g. t[27]='vent') can override procedurally-placed terrain on rare seeds, slightly diluting pure seed-derivation but not affecting overall wiring or determinism."
+}
+```

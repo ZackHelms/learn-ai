@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** State `S` from `newGame()`; seeded mulberry32 `rng(S)` used everywhere (Math.random trapped, test asserts 0 calls); `endTurn()` runs 14 fixed phases (upkeep→storm→repair→production→...→resolution). Score 2.
+
+**F2 (Map):** `MAP_W=8,MAP_H=8`; `genMap(seed)` uses seeded stream; `buildReason()` checks `def.terr.includes(t.terr)`; `adjInfo().pct` multiplies `outScale` in `runProduction`. Score 2.
+
+**F3 (Economy):** Chains ash→soil (compost), ore→metal (forge), soil+water→food (greenhouse); `capOf()`/`gain()` enforce caps; overflow tracked in `OVERFLOW`, logged phase 8. Score 2.
+
+**F4 (Population):** `addColonist` creates records w/ skill/fatigue/morale/job; `workerEff(S,c,bid)` reads `c.skill,c.fatigue,c.morale,c.job` for production rate. Score 2.
+
+**F5 (Needs):** `needFood/needWater` consumed each turn (phase 9); `shortF/shortW` reduce morale in phase 10; `moraleF` in `workerEff` feeds output; recovery via "+3 fed", "+1 rested" morale gains. Score 2.
+
+**F6 (Research):** 13 nodes in `RESEARCH`; `req` array + tier/Lab checks in `researchState`; `take(scrip/parts)` in `doResearch`; each `mod(m)` mutates `computeMods()` output consumed by `runProduction`. Score 2.
+
+**F7 (Events):** 15 events in `EVENTS`; weighted draw in `drawEvent` (`roll -= e.w`); 7 events (ashbloom, refugees, cavein, cache, engineer, sickness, rumour) offer 3 differing choices; `evCd[id]=cd` cooldown checked in `eligibleEvents`. Score 2.
+
+**F8 (Trade):** `priceOf()` reads stockpile ratio and `market.index` (drifts phase 12); `caravan.stock` decremented on buy/incremented on sell, capped by `caravan.scrip`; `tradeBuy`/`tradeSell` both functional. Score 2.
+
+**F9 (Hazard):** `doStorm` fires at `storm.next` interval; `sev` grows with `turn/16`; `integrityFactor(tile)` reduces `outScale` in `runProduction`; `shutters`/`bunkerframes` research and windbreak/bunker buildings cut `stormDmg`; `startRepair` spends parts via `repairCostOf`. Score 2.
+
+**F10 (Save/load):** `serialize(S)`→JSON text in textarea; `deserialize(text)` validates fields/types, throws descriptive `Error`, shown via `UI.loadMsg`. Score 2.
+
+**F11 (End conditions):** `checkEnd` win (`turn>=WIN_TURN && pop>=12 && needsMet`) and lose (`colonists.length===0`) both reachable; `scoreOf` combines pop/research/turns/buildings/morale/etc; `renderOverlay` shows summary table. Score 2.
+
+**F12 (UI):** `handle('tab',...)` switches `UI.tab`; `addLog` stores `S.turn`, rendered as `e.t`; extensive `data-tip` tooltips w/ formula breakdowns; Space/1-6 keys in `keydown` listener; `@media` queries adapt layout. Score 2.
+
+**F13 (Dev panel):** 34 assertions in `runTests` check real invariants (negative resources, cap violations, research gating, storm mitigation, trade arithmetic); `runBenchmark` runs 200 headless `greedyTurn()` calls and prints `stateHash`. Score 2.
+
+**G1:** `sifting.mod` sets `m.out.ashworks*=1.30`; `computeMods(S)` rebuilt every `endTurn`; `runProduction` reads `m.out[t.b]` in `outScale`. Fully wired, visible via tooltip "research multiplier". Score 4.
+
+**G2:** `take(S,'food',needFood)` shortfall sets `shortF`; `shortF>0` subtracts from `c.morale` in phase-10 loop; `workerEff` reads `c.morale` into `moraleF` used in `rate` for next turn's production. Score 4.
+
+**G3:** `doStorm` calls `damageBuilding`; `integrityFactor` (from damaged `t.integrity`) scales `outScale` down in `runProduction`; `startRepair` deducts `repairCostOf` parts; repair phase restores `t.integrity`, eventually reaching full output again. Score 4.
+
+**G4:** `priceOf` reads `S.res[res]/cap` (stockpile) and `S.market.index[res]` (drifts w/ mean reversion each turn, phase 12). Both feed price shown in Trade tab. Score 4.
+
+**G5:** `cache` choice `apply` calls `gain(S,'metal',26,...)`; `refugees` choice calls `addColonist`+`take(food/water)`/`moraleAll(-9)` — distinct branches durably mutate `S.res`/`S.colonists`, confirmed by test 33. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() runs 14-phase order using rng(S) mulberry32; test1 asserts Math.random never called",
+    "F2": "buildReason() checks def.terr.includes(t.terr); adjInfo().pct scales outScale in runProduction",
+    "F3": "gain()/take() chain ash->soil->food etc; capOf() caps stock, OVERFLOW logged phase 8",
+    "F4": "workerEff(S,c,bid) reads c.skill/fatigue/morale to compute production rate",
+    "F5": "shortF/shortW in endTurn phase9 cut c.morale phase10; moraleF used in workerEff next turn",
+    "F6": "RES_NODE[id].mod(m) mutates computeMods() output consumed by runProduction outScale",
+    "F7": "drawEvent weighted roll over pool w; 7 events w/ 3 choices; evCd cooldown in eligibleEvents",
+    "F8": "priceOf() reads stockpile ratio + market.index; tradeBuy/tradeSell both mutate stock+scrip",
+    "F9": "doStorm damages via damageBuilding; integrityFactor cuts runProduction outScale; startRepair spends parts",
+    "F10": "serialize()->textarea; deserialize() validates/throws Error shown in UI.loadMsg",
+    "F11": "checkEnd() win/lose both reachable; scoreOf() multi-factor; renderOverlay shows summary table",
+    "F12": "handle('tab') switches UI.tab; addLog stores S.turn; keydown handles Space/1-6; @media adapts layout",
+    "F13": "runTests: 34 real assertions (test28 storm mitigation, test8 research gating); runBenchmark hashes 200 headless turns",
+    "G1": "sifting.mod sets m.out.ashworks*=1.30, read in runProduction outScale every endTurn",
+    "G2": "shortF cuts c.morale phase10, workerEff(c.morale) lowers rate feeding next turn's production",
+    "G3": "damageBuilding->integrityFactor cuts outScale; startRepair spends parts; repair restores integrity to full",
+    "G4": "priceOf() = BASE*market.index(drifts phase12)*scarcity(S.res[res]/cap)",
+    "G5": "cache/refugees choices call gain()/take()/addColonist() mutating S.res/S.colonists, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Production-shortfall-to-morale feedback has a one-turn lag (shortage computed after production runs), a minor but expected pipeline-order nuance rather than a missing link."
+}
+```

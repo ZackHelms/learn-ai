@@ -256,6 +256,20 @@ claude --model claude-fable-5 --effort max --permission-mode auto
 
 ## 10Aug2026
 
+<!--
+Me:
+    Later I will re-run all anthropic models with each effort level after I do one initial pass of all of these and finish refining & cleaning up this eval process. The main benefit is that I am learning along the way about evals. Secondary benefit is that I am building up an example eval (eval01) that can serve as a pattern or template to follow in the future for other evals. After I finish this first pass of haiku/sonnet/opus/fable each with effort levels low/medium/high/xhigh/max, I will have RESULTS.md with rough results (some claude code (bare), some claude code with my CLAUDE.md and other context and claude memory biasing the results a bit) that I will ask you to review and discuss things like ```should we modify the main eval01 prompt or leave it challenging and filled with rabbit-hole traps for cases like opus5-max that tend to overthink and potentialy miss the original intent of the main prompt``` and ```should we update the RUBRIC.md to make it more precise for handling the challenging intent of the main eval01 prompt?``` and anything else you can think of; and then I will re-run to get a more consistent set of eval numbers. I want to compact this session after this message, so make sure to capture any lessons learned or other items (like a rough plan in `.claude/plans/` of next steps I can feed in once my 'first pass' is done) as durable context or whatever makes sense.
+CC: 
+    Everything is captured for the compact. Where it landed:
+    .claude/plans/20260810124155.00-eval01-first-pass-review.md (in your plans naming convention) — the file to feed back in when the first pass is done. It contains:
+    - A state snapshot: the 4-command stem-grammar pipeline, the run-id letter scheme (r0x haiku interactive, s1x sonnet bare, t.. opus — I see t04 is the old r21a/opus5xhigh run renamed, which explains the "missing" files from earlier), and the two provenance mixtures that need resolving (context-biased r0x/t04 candidates; s1x gradings mixing 19 plan-mode-framed judge sessions with 6 clean re-grades).
+    - The review agenda: your two questions (keep the prompt trap-laden vs tighten; make RUBRIC more precise) plus five more — grader variance from your 5-gradings-per-candidate data, a bare-vs-context comparability ledger, eval_ashfall's known heuristic weak spots, cost budgeting before opus/fable at max, and the template-extraction writeup. Each item states the tension and my preliminary lean, labeled as inference. One lean worth flagging now: freeze eval01's prompt and fork variants as eval02, since editing the task invalidates every existing row.
+    - A proposed second-pass protocol and the session's lessons learned (bare-env recipe, pin --permission-mode always, validate judge output with the downstream parser, idempotent sweeps, judges drift on format, version everything).
+    It also records the early signal already sitting in your s-numbers: sonnet5 medium got a perfect deterministic 54 and beat high/xhigh/max by roughly 20 points, with the collapse entirely in the deterministic half — exactly the overthink question your review agenda item 1 is about.
+    Memory (two entries + index): headless-claude-needs-explicit-permission-mode — your defaultMode: plan setting silently hijacks any bare claude -p, so future scripts must pin a mode and verify side effects; and eval01-project-arc — a thin pointer that tells a future session to read the plan file when you say the first pass is done.
+    Ready to compact whenever you are.
+-->
+
 
 when done with the current task, please proceed with the following task:
 update grade.sh to standardize on the argument format so an eval sweep of sonnet5 might go something like this:
@@ -275,9 +289,14 @@ PPP=s; QQQ=1; MODEL=sonnet5
 ./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
 ./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
 
-# TODO
-# sonnet5-low,medium,high,xhigh,max -> eval01/runs/s1{1,2,3,4,5}.html
+# opus5-low,medium,high,xhigh,max -> eval01/runs/t1{1,2,3,4,5}.html
 PPP=t; QQQ=1; MODEL=opus5
+./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
+./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
+./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
+./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
+
+PPP=r; QQQ=1; MODEL="haiku-4-5"
 ./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
 ./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
 ./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
@@ -286,16 +305,9 @@ PPP=t; QQQ=1; MODEL=opus5
 
 
 
+# TODO: .claude/plans/20260810124155.00-eval01-first-pass-review.md
+claude --model claude-fable-5 --effort xhigh --permission-mode auto
 
-
-
-# Then opus5
-# Then opus4.7 (or 4.8? whatever was most recent before opus5)
-# Then fable ?
-
-# Then discuss results with fable(max)
-# - should we modify the main eval01 prompt or leave it challenging and filled with rabbit-hole traps for cases like opus5-max that tend to overthink and potentialy miss the original intent of the main prompt
-# - should we update the RUBRIC.md to make it more precise for handling the challenging intent of the main eval01 prompt?
 
 
 ```

@@ -1,0 +1,69 @@
+Looking through this submission — it's unusually thorough. Let me work through each item with evidence.
+
+**F1 Core loop**: `newState()` builds one state object; `rnd(S)` (mulberry32-derived) is the only randomness source, used throughout; `endTurn()` resolves storm→power→extraction→refining→food→consumption→needs→skill→market→events→end in documented fixed order. Score 2.
+
+**F2 Map**: 64-tile grid; terrain assigned via `rnd(S)` loop in `newState`; `canBuild()` checks `b.terr.indexOf(t.terrain)`; `adjBonus()` multiplies into `buildingEff()`. Score 2.
+
+**F3 Economy**: chains ore→metal (forge), ash→soil (composter), soil→food (green); `capOf()`/`addRes()` cap storage; overflow tracked in `S.overflow` and logged. Score 2.
+
+**F4 Population**: `makeColonist` gives skill/fatigue/morale/job/assign; `effOf()` reads `p.skill`/`p.fatigue` and feeds `buildingEff()`. Score 2.
+
+**F5 Needs**: `popNeed()` consumption each turn; shortage subtracts from morale in the needs block; morale feeds `effOf()`; recovery via `d+=2.5` when fed and `zeroTurns>=3` gate before departure (not instant). Score 2.
+
+**F6 Research**: 12 nodes in `RESEARCH`; `buyResearch()` enforces `n.pre` and deducts cost; every node's effect is wired (`techMult()` for 7 production nodes, `b.req` gating for 3 unlock nodes, `stormMitigation()` for storm_shutters, `capOf()`/`priceOf()` for logistics). Score 2.
+
+**F7 Events**: 15 entries in `EVENTS` (10 auto + 5 choice, ≥10 and ≥4 met); weighted draw in `fireEvent()` via `e.w`; `S.cooldown[chosen.id]=chosen.cd` enforced in pool filter. Score 2.
+
+**F8 Trade**: `priceOf()` combines stock-based `scarcity` and drifting `S.market.drift[r]` (updated in `tickMarket`); `S.caravan.stock` decremented/incremented; `tradeBuy`/`tradeSell` both mutate state. Score 2.
+
+**F9 Hazard**: storms fire on `S.turn%5===0`; `sev = 1+turn/14+rnd*0.8` scales with turn; `buildingEff()` multiplies by `integrity/100`, zero below 25; `stormMitigation()` reads windbreaks/storm_shutters/relay; `doRepair()` costs parts + fatigue. Score 2.
+
+**F10 Save/load**: `serialize()` outputs full JSON to textarea; `deserialize()` validates tiles/people/res/research with explicit `throw new Error(...)` messages shown via `flash()`. Score 2.
+
+**F11 End conditions**: win/lose both in `checkEnd()` (`people.length===0` lose, turn 60 pop/needs win), both reachable per tests; `scoreOf()` combines population/research/stockpiles/turns/buildings/victory; `renderSummary()` renders it. Score 2.
+
+**F12 UI**: `data-tab` click handler switches `TAB`; log entries carry `e.t` turn number; extensive `data-tip` tooltips explain formulas; Space and 1-6 keyboard shortcuts wired; `@media (max-width:560px)` adapts layout. Score 2.
+
+**F13 Dev panel**: `runTests()` checks real invariants (non-negative resources, cap enforcement, storm mitigation reduces damage, save/load hash round-trip); `runBenchmark()` runs 200 headless turns via `greedyTurn()`, prints `stateHash()`, wired to `data-act="bench"`. Score 2.
+
+**G1**: `techMult(S,key)` reads `S.research`, called inside `buildingEff()` which is used by `runPhase()` for real production every turn. Score 4.
+
+**G2**: shortfall computed in consumption step, written into morale via `d -= 6+...`; `effOf()` reads `p.morale` via `mor=0.40+0.60*(morale/100)`, used in `buildingEff()`. Full pipeline, every turn. Score 4.
+
+**G3**: storm loop damages `t.integrity`; `buildingEff()` scales output by `integrity/100` (zero <25); `doRepair()` spends parts, restores to 100, verified by tests. Score 4.
+
+**G4**: `priceOf()` reads both `S.res[r]/cap` scarcity and `S.market.drift[r]`, the latter updated every turn in `tickMarket()`. Score 4.
+
+**G5**: `pneumonia`/`refugees`/`infest` choices each `apply()` durable changes (parts, morale, fatigue, new colonists, food/water) not just log text; confirmed by test "Event choices alter state, not just text". Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "rnd(S)/mulberry32 only RNG; endTurn() runs fixed documented phase order",
+    "F2": "canBuild() checks b.terr; adjBonus().mult multiplies buildingEff()",
+    "F3": "forge inp ore/power out metal; capOf()/addRes() cap+overflow log",
+    "F4": "makeColonist p.skill/fatigue/morale/job/assign; effOf() reads skill+fatigue",
+    "F5": "popNeed() consumption; shortage -> d-=6.. morale; effOf() reads morale; recovery d+=2.5",
+    "F6": "buyResearch() enforces n.pre/cost; techMult()+b.req wire all 12 node effects",
+    "F7": "EVENTS 15 entries, fireEvent() weighted by e.w, S.cooldown[id]=cd gates repeats",
+    "F8": "priceOf() uses scarcity(stock) x S.market.drift updated in tickMarket(); tradeBuy/tradeSell mutate both sides",
+    "F9": "turn%5 storm, sev scales w/ turn, buildingEff() x integrity/100, stormMitigation() reads windbreak/research/relay, doRepair() costs parts",
+    "F10": "serialize()/deserialize() with explicit throw Error(...) validation shown via flash()",
+    "F11": "checkEnd() win+lose both reachable; scoreOf() combines 6 fields; renderSummary() renders",
+    "F12": "data-tab click switches TAB; e.t turn in log; data-tip tooltips; Space/1-6 keys; media query layout",
+    "F13": "runTests() checks real invariants (caps, storm mitigation, save hash roundtrip); runBenchmark() 200-turn headless w/ stateHash()",
+    "G1": "techMult(S,key) reads S.research, consumed in buildingEff() used by runPhase()",
+    "G2": "shortage writes morale delta, effOf() reads p.morale into output multiplier every turn",
+    "G3": "storm damages t.integrity, buildingEff() scales by integrity/100, doRepair() spends parts restores to 100",
+    "G4": "priceOf() reads S.res[r]/cap scarcity and S.market.drift[r], drift updated each turn in tickMarket()",
+    "G5": "refugees/pneumonia apply() durably changes people array, parts, morale, food/water, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Minor dead code (effBreak(), incomingSpike var never used) and duplicated assignment logic between autoAssign() and greedyTurn(), but no functional gaps found in the traced systems."
+}
+```

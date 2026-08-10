@@ -1,0 +1,73 @@
+## Worksheet
+
+**F1 (Core loop):** Single `S` object; `mulberry32` PRNG stored as `S.rngState`, threaded via `rnd()`; `endTurn()`→`resolveTurn()` executes `PROD_PHASES` in fixed order then consumption/morale/storm/events. Score 2.
+
+**F2 (Map):** `genMap` builds 64 tiles (8x8) from seeded RNG; `canBuild` checks `def.terr.indexOf(t.terr)`; `tileAdjBonus`/`adjCount` multiply into `tilePreview` scale. Score 2.
+
+**F3 (Economy):** Chains: ash→soil (composter), soil+water→food (greenhouse), ore+power→metal (forge); `caps()`+`addRes` enforce caps, overflow tracked in `S.stats.overflowLost` and logged. Score 2.
+
+**F4 (Population):** Colonist records `{skill,fatigue,morale,job,at}`; `colonistPower()` reads skill+fatigue+morale, consumed by `tileWorkerPower` in production. Score 2.
+
+**F5 (Needs):** `foodNeed/waterNeed` consumed each turn; shortage sets `S.shortage`, drives `d -= 13` morale; morale feeds `colonistPower`; recovery via `d>0` branch when no shortage. Score 2.
+
+**F6 (Research):** 12 nodes in `RESEARCH`; `researchAvailable` enforces `pre.every`; `buyResearch` deducts cost; `mods(S)` reads `S.research` and multiplies into `tilePreview`. Score 2.
+
+**F7 (Events):** 14 events in `EVENTS`; weighted roll in `eventStep`; 5 events (`refugees`,`ventSurge`,`peddler`,`sickness`,`defector`) offer differing-outcome choices; `S.eventCooldown[id]=turn+8`. Score 2.
+
+**F8 (Trade):** `priceBuy/priceSell` use `S.market[g]` (drifts in `finishTurn`) and `stockFactor` (reads `S.res[g]`); `S.caravan.stock` finite, `doBuy`/`doSell` both implemented. Score 2.
+
+**F9 (Hazard):** Storm fires `turn%6===0` from turn 6; `sev` grows with `Math.floor(turn/16)`; `dmgMult(t.dmg)` cuts `tilePreview` scale; `stormShutters`/`windbreak` reduce chance; `repair()` spends `parts` and resets `t.dmg=0`. Score 2.
+
+**F10 (Save/load):** `serialize`=`JSON.stringify(S)` shown in textarea; `deserialize` validates fields and throws descriptive errors shown via `saveMsg` class `bad`. Score 2.
+
+**F11 (End conditions):** `checkEnd` sets win (pop≥12, no shortage, avgMorale≥45 at turn 60) or lose (`colonists.length<=0` or failed charter); `score()` sums multiple fields; `viewEnd()` renders summary. Score 2.
+
+**F12 (UI):** `setTab`/`TABS` tab switching; `log()` stores `t:S.turn` shown as `T`+e.t; extensive `data-tip` tooltips; Space/1-6 keydown handlers; `@media max-width:520px` layout. Score 2.
+
+**F13 (Dev panel):** `runTests()` has 25 real invariant checks (cap respect, worker/tile consistency, save round-trip hash); `runBenchmark()` calls `runHeadless(seed,200)` with no DOM calls, prints `hashState`. Score 2.
+
+**G1:** `mods(S).greenhouse` reads `R.hydroponics`, multiplies `tilePreview` scale; test #9 explicitly asserts yield increase. Score 4.
+
+**G2:** `S.shortage.food/water` set in consumption step, `-13` morale applied, `colonistPower` moraleF scales worker output every turn. Score 4.
+
+**G3:** Storm loop sets `t.dmg++`; `dmgMult(t.dmg)` cuts `tilePreview` output; `repair()` spends `parts`, resets `t.dmg=0` restoring full output. Score 4.
+
+**G4:** `priceBuy/priceSell` multiply `S.market[g]` (drifts each `finishTurn`) by `stockFactor(S,g)` reading `S.res[g]`. Score 4.
+
+**G5:** `refugees`/`sickness` choice branches directly mutate `S.colonists`, `S.res`, morale/fatigue — distinct per branch, not just logged. Score 4.
+
+todo_notes: none found (no `// TODO` markers present).
+
+single_biggest_weakness: The documented "fixed" turn-resolution order in the header comment doesn't exactly match the implementation's storm/consumption interleaving, though the actual in-code order is still deterministic and consistent — a cosmetic doc/code mismatch rather than a functional flaw.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "rnd() threads S.rngState through mulberry32; resolveTurn() runs PROD_PHASES in fixed order",
+    "F2": "genMap seeds terrain; canBuild checks def.terr; tileAdjBonus multiplies tilePreview scale",
+    "F3": "composter/forge/greenhouse chains; addRes clamps to caps(), logs overflowLost",
+    "F4": "colonistPower(c,def) reads c.skill/c.fatigue, used by tileWorkerPower in production",
+    "F5": "S.shortage.food/water drives morale d-=13; colonistPower moraleF scales output",
+    "F6": "researchAvailable enforces pre[]; mods(S) reads S.research, multiplies tilePreview",
+    "F7": "EVENTS weighted roll in eventStep; S.eventCooldown[id]=turn+8; 5 events with branching choices",
+    "F8": "priceBuy/priceSell use S.market[g] drift + stockFactor(S.res[g]); doBuy/doSell both work",
+    "F9": "storm sets t.dmg++, dmgMult() cuts tilePreview output; repair() spends parts, resets dmg",
+    "F10": "serialize()=JSON.stringify(S) shown in textarea; deserialize() throws descriptive errors",
+    "F11": "checkEnd sets S.over win/lose; score() sums population/research/turns/etc; viewEnd() renders",
+    "F12": "setTab/TABS tab switching; log() stores turn number; keydown Space/1-6; media query layout",
+    "F13": "runTests() 25 real invariant asserts; runBenchmark() runs runHeadless(200) headless, prints hash",
+    "G1": "mods(S).greenhouse reads R.hydroponics, scales tilePreview; test #9 verifies yield rise",
+    "G2": "S.shortage sets -13 morale, colonistPower moraleF scales tileWorkerPower every turn",
+    "G3": "storm t.dmg++ -> dmgMult cuts tilePreview -> repair() spends parts, resets dmg=0",
+    "G4": "priceBuy/priceSell = BASE_PRICE*S.market[g]*stockFactor(S.res[g]), market drifts in finishTurn",
+    "G5": "refugees/sickness choice branches mutate S.colonists/S.res/morale directly, not just logged"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Header-comment turn order doesn't exactly match the implemented storm/consumption interleaving, a cosmetic doc/code mismatch rather than a functional gap."
+}
+```
