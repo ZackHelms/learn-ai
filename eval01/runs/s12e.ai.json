@@ -1,0 +1,69 @@
+## Grading Worksheet
+
+**F1 Core loop**: `STATE`/`freshState()` single state object; `rngNext(rng)` mulberry32-style used for all RNG; `resolveTurn()` resolves systems in fixed documented order (events→production→needs→morale→...). Score 2.
+
+**F2 Map**: 8x8 grid (`generateGrid`, 64 tiles); terrain via `rngWeighted(s.rng,...)` seeded; `tryBuild` checks `def.terrain.includes(t.terrain)`; `adjBonus` added to `addResource` amounts in `doProduction` when `hasAdjTerrain`. Score 2.
+
+**F3 Economy**: forge consumes ore+power→metal; greenhouse ash(ambient)→soil→(soil+water)→food, two-stage in `doProduction`; caps enforced/overflow logged in `addResource`/`logOverflow`. Score 2.
+
+**F4 Population**: colonist records `{skill,fatigue,morale,job,assignedBuildingId}`; `skillFactor(c.skill)` and `computeMoraleFatigueFactor(c)` read in `doProduction`. Score 2.
+
+**F5 Needs**: `resolveNeeds` consumes food/water, shortage calls `adjustAllMorale(-5)`; morale feeds `computeMoraleFatigueFactor` used in production; recovery via fatigue<50 → morale+1 in `resolveMoraleFatigue`. Score 2.
+
+**F6 Research**: 10 nodes in `RESEARCH_TREE`; `researchPrereqsMet` enforced in `tryResearch`; `payCost` deducts; effects (`chainYield`, `condenserYield`, `stormDamage`, `housingDurability`, unlocks) all read in `doProduction`/`resolveHazard`/`isBuildingUnlocked`. Score 2.
+
+**F7 Events**: 13 entries in `EVENTS`; `rngWeighted` selection in `resolveEvents`; 5 choice events (sickness, migrants, festival, wanderer, toxic_cloud) with differing state writes; `eventCooldowns` set/decremented/checked. Score 2.
+
+**F8 Trade**: `resolveTrade` prices from `stockRatio` and `market.drift` (random-walked each turn); `caravan.inventory[].qty` capped/decremented; `tradeBuy`/`tradeSell` both wired to UI buttons. Score 2.
+
+**F9 Hazard**: `resolveHazard` fires every 6 turns, `severity` grows with `s.turn`; `storm_walls`/`reinforced_housing` mults reduce damage; `repairBuilding` spends parts. BUT `doProduction` only skips production when `b.hp<=0`/`disabled` — partially damaged buildings produce at full rate, so "produce less until repaired" is missing. Score 1.
+
+**F10 Save/load**: `serializeState`→JSON into `#savearea` textarea (copyable); `deserializeState` validates required fields, throws on bad JSON, shown via `#loadmsg` with `.bad` class. Score 2.
+
+**F11 End conditions**: `checkEndConditions` win (turn≥60, pop≥12, needsMet) and lose (pop=0 or turn 60 fail) both reachable each turn; `computeScore` uses pop/research/turn/stockpile; `checkGameOverOverlay` renders summary. Score 2.
+
+**F12 UI**: `switchTab` wired to nav buttons; log entries `'[T'+e.turn+']'`; `data-tip`/`title` tooltips explain resource sourcing; keyboard shortcuts (Space, 1-5) in `keydown` handler; `@media (max-width:500px)` layout. Score 2.
+
+**F13 Dev panel**: `runTests()` 18 real-invariant assertions (cap respected, prereqs enforced, save/load hash roundtrip, terrain/assignment consistency); `runBenchmark` runs 200 turns headless via `greedyPolicyTurn`, prints `hashState` in `#devout`. Score 2.
+
+**G1**: `efficient_chains`/`advanced_filtration` mults read directly in `doProduction` formula (forge/greenhouse/condenser); `trade_networks`→`trade_post.tradeBonus` read in `tradeSell`; applied every relevant turn, visible in resource totals. Score 4.
+
+**G2**: `resolveNeeds` shortage → `adjustAllMorale(-5)` → `computeMoraleFatigueFactor(c)` multiplies output in `doProduction` workers loop. Fully traceable, every turn. Score 4.
+
+**G3**: `resolveHazard` damages `b.hp`; but `doProduction` only gates on `b.hp<=0`(disabled), so partially-damaged buildings still produce at full rate — matches rubric's explicit cap-at-1 case; `repairBuilding` restores hp/production once fixed. Score 1.
+
+**G4**: `resolveTrade` price formula reads `stockRatio=(resources[g]/caps[g])` and `market.drift[g]` (random-walked each caravan turn); shown in Trade tab. Score 4.
+
+**G5**: sickness choice (quarantine: -food/-water/-morale vs ignore: RNG morale hit) and migrants choice (welcome: `addColonist`+resource cost vs turn away: +scrip) both mutate resources/colonists/morale directly, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "resolveTurn() calls fixed ordered steps; rngNext() used throughout via s.rng",
+    "F2": "generateGrid() seeds terrain; tryBuild() checks def.terrain; adjBonus applied in doProduction",
+    "F3": "forge consumes ore+power->metal; greenhouse ash->soil->food in doProduction",
+    "F4": "skillFactor(c.skill), computeMoraleFatigueFactor(c) read in doProduction workers loop",
+    "F5": "resolveNeeds shortage->adjustAllMorale(-5); mf factor read in doProduction",
+    "F6": "researchPrereqsMet in tryResearch; chainYield/condenserYield mults read in doProduction",
+    "F7": "13 EVENTS entries; rngWeighted selection; eventCooldowns checked in resolveEvents",
+    "F8": "resolveTrade prices from stockRatio & market.drift; tradeBuy/tradeSell wired to buttons",
+    "F9": "doProduction only checks b.hp<=0/disabled, not partial damage, so damaged bldgs run at full output",
+    "F10": "serializeState->#savearea; deserializeState validates fields, error shown in #loadmsg",
+    "F11": "checkEndConditions win/lose both reachable; computeScore; checkGameOverOverlay renders summary",
+    "F12": "switchTab wired to nav; log '[T'+e.turn+']'; data-tip tooltips; keydown shortcuts; media query",
+    "F13": "runTests() 18 invariant asserts; runBenchmark() 200-turn headless loop prints hashState",
+    "G1": "efficient_chains/advanced_filtration mults read in doProduction; tradeBonus read in tradeSell",
+    "G2": "resolveNeeds shortage->adjustAllMorale->computeMoraleFatigueFactor used in doProduction",
+    "G3": "resolveHazard damages b.hp but doProduction ignores partial damage, only hp<=0 stops output",
+    "G4": "resolveTrade buyPrice/sellPrice formula reads stockRatio and market.drift[g]",
+    "G5": "sickness/migrants choice options call addResource/adjustAllMorale/addColonist differently"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm damage is binary (full output until hp hits 0, then disabled) rather than scaling output loss with damage severity, weakening F9/G3."
+}
+```

@@ -1,0 +1,55 @@
+I don't have file-write access in this session (only Google Drive tools are available, and this is a plain read/analyze task with no plan-worthy code changes), so I'll give the grading directly.
+
+## Worksheet
+
+- F1: single `state` object; `makeRng`/`rngNext` used for all randomness (map gen, events, caravan, market drift, excavation — no `Math.random` found); `endTurnLogic()` runs resolveStorm→resolveProduction→resolveNeeds→resolveColonistUpdates→resolvePopGrowth→resolveEvents→resolveCaravan→checkEndConditions in fixed order. Score 2.
+- F2: `CONFIG.GRID=8`; `genMap(rng)` derives terrain from seeded rng; `canBuildAt` checks `def.terrain.indexOf(t.terrain)`; `adjacencyMultiplier` feeds every production formula in `resolveProduction`. Score 2.
+- F3: ore→metal (mine→forge, `consumesInput:"ore"`) and ash→soil→food (greenhouse `soilRate` then soil+water→food) chains; `addResource` enforces `getCap`, logs overflow loss. Score 2.
+- F4: colonist record `{skill,fatigue,morale,job,assignedBuilding}` from `spawnColonist`; `c.skill`, `moraleMult(c)`, `fatigueMult(c)` read directly in `resolveProduction`. Score 2.
+- F5: `resolveNeeds` consumes food/water; shortage sets `turnStats.shortageFood/Water` → morale loss in `resolveColonistUpdates` → `moraleMult` reduces next output; recovery via rest/productivity, not instant loss. Score 2.
+- F6: 10 nodes in `RESEARCH_DEFS`; `purchaseResearch`/`researchPrereqsMet` enforce prereq + deduct cost; every node's effect read somewhere (`researchYieldBonus` in yield formulas, `coldstorage` in `getCap`, `toolfab`/`diplomacy`/`windbreak` gate `canBuildAt`, `stormshelter`/`windbreak` in `resolveStorm`). Score 2.
+- F7: 12 entries in `EVENT_DEFS`; `weightedEventPick` uses `e.weight`; 4 events (`wanderers`,`fever`,`dispute`,`ruins_rumor`) have 2-3 choices with differing `apply()` effects; `eventCooldowns` checked in `resolveEvents`. Score 2.
+- F8: `tradePrice` reads `state.resources[key]/cap` and `state.market.globalFactor[key]` (drifted every turn via `driftMarket` in `resolveCaravan`); caravan `inventory[key].sellQty/buyMax` decremented on trade; `tradeBuy`/`tradeSell` both wired to UI. Score 2.
+- F9: `resolveStorm` fires on `turn % STORM_INTERVAL===0`, severity grows with `Math.floor(turn/10)`; `b.integrity` damaged, `integrityMult` cuts every production formula; `stormwall`/`stormshelter`/`windbreak` reduce mitigation; `repairBuilding` spends parts + idle colonist, restores integrity. Score 2.
+- F10: `JSON.stringify(state,null,2)` into textarea on save; Load does `JSON.parse` (catches error) + `validateSaveData` with clear `saveError` message on bad input. Score 2.
+- F11: `checkEndConditions` sets win/lose, both reachable; `computeScore` combines pop/research/turn/stockpile; `renderModal` renders full summary table. Score 2.
+- F12: `setActiveTab` wired to tab clicks; `logLine` shows `"T"+entry.turn`; extensive `data-tip` tooltips; `keydown` implements Space + 1-7 shortcuts; media query adapts layout under 600px. Score 2.
+- F13: `runTests()` asserts real invariants (cap clamping, morale/fatigue bounds over 40 turns, save/load hash round-trip, PRNG determinism, popCap formula, win/lose consistency); `runBenchmark` loops `stepTurnHeadless` with no rendering and prints `hashState`. Score 2.
+
+- G1: `researchYieldBonus(state,"sifting",...)` etc. read every turn inside the per-building formulas in `resolveProduction`. Full chain, visible via tooltips. Score 4.
+- G2: shortage severity written in `resolveNeeds` → morale subtraction in `resolveColonistUpdates` → `moraleMult` cuts next turn's output. Score 4.
+- G3: `resolveStorm` damages integrity → `integrityMult` cuts all staffed/passive production → `repairBuilding` spends parts, restores to 100. Score 4.
+- G4: `tradePrice` reads live stockpile fraction and `market.globalFactor`, drifted every turn by `driftMarket`. Score 4.
+- G5: `wanderers`/`fever`/`dispute`/`ruins_rumor` choices each write distinct `addResource`/`colonists`/`turnEffects` changes, not just log entries. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "state object; makeRng/rngNext used for all randomness; endTurnLogic() calls resolve* in fixed order",
+    "F2": "genMap(rng) 8x8 terrain from seed; canBuildAt checks terrain; adjacencyMultiplier in resolveProduction",
+    "F3": "mine->forge ore->metal, greenhouse soil->food chains; addResource enforces getCap, logs overflow",
+    "F4": "colonist record with skill/fatigue/morale/job in spawnColonist; read via moraleMult/fatigueMult in resolveProduction",
+    "F5": "resolveNeeds consumption -> shortage flags -> resolveColonistUpdates morale hit -> moraleMult feeds production; morale recovers",
+    "F6": "10 RESEARCH_DEFS nodes; purchaseResearch enforces prereq/cost; researchYieldBonus read in every yield formula",
+    "F7": "12 EVENT_DEFS, weightedEventPick by weight; 4 choice events with differing apply(); eventCooldowns checked in resolveEvents",
+    "F8": "tradePrice reads stockFrac + market.globalFactor (drifted via driftMarket); caravan inventory qty decremented; tradeBuy/tradeSell both work",
+    "F9": "resolveStorm scales severity with turn, damages integrity; integrityMult cuts output; stormwall/research mitigate; repairBuilding spends parts",
+    "F10": "JSON.stringify(state) into textarea; loadBtn JSON.parse + validateSaveData with clear saveError messages",
+    "F11": "checkEndConditions sets win/lose both reachable; computeScore combines multiple state values; renderModal shows summary table",
+    "F12": "setActiveTab wired to tabs; logLine shows turn number; data-tip tooltips everywhere; keydown Space/1-7 shortcuts; media query layout",
+    "F13": "runTests asserts overflow/bounds/hash/determinism invariants; runBenchmark loops stepTurnHeadless headlessly and prints hashState",
+    "G1": "researchYieldBonus(state,'sifting',...) etc. read every turn inside resolveProduction's per-building formulas",
+    "G2": "shortage severity -> morale subtraction in resolveColonistUpdates -> moraleMult multiplies next turn's output",
+    "G3": "resolveStorm damages integrity -> integrityMult cuts all production -> repairBuilding spends parts and restores to 100",
+    "G4": "tradePrice reads state.resources stockFrac and market.globalFactor, drifted every turn by driftMarket",
+    "G5": "wanderers/fever/dispute/ruins_rumor choices each write different addResource/colonists/turnEffects changes, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Shared inputs (power/ore/metal for Forge and Workshop) are drawn strictly in building-creation order rather than proportionally, so later-built production buildings can be starved with no fairness fallback as the economy scales."
+}
+```

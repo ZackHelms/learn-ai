@@ -32,7 +32,7 @@ Total: 100 points. Deterministic covers 54, AI covers 46.
 | A2 | Output is not truncated (closes `</html>`, no cut-off code fence) | 3 |
 | A3 | Loads in a headless browser with zero console errors and zero page errors | 4 |
 
-A3 requires the runtime pass (`--runtime`).
+A3 requires the runtime pass (on by default; `--noruntime` skips it).
 
 ---
 
@@ -145,7 +145,7 @@ pipeline with a minor gap. **4** = fully wired, visible to the player, and trace
 ## How to run a full grade
 
 See "Protocol - run one candidate" in [README.md](README.md). Short version: deterministic
-pass with `eval_ashfall.py --runtime`, AI pass by handing `GRADER_PROMPT.md` plus the
+pass with `eval_ashfall.py`, AI pass by handing `GRADER_PROMPT.md` plus the
 candidate to a fixed grader model, then `--merge` for the total and `--report` to compare.
 
 ## Known weak spots (fix in a later iteration)

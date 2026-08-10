@@ -92,7 +92,10 @@ def main(argv):
             rc = 1
             continue
         except (SystemExit, ValueError) as e:  # load_ai bad-JSON / corrupt eval.json
-            print("%serror: %s" % (prefix, e), file=sys.stderr)
+            msg = str(e)
+            if msg.startswith("error: "):
+                msg = msg[len("error: "):]
+            print("%serror: %s" % (prefix, msg), file=sys.stderr)
             rc = 1
             continue
 

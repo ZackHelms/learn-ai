@@ -1,0 +1,71 @@
+I'll grade this by reading through the source code systematically against each rubric item.
+
+**F1 - Core loop**: `STATE` object holds all state; `mulberry32(seed)` PRNG used via `s.rng` throughout; `resolveTurn(s)` has 9 numbered fixed-order steps. Score: 2
+
+**F2 - Map**: 8x8 grid in `makeGrid`; terrain from seeded `rng()` rolls; `canBuild` checks `def.terrain.includes(tile.terrain)`; `adjacencyBonus` reads neighbor terrain and multiplies into production via `adj` in production loop. Score: 2
+
+**F3 - Economy**: chains exist (ore/metal is flavor-text but forge consumes power→metal is real; generator consumes metal→power; workshop consumes metal→parts; greenhouse consumes water→food); `STORAGE_CAP` enforced via `addRes` clamping with overflow log. Score: 2
+
+**F4 - Population**: colonists are objects with `skill{}, fatigue, morale, job, assigned`; `skillMult` and `moraleMult` read `col.skill[def.job]` and `col.morale` in production loop. Score: 2
+
+**F5 - Needs**: `foodNeed/waterNeed` consumed each turn; `foodShort/waterShort` reduce morale via `moraleDelta`; morale affects output via `moraleMult`; recovery possible via `moraleDelta += 3` when needs met and fatigue low, and medbay `moraleAid`. Score: 2
+
+**F6 - Research**: exactly 8 nodes in `RESEARCH_NODES`; `canResearch` enforces `node.prereq`; `doResearch` deducts cost via `addRes`; each `effect(s)` mutates `s.mods`, which is read in production (`buildingMult`, `forgePowerDiscount`, `stormResist`, etc.). Score: 2
+
+**F7 - Events**: 12 events in `EVENTS` array; `rngWeighted` selects using `.w`; 5 events have `.choices` with 2 options each with differing state mutations; `s.eventCooldowns[e.id]` tracked and filtered via `avail`. Score: 2
+
+**F8 - Trade**: `priceFor` reads `s.market.supply[key]` (drifts each turn) and `s.res[key]/STORAGE_CAP` stockFactor; `spawnCaravan` gives limited random inventory; `doTrade` handles both buy (checks caravan stock) and sell. Score: 2
+
+**F9 - Hazard**: storm fires every 8 turns (`s.turn % 8 === 0`); severity scales `0.25 + s.turn/200`; damaged tiles skip production (`if (tile.damaged) continue`); `stormResist` research and windbreak buildings reduce chance; `doRepairNow`/auto-repair costs parts. Score: 2
+
+**F10 - Save/load**: `JSON.stringify(STATE, ...)` to textarea; `loadbtn` parses with `JSON.parse`, validates required fields (`turn`, `colonists`, `res`, `grid`), shows error via `errEl.textContent` on catch. Score: 2
+
+**F11 - End conditions**: `checkEndConditions` checks lose (`colonists.length<=0`) and win (turn>=60 + pop>=12 + needsMet) — both reachable branches exist; `scoreOf` computes from pop/research/turn/stockpile; `renderModal` shows summary screen with score. Score: 2
+
+**F12 - UI**: `switchTab` wired to nav buttons; log lines show `[T${e.turn}]`; tooltips via `title` attributes on res-chips, tiles, buttons explaining mechanics; keyboard shortcuts (Space, 1-5) via `keydown` listener; `@media (max-width:480px)` CSS. Score: 2
+
+**F13 - Dev panel**: `runTests` has ~18 asserts checking real invariants (prereq enforcement, cap respect, save/load hash match, skill cap); `runBenchmark` runs `greedyPolicy`+`resolveTurn` headlessly 200 turns, prints `stateHash` via djb2. Score: 2
+
+**G1 - research→yield**: `irrigation.effect` sets `s.mods.greenhouseMult`; `buildingMult(s,'greenhouse')` reads it; used in production `amt = v * skillMult * moraleMult * adj * bMult`. Full chain, every turn. Score: 4
+
+**G2 - shortfall→morale→labor**: `foodShort`/`waterShort` → `moraleDelta -= 10` → `c.morale` updated → `moraleMult` in production reads `col.morale` (thresholds 0/<30/else). Fully wired each turn. Score: 4
+
+**G3 - storm→damage→output→repair→recovery**: storm sets `tile.damaged=true` + `repairTurns`; damaged tiles skip production entirely (`if (tile.damaged) continue`); repair via `doRepairNow` (costs parts, instant) or passive countdown in step 1 restores. Full chain. Score: 4
+
+**G4 - trade prices vs stockpile/supply**: `priceFor` uses `s.market.supply[key]` (drifts randomly each turn) and `stockFactor = 1+(s.res[key]/cap)*0.6`, applied differently for buy/sell. Score: 4
+
+**G5 - event choices mutate state**: e.g. `refugees` choice adds colonists/spends food differently per branch; `scavenger_find` adds parts vs scrip; both write to `s.res`/`s.colonists`, not just log. Score: 4
+
+One real gap worth noting: skill growth threshold `col.skill[col.job]*6` uses only the colonist's job skill even if assigned to a different-job building's slot — but `def.job` always matches since assignment doesn't enforce job type strictly (any colonist can be assigned to any job-building), so skill used in production could be a colonist's off-job skill defaulting via `col.skill[def.job] || 1`. This is a minor internal consistency issue, not a missing chain, so I did not penalize G1/G2 for it beyond noting it.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "STATE + mulberry32 rng used throughout; resolveTurn() has 9 fixed numbered steps",
+    "F2": "makeGrid seeds terrain; canBuild checks def.terrain; adjacencyBonus multiplies production",
+    "F3": "greenhouse consumes water->food, forge consumes power->metal; addRes enforces STORAGE_CAP",
+    "F4": "colonist.skill/fatigue/morale read via skillMult/moraleMult in production loop",
+    "F5": "foodShort/waterShort cut moraleDelta; moraleMult reads morale in production; recovery +3 when stable",
+    "F6": "8 RESEARCH_NODES; canResearch enforces prereq; effect() writes s.mods read in buildingMult",
+    "F7": "12 EVENTS, rngWeighted select, 5 with choices, eventCooldowns gate reselection",
+    "F8": "priceFor reads market.supply (drifts each turn) and s.res stockFactor; doTrade buy/sell both work",
+    "F9": "storm every 8 turns, severity scales with turn; damaged tiles skip production; stormResist/windbreak mitigate; doRepairNow costs parts",
+    "F10": "savebtn JSON.stringify to textarea; loadbtn JSON.parse + field validation + error display",
+    "F11": "checkEndConditions sets win/lose both reachable; scoreOf combines pop/research/turn/stock; renderModal shows summary",
+    "F12": "switchTab wired to nav buttons; log shows [T#]; title tooltips; Space/1-5 keydown; media query for narrow screens",
+    "F13": "runTests has 18 real invariant asserts; runBenchmark runs 200 headless turns, prints stateHash via djb2",
+    "G1": "irrigation.effect sets mods.greenhouseMult; buildingMult() reads it in production formula every turn",
+    "G2": "foodShort/waterShort cut morale; moraleMult(col.morale) directly scales production amt",
+    "G3": "storm sets tile.damaged; production loop 'if (tile.damaged) continue'; doRepairNow spends parts and clears damage",
+    "G4": "priceFor() reads market.supply (drifts via rng each turn) and s.res[key]/cap stockFactor",
+    "G5": "refugees/scavenger_find choices write different s.res/s.colonists changes per branch, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Colonist skill used in production reads col.skill[def.job] regardless of the colonist's actual best job, so misassigned staff silently default to skill 1 rather than being blocked or penalized more meaningfully."
+}
+```

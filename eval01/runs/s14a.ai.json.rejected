@@ -1,0 +1,41 @@
+I'll grade the ASHFALL OUTPOST candidate by reading the source directly, then write the full worksheet and JSON verdict to the plan file for your review.
+
+Let me work through the grading systematically.
+
+**F1 Core loop** — `GS` state object; `makeRng`/`rngNext` seeded PRNG used for all randomness (map gen, events, trade drift, names); `beginEndTurn()` resolves hazard→production→needs→population→events→(finishTurn: caravan→endcheck) in fixed order. Score 2.
+
+**F2 Map** — 8x8 in `genMap`; `pickTerrain(rng)` weighted by seed; `canBuildOn` checks `def.terrain.includes(tile.terrain)`; `adjacencyMultiplier` multiplies `total` in `resolveProduction`. Score 2.
+
+**F3 Economy** — ore→metal (mine→forge), soil→food (composter→greenhouse) chains; `storageCaps` enforced in `addResource`/`recalcStorageCaps` with overflow logged. Score 2.
+
+**F4 Population** — colonist records w/ skill, fatigue, morale, job, assignment; `colonistSkillMult`/`colonistFatigueMult`/`colonistMoraleMult` read in `resolveProduction`. Score 2.
+
+**F5 Needs** — `resolveNeeds` consumes food/water per pop, shortage → `morale -8`; `colonistMoraleMult` feeds back into output; resting colonists regain `+3` morale (gradual, not instant). Score 2.
+
+**F6 Research** — 12 nodes in `RESEARCH_ORDER`; `researchPrereqsMet` enforced in `doResearch`; cost paid via `payCost`; effects consumed by `productMultForBuilding`, `inputMultForBuilding`, `globalProdMult`, `stormDamageMult`, `repairCostMult`, `tradeMultFor`, `buildingResearchUnlocked`. Score 2.
+
+**F7 Events** — 14 events in `EVENTS`; `weightedEventPick` uses `.weight`; 5 events (`wanderers`, `dispute`, `old_cache`, `illness`, `migrants_skilled`) have 2-choice branches with differing state effects; `eventCooldowns` decremented each turn and set on fire. Score 2.
+
+**F8 Trade** — `tradePrice` reads `stockRatio` (player stockpile) and `globalDrift` (seeded random-walk supply); `caravan.inventory` capped; `tradeBuy`/`tradeSell` both functional with budget/inventory checks. Score 2.
+
+**F9 Hazard** — `resolveHazard` fires every 6 turns; `stormSeverityForTurn` grows with turn; `windbreak` mitigation + `stormDamageMult` research reduce damage; `repairTile` costs parts. BUT `resolveProduction` only checks `tile.hp <= 0` — partially damaged buildings (hp 1-99) produce at full rate, no graduated output loss. Score 1 (fails "damaged buildings produce less" in the graduated sense implied by the rubric).
+
+**F10 Save/load** — `serializeState` → JSON in `#saveText`; `deserializeState` validates required fields/types, throws clear errors shown in `#saveError`. Score 2.
+
+**F11 End conditions** — `checkEndConditions`: win (turn≥60, pop≥12, no shortage) and lose (pop==0, or threshold fail at turn 60) both reachable; `computeScore` combines stock/research/pop/turn; `renderOverlay` renders summary. Score 2.
+
+**F12 UI** — `switchTab`/`wireStaticEvents` tab switching; `renderLog` shows `T{turn}`; `data-tip` tooltips via `attachTooltipHandlers`; keydown handler for Space/1-7; `@media(max-width:480px)` responsive CSS. Score 2.
+
+**F13 Dev panel** — `runTests` asserts real invariants (RNG determinism, overflow logged, terrain rejection, save/load hash roundtrip, windbreak mitigation, trade budget rejection); `runBenchmark` runs 200 headless turns via `beginEndTurn`, prints `stateHash`. Score 2.
+
+**G1 research→yield** — `filtration`/`composting`/`hydroponics`/`automation` effects stored in `research.done`, read by `productMultForBuilding`/`globalProdMult` inside `resolveProduction`'s `total`. Fully wired, visible every turn. Score 4.
+
+**G2 shortfall→morale→output** — `resolveNeeds` shortage → `morale -8`; `colonistMoraleMult` (binary <30 ? 0.5 : 1) multiplies production `total`. Real pipeline but threshold-only, minor gap. Score 3.
+
+**G3 storm→damage→output→repair→recovery** — `applyDamage` reduces hp; but production formula only checks `tile.hp<=0` (binary special case), not graduated by damage; `repairTile` restores hp to 100 and reactivates. Chain works but through a hardcoded 0-hp special case rather than real degradation. Score 2.
+
+**G4 trade prices↔stockpile/drift** — `tradePrice` reads `stockRatio` and `globalDrift[res]` (random-walked each turn in `resolveCaravanSchedule`); shown in Trade tab. Score 4.
+
+**G5 event choices→durable state** — `wanderers` choice1 `addColonist` (durable pop change) vs choice2 `addRes`+`moraleAll`; `dispute` mediate vs ignore both mutate `resources`/`morale` via `applyEffectOps`, not just log. Score 4.
+
+Now writing this to the plan file as the deliverable.

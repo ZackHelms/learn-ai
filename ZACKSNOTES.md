@@ -251,25 +251,54 @@ claude --model claude-fable-5 --effort max --permission-mode auto
 # I'm concerned that when I run my prompt in a regular claude code interactive session that it loads all my .claude/** context files
 # and uses other historical memory that will bias my attempt to get a bare bones eval of the LLM & effort level.
 # For each model+effortlevel the script should also output: time taken, tokens used, estimated cost (api $).
-
-
-./eval01/generate.sh sonnet5 r1 # sonnet5-low,medium,high,xhigh,max -> eval01/runs/r1{1,2,3,4,5}.html
-
-claude --model claude-sonnet-5 --effort low    --permission-mode auto
-claude --model claude-sonnet-5 --effort medium --permission-mode auto
-claude --model claude-sonnet-5 --effort high   --permission-mode auto
-claude --model claude-sonnet-5 --effort xhigh  --permission-mode auto
-claude --model claude-sonnet-5 --effort max    --permission-mode auto
-`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r01.html`
-`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r02.html`
-`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r03.html`
-`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r04.html`
-`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r05.html`
-
-
 ```
 
 
+## 10Aug2026
+
+
+when done with the current task, please proceed with the following task:
+update grade.sh to standardize on the argument format so an eval sweep of sonnet5 might go something like this:
+```bash
+PPP=s; QQQ=1; MODEL=sonnet5
+./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
+./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
+./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
+./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
+```
+
+```bash
+# sonnet5-low,medium,high,xhigh,max -> eval01/runs/s1{1,2,3,4,5}.html
+PPP=s; QQQ=1; MODEL=sonnet5
+./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
+./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
+./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
+./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
+
+# TODO
+# sonnet5-low,medium,high,xhigh,max -> eval01/runs/s1{1,2,3,4,5}.html
+PPP=t; QQQ=1; MODEL=opus5
+./eval01/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
+./eval01/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
+./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
+./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
+
+
+
+
+
+
+
+# Then opus5
+# Then opus4.7 (or 4.8? whatever was most recent before opus5)
+# Then fable ?
+
+# Then discuss results with fable(max)
+# - should we modify the main eval01 prompt or leave it challenging and filled with rabbit-hole traps for cases like opus5-max that tend to overthink and potentialy miss the original intent of the main prompt
+# - should we update the RUBRIC.md to make it more precise for handling the challenging intent of the main eval01 prompt?
+
+
+```
 
 
 

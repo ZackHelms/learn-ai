@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# grade.sh - run the ASHFALL OUTPOST AI grader over candidate HTML files using
-# headless Claude Code ("claude -p") with ALL tools disabled.
+# grade.sh - run the ASHFALL OUTPOST AI grader over candidates using headless
+# Claude Code ("claude -p") with ALL tools disabled. Args are grading-run stems
+# in the listscore.py spelling (s11a = candidate runs/s11.html, output
+# runs/s11a.ai.json) or plain candidate paths; see usage.
 #
 # Why this exists: interactive grading sessions kept exploring the repo
 # (eval_ashfall.py, old results) before reading GRADER_PROMPT.md rule 11, then
@@ -11,6 +13,14 @@
 #   - --tools "" removes every tool: no file reads, no shell, no subagents
 #   - each job runs from an empty temp dir: no CLAUDE.md, no repo settings, no memory
 #   - the model never sees the candidate's filename (stronger blinding than agentic runs)
+#   - the session gets an explicit --permission-mode, so a defaultMode in
+#     ~/.claude/settings.json (e.g. "plan") cannot hijack the grader into
+#     "writing the grading to the plan file" instead of answering
+#   - every reply is vetted with eval_ashfall.load_ai - the same parser
+#     listscore.py and --merge use. An unusable reply is retried once, then
+#     parked at runs/<stem>.ai.json.rejected with no .ai.json written, so
+#     re-running the same sweep re-grades only what is missing (existing
+#     outputs SKIP, which is not counted as a failure)
 #
 # Parallel jobs share nothing except the server-side prompt cache, which reuses
 # identical prefix tokens for speed/cost and cannot carry content between requests.
@@ -25,23 +35,26 @@ PROMPT_FILE="$SCRIPT_DIR/GRADER_PROMPT.md"
 MODEL="claude-sonnet-5"
 EFFORT="high"
 SUFFIX=""
-JOBS=1
+JOBS=5
 FORCE=0
 
 usage() {
   cat <<'EOF'
-Usage: ./grade.sh [-m model] [-e effort] [-s suffix] [-j jobs] [-f] candidate.html [...]
+Usage: ./grade.sh [-m model] [-e effort] [-s suffix] [-j jobs] [-f] arg [...]
+
+Each arg is a grading-run stem, or a candidate HTML path:
+  s11a            grade runs/s11.html once            -> runs/s11a.ai.json
+  s1{1..5}{a..e}  5 grading runs of each of s11..s15  -> runs/s11a.ai.json ...
+  runs/s11.html   path form; the -s suffix names the output as before
+
+The trailing letter of a stem is the grading-run suffix - unless a candidate
+with that exact name exists (r21a -> runs/r21a.html), matching listscore.py.
 
   -m model   grader model (default: claude-sonnet-5)
   -e effort  low|medium|high|xhigh|max (default: high)
-  -s suffix  appended to the candidate stem for the output name:
-             "-s b" grades runs/r01.html into runs/r01b.ai.json (default: none)
-  -j jobs    grade up to N candidates in parallel (default: 1)
+  -s suffix  default suffix for args that do not carry one (default: none)
+  -j jobs    grade up to N in parallel (default: 5)
   -f         overwrite existing output files
-
-Examples:
-  ./grade.sh -s b runs/r01.html
-  ./grade.sh -s c -j 5 runs/r01.html runs/r02.html runs/r03.html runs/r04.html runs/r05.html
 
 Record model + effort + grader-prompt version in the RESULTS.md Grader column;
 scores are only comparable when the grader is held fixed (see README.md).
@@ -64,34 +77,70 @@ shift $((OPTIND - 1))
 if [ "$#" -lt 1 ]; then usage; exit 1; fi
 if [ ! -f "$PROMPT_FILE" ]; then echo "error: missing $PROMPT_FILE" >&2; exit 1; fi
 if ! command -v claude >/dev/null 2>&1; then echo "error: claude CLI not found" >&2; exit 1; fi
+if ! command -v python3 >/dev/null 2>&1; then echo "error: python3 not found (needed to vet grader replies)" >&2; exit 1; fi
 case "$JOBS" in ''|*[!0-9]*|0) echo "error: -j must be a positive integer" >&2; exit 1 ;; esac
 
 WORKDIR="$(mktemp -d)"
 FAIL_DIR="$WORKDIR/failed"
-mkdir -p "$FAIL_DIR"
+SKIP_DIR="$WORKDIR/skipped"
+mkdir -p "$FAIL_DIR" "$SKIP_DIR"
 trap 'rm -rf "$WORKDIR"' EXIT
+
+reply_has_scores() {
+  # Acceptance check for a grader reply: exactly what listscore.py and
+  # eval_ashfall.py --merge will run on it later.
+  PYTHONPATH="$SCRIPT_DIR" python3 -c \
+    'import sys; from eval_ashfall import load_ai; load_ai(sys.argv[1])' \
+    "$1" >/dev/null 2>"$2"
+}
 
 echo "grader: model=$MODEL effort=$EFFORT suffix='$SUFFIX' jobs=$JOBS" >&2
 
-grade_one() {
-  local candidate="$1"
-  local tag stem out job_dir reply errlog rc t0 t1
+resolve_arg() {
+  # Map one CLI arg to a candidate + grading suffix (sets RES_CAND, RES_SFX).
+  # An existing path or exact runs/<stem>.html keeps the -s default suffix;
+  # otherwise a trailing digit-then-letter is split off as the suffix.
+  local arg="$1" stem cand
+  RES_CAND="" RES_SFX="$SUFFIX"
+  if [ -f "$arg" ]; then RES_CAND="$arg"; return 0; fi
+  stem="${arg%.html}"
+  case "$stem" in */*) : ;; *) stem="$SCRIPT_DIR/runs/$stem" ;; esac
+  if [ -f "$stem.html" ]; then RES_CAND="$stem.html"; return 0; fi
+  case "$stem" in
+    *[0-9][A-Za-z])
+      cand="${stem%?}"
+      if [ -f "$cand.html" ]; then
+        RES_CAND="$cand.html"
+        RES_SFX="${stem#"$cand"}"
+        return 0
+      fi
+      echo "error: $arg: no candidate found (tried $stem.html, $cand.html)" >&2 ;;
+    *)
+      echo "error: $arg: no candidate found (tried $stem.html)" >&2 ;;
+  esac
+  return 1
+}
 
-  tag="$(basename "$candidate")"
+grade_one() {
+  local candidate="$1" sfx="$2"
+  local tag mark stem out job_dir reply errlog rc t0 t1
+
+  stem="${candidate%.html}"
+  tag="$(basename "$stem")$sfx"
+  mark="$(echo "$candidate" | tr '/' '_')$sfx"
   if [ ! -f "$candidate" ]; then
     echo "[$tag] FAIL: candidate not found" >&2
-    : > "$FAIL_DIR/$(echo "$candidate" | tr '/' '_')"
+    : > "$FAIL_DIR/$mark"
     return 1
   fi
-  stem="${candidate%.html}"
-  out="${stem}${SUFFIX}.ai.json"
+  out="${stem}${sfx}.ai.json"
   if [ -e "$out" ] && [ "$FORCE" -ne 1 ]; then
     echo "[$tag] SKIP: $out exists (use -f to overwrite)" >&2
-    : > "$FAIL_DIR/$(echo "$candidate" | tr '/' '_')"
-    return 1
+    : > "$SKIP_DIR/$mark"
+    return 0
   fi
 
-  job_dir="$WORKDIR/$(echo "$candidate" | tr '/' '_').d"
+  job_dir="$WORKDIR/$mark.d"
   mkdir -p "$job_dir"
   reply="$job_dir/reply.txt"
   errlog="$job_dir/stderr.log"
@@ -104,46 +153,76 @@ grade_one() {
   } > "$job_dir/prompt.txt"
 
   echo "[$tag] grading -> $out" >&2
-  t0="$(date +%s)"
-  # Empty cwd on purpose: no CLAUDE.md, no project settings, no repo memory.
-  (
-    cd "$job_dir" &&
-    claude -p --model "$MODEL" --effort "$EFFORT" --tools "" \
-      --no-session-persistence < prompt.txt
-  ) > "$reply" 2> "$errlog"
-  rc=$?
-  t1="$(date +%s)"
+  local attempt note
+  for attempt in 1 2; do
+    t0="$(date +%s)"
+    # Empty cwd on purpose: no CLAUDE.md, no project settings, no repo memory.
+    # Explicit permission mode on purpose: without one, the user's settings
+    # defaultMode applies - "plan" derails the grader into planning.
+    (
+      cd "$job_dir" &&
+      claude -p --model "$MODEL" --effort "$EFFORT" --tools "" \
+        --permission-mode dontAsk \
+        --no-session-persistence < prompt.txt
+    ) > "$reply" 2> "$errlog"
+    rc=$?
+    t1="$(date +%s)"
 
-  if [ "$rc" -ne 0 ] || [ ! -s "$reply" ]; then
-    echo "[$tag] FAIL: claude exited $rc after $((t1 - t0))s; stderr tail:" >&2
-    tail -n 5 "$errlog" >&2 || true
-    : > "$FAIL_DIR/$(echo "$candidate" | tr '/' '_')"
-    return 1
-  fi
+    if [ "$rc" -eq 0 ] && [ -s "$reply" ] && reply_has_scores "$reply" "$job_dir/validate.err"; then
+      note=""
+      if [ "$attempt" -gt 1 ]; then note=" (attempt $attempt)"; fi
+      mv "$reply" "$out"
+      echo "[$tag] OK -> $out ($((t1 - t0))s)$note" >&2
+      return 0
+    fi
+    if [ "$attempt" -eq 1 ]; then
+      echo "[$tag] RETRY: attempt 1 unusable after $((t1 - t0))s (claude rc=$rc)" >&2
+    fi
+  done
 
-  mv "$reply" "$out"
-  if grep -q '```json' "$out"; then
-    echo "[$tag] OK -> $out ($((t1 - t0))s)" >&2
+  if [ -s "$reply" ]; then
+    mv "$reply" "$out.rejected"
+    echo "[$tag] FAIL: no usable F/G scores after 2 attempts; reply kept at $out.rejected" >&2
+    tail -n 2 "$job_dir/validate.err" >&2 || true
   else
-    echo "[$tag] WARN -> $out ($((t1 - t0))s): no \`\`\`json block found; merge will likely fail - inspect and regrade with -f" >&2
-    : > "$FAIL_DIR/$(echo "$candidate" | tr '/' '_')"
-    return 1
+    echo "[$tag] FAIL: claude exited $rc with an empty reply; stderr tail:" >&2
+    tail -n 5 "$errlog" >&2 || true
   fi
+  : > "$FAIL_DIR/$mark"
+  return 1
 }
 
-for candidate in "$@"; do
+# Resolve every arg before starting anything, so a typo in a 25-job sweep
+# fails fast instead of surfacing minutes in.
+CANDS=()
+SFXS=()
+bad=0
+for arg in "$@"; do
+  if resolve_arg "$arg"; then
+    CANDS+=("$RES_CAND")
+    SFXS+=("$RES_SFX")
+  else
+    bad=1
+  fi
+done
+if [ "$bad" -ne 0 ]; then exit 1; fi
+
+i=0
+while [ "$i" -lt "${#CANDS[@]}" ]; do
   if [ "$JOBS" -gt 1 ]; then
     while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
       wait -n
     done
-    grade_one "$candidate" &
+    grade_one "${CANDS[$i]}" "${SFXS[$i]}" &
   else
-    grade_one "$candidate"
+    grade_one "${CANDS[$i]}" "${SFXS[$i]}"
   fi
+  i=$((i + 1))
 done
 wait
 
 failures="$(find "$FAIL_DIR" -type f | wc -l)"
-total="$#"
-echo "done: $((total - failures))/$total ok" >&2
+skips="$(find "$SKIP_DIR" -type f | wc -l)"
+total="${#CANDS[@]}"
+echo "done: $((total - failures - skips)) graded, $skips skipped (existing), $failures failed" >&2
 [ "$failures" -eq 0 ]

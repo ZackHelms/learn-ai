@@ -1,0 +1,67 @@
+**F1 — Core loop**: single `GS` object; `mulberry32`/`makeRng` used for all randomness (map, colonists, events, trade, damage); `beginEndTurn()` resolves hazard→production→needs→population→events→finishTurn in fixed order. Score 2.
+
+**F2 — Map**: `genMap()` builds 8x8 grid via `pickTerrain(rng)`; `canBuildOn()` checks `def.terrain.includes(tile.terrain)`; `adjacencyMultiplier()` feeds into `resolveProduction()`'s `total` multiplier. Score 2.
+
+**F3 — Economy**: mine→ore→forge→metal, composter→soil→greenhouse→food chains; `addResource()`/`recalcStorageCaps()` enforce caps and log overflow. Score 2.
+
+**F4 — Population**: colonist records w/ skill,fatigue,morale,job,assigned; `colonistSkillMult`/`colonistFatigueMult`/`colonistMoraleMult` read into `resolveProduction()`. Score 2.
+
+**F5 — Needs**: `resolveNeeds()` computes food/water consumption, drops morale on shortage; morale recovers via resting in `resolvePopulation()` (+3/turn); morale gates output via `colonistMoraleMult`. Score 2.
+
+**F6 — Research**: 12 nodes in `RESEARCH`; `researchPrereqsMet`/`doResearch` gate purchase and deduct cost; effects consumed by `productMultForBuilding`, `stormDamageMult`, `tradeMultFor`, etc. Score 2.
+
+**F7 — Events**: 14 events in `EVENTS`; `weightedEventPick()` weighted-random; 5 events (`wanderers`,`dispute`,`old_cache`,`illness`,`migrants_skilled`) offer differing-outcome choices; `gs.eventCooldowns` gates re-fire. Score 2.
+
+**F8 — Trade**: `tradePrice()` reads stockpile ratio + `caravan.globalDrift` (random-walked in `resolveCaravanSchedule`); `caravan.inventory` capped/decremented; `tradeBuy`/`tradeSell` both implemented and wired to UI. Score 2.
+
+**F9 — Hazard**: `resolveHazard()` fires storms every 6 turns, severity grows (`stormSeverityForTurn`); windbreak/research mitigate (`stormDamageMult`, mitigation check); repair costs parts (`repairCost`/`repairTile`). BUT `resolveProduction()` only checks `tile.hp<=0`, so buildings damaged-but-not-disabled (hp 1-99) still produce at full rate — "produce less until repaired" not actually implemented. Score 1.
+
+**F10 — Save/load**: `serializeState()` → JSON in textarea; `deserializeState()` validates required fields/shapes, throws caught by `loadUI()` and shown in `#saveError`. Score 2.
+
+**F11 — End conditions**: `checkEndConditions()` checks pop==0 (lose) and turn>=60 (win/lose); `computeScore()` combines stock/research/pop/turn; `renderOverlay()` shows summary screen. Score 2.
+
+**F12 — UI**: `switchTab`/`wireStaticEvents` wire tab buttons; log lines show `T'+e.turn`; `data-tip` tooltips explain mechanics; keydown handler wires Space + digit-keys 1-7; `@media (max-width:480px)` adapts layout. Score 2.
+
+**F13 — Dev panel**: `runTests()` has ~25 real invariant assertions (RNG determinism, cap enforcement, prereqs, save/load round-trip, departure logic); `runBenchmark()` runs 200 headless turns via `greedyPolicyTurn`+`beginEndTurn`, prints `stateHash()`. Score 2.
+
+**G1**: `RESEARCH.filtration.effects` (`buildingMult`) stored in `gs.research.done`, read by `productMultForBuilding()` inside `resolveProduction()` total. Score 4.
+
+**G2**: `resolveNeeds()` shortage → `c.morale -= 8`; `colonistMoraleMult()` (binary <30 threshold) read in `resolveProduction()` total. Real pipeline, but binary step not continuous. Score 3.
+
+**G3**: `applyDamage()` sets `tile.hp`, but `resolveProduction()` only zeroes output at `hp<=0`; buildings damaged yet >0 hp produce at full rate — matches explicit "cap at 1" caution despite real repair cost/recovery. Score 1.
+
+**G4**: `tradePrice()` reads `stockRatio = resources[res]/storageCaps[res]` and `caravan.globalDrift[res]` (random-walked each turn in `resolveCaravanSchedule`). Score 4.
+
+**G5**: `applyEventChoice()`→`applyEffectOps()` on `wanderers`/`dispute` choices calls `addResource`/`spendResource`/`moraleAll`/`addColonist` — durable state mutation, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 3, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "GS object; mulberry32 rng threaded through map/colonist/event/trade gen; beginEndTurn() fixed order",
+    "F2": "genMap() 8x8; canBuildOn() checks terrain; adjacencyMultiplier() used in resolveProduction total",
+    "F3": "mine->ore->forge->metal, composter->soil->greenhouse->food; addResource()/recalcStorageCaps() cap+overflow",
+    "F4": "colonistSkillMult/FatigueMult/MoraleMult read skill/fatigue/morale in resolveProduction total",
+    "F5": "resolveNeeds() shortage drops morale; resting regains morale (+3/turn) in resolvePopulation()",
+    "F6": "RESEARCH 12 nodes; doResearch() checks prereq/cost; productMultForBuilding()/stormDamageMult() consume effects",
+    "F7": "14 EVENTS; weightedEventPick() weighted rng; 5 choice events; eventCooldowns gate re-fire",
+    "F8": "tradePrice() uses stockRatio + caravan.globalDrift; tradeBuy/tradeSell both implemented and wired",
+    "F9": "resolveHazard() periodic/scaling severity, repairTile() costs parts, but resolveProduction only zeroes hp<=0 not partial damage",
+    "F10": "serializeState()->textarea; deserializeState() validates and throws, caught in loadUI()",
+    "F11": "checkEndConditions() win/lose; computeScore(); renderOverlay() summary screen",
+    "F12": "wireStaticEvents tabs; log 'T'+turn; data-tip tooltips; keydown Space/digit shortcuts; media query layout",
+    "F13": "runTests() ~25 real invariant asserts; runBenchmark() 200-turn headless loop prints stateHash()",
+    "G1": "RESEARCH.filtration buildingMult read by productMultForBuilding() in resolveProduction()",
+    "G2": "resolveNeeds() shortage -> c.morale-=8 -> colonistMoraleMult() binary threshold in production total",
+    "G3": "applyDamage() sets tile.hp but resolveProduction only disables at hp<=0; damaged-but-alive buildings run at full rate",
+    "G4": "tradePrice() reads resources[res]/storageCaps[res] and caravan.globalDrift updated each turn in resolveCaravanSchedule()",
+    "G5": "applyEventChoice()->applyEffectOps() on wanderers/dispute choices mutates resources/morale/roster, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ashstorm damage is effectively binary (full output until hp hits exactly 0), so the storm->reduced-output link required by F9/G3 is missing despite real repair mechanics."
+}
+```

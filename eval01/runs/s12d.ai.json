@@ -1,0 +1,73 @@
+I'll grade this by reading through the candidate HTML directly — this is a code-analysis/grading task, not an implementation task, so no plan or file edits are needed. Here's my evaluation.
+
+## Worksheet
+
+**F1 — Core loop**: Single `STATE` object from `freshState()`; `rngNext`/mulberry32-style PRNG used throughout (no Math.random found); `resolveTurn()` calls systems in fixed documented order. Score 2.
+
+**F2 — Map**: 8x8 grid (`generateGrid`, y<8,x<8); terrain from seeded `rngWeighted`; `tryBuild` checks `def.terrain.includes(t.terrain)`; `hasAdjTerrain`/`adjBonus` change output amounts in `doProduction`. Score 2.
+
+**F3 — Economy**: ore→metal (forge consumes `ore`+`power`), ash→soil→food (greenhouse two-stage in `doProduction`); caps enforced and overflow logged in `addResource`/`logOverflow`. Score 2.
+
+**F4 — Population**: colonists have `skill`,`fatigue`,`morale`,`job`,`assignedBuildingId`; `skillFactor(c.skill)` and `computeMoraleFatigueFactor(c)` read directly in `doProduction`. Score 2.
+
+**F5 — Needs**: `resolveNeeds` consumes food/water per colonist; shortage calls `adjustAllMorale(s,-5)`; morale feeds `computeMoraleFatigueFactor` into production; recovery via `fatigue<50` morale regen and rest. Score 2.
+
+**F6 — Research**: 10 nodes in `RESEARCH_TREE`; `researchPrereqsMet` enforced in `tryResearch`; costs deducted via `payCost`; each unlock either gates a building (`isBuildingUnlocked`) or applies a real multiplier read in `doProduction`/`resolveHazard`. Score 2.
+
+**F7 — Events**: 13 entries in `EVENTS`; `rngWeighted` selection; 5 choice-events with 2 options each with differing `apply()` state changes; `eventCooldowns` set and decremented in `resolveHazard`. Score 2.
+
+**F8 — Trade**: `resolveTrade` computes buy/sell price from `stockRatio` and drifting `market.drift[g]` (random walk each caravan); `caravan.inventory[].qty` limited and decremented; `tradeBuy`/`tradeSell` both implemented and wired to UI buttons. Score 2.
+
+**F9 — Hazard**: `resolveHazard` fires every 6 turns (`s.turn % 6`); `severity` grows with `Math.floor(s.turn/12)`; damaged buildings check `b.hp<=0`→`disabled` and production skips disabled/dead buildings (`if(b.disabled||b.hp<=0) return;`); `storm_walls`/`reinforced_housing` research reduce damage; `repairBuilding` spends parts and restores hp/clears disabled. Score 2.
+
+**F10 — Save/load**: `serializeState` → JSON text into textarea; `deserializeState` validates required fields, array lengths, rng shape, throws descriptive `Error`s shown in `#loadmsg`. Score 2.
+
+**F11 — End conditions**: `checkEndConditions` has both win (`alive>=12 && needsMet` at turn 60) and lose (`alive.length===0`, or turn 60 without win) branches, both reachable; `computeScore` uses population/research/turn/stockpile; `checkGameOverOverlay` renders summary screen. Score 2.
+
+**F12 — UI**: `switchTab` wires nav buttons; log entries carry `[T'+e.turn+']`; tooltips via `data-tip`/`title` attached widely (`tip()`, `attachTooltipEvents`); keyboard shortcuts (`Space`, `1`-`5`) in `keydown` listener; `@media (max-width:500px)` responsive CSS. Score 2.
+
+**F13 — Dev panel**: `runTests` has 18 assertions on real invariants (cap enforcement, prereq gating, save/load hash equality, assignment consistency, RNG determinism, clamping); `runBenchmark` runs a headless greedy policy loop up to 200 turns without DOM and returns `hashState` result. Score 2.
+
+**G1 — research→yield**: `efficient_chains.mult` read as `chainMult` in `doProduction` (forge & greenhouse); `advanced_filtration.mult` read as `condMult` for condenser; `vent_tapping` gates generator existence. Full chain traced, applied every relevant turn. Score 4.
+
+**G2 — shortfall→morale→output**: `resolveNeeds` computes `foodShort`/`waterShort` → `adjustAllMorale(s,-5)`; `computeMoraleFatigueFactor` reads `c.morale` and multiplies into every production formula (`mf`). Fully wired, every turn. Score 4.
+
+**G3 — storm→damage→output loss→repair→recovery**: `resolveHazard` reduces `b.hp`, sets `b.disabled` at 0 hp; production skips `b.disabled||b.hp<=0` entirely (binary loss, not gradual, but real output loss); `repairBuilding` spends parts (`Math.ceil(missing/5)`), restores hp and `disabled=false`. Minor gap: partial damage (hp reduced but >0) does NOT reduce output at all — only full disable stops production, so a building at 90% damage still produces at full rate. Score 3.
+
+**G4 — trade prices vs stockpile/supply**: `resolveTrade` buy/sell price formulas read `stockRatio = resources[g]/caps[g]` and multiply by `market.drift[g]`, which is updated via random walk each caravan turn. Score 4.
+
+**G5 — event choices mutate state**: `migrants` choice: welcome adds colonists via `addColonist`+resource cost vs turn-away adds scrip — both mutate different state; `sickness` choice: quarantine costs food/water+morale vs ignore has RNG-branched morale hit — different state paths, not just log text. Score 4.
+
+## JSON
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 3, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "STATE object, rngNext() PRNG, resolveTurn() fixed order comment + calls",
+    "F2": "generateGrid() 8x8, tryBuild() checks def.terrain.includes, adjBonus in doProduction",
+    "F3": "forge consumes ore+power->metal, greenhouse ash->soil->food, addResource caps+overflow",
+    "F4": "skillFactor(c.skill), computeMoraleFatigueFactor(c) read in doProduction workers loop",
+    "F5": "resolveNeeds() shortage->adjustAllMorale(-5); mf factor read in doProduction",
+    "F6": "RESEARCH_TREE 10 nodes, researchPrereqsMet() gate, mult read in doProduction/resolveHazard",
+    "F7": "13 EVENTS, rngWeighted select, 5 choice events w/ 2 options, eventCooldowns decremented",
+    "F8": "resolveTrade() price from stockRatio+market.drift, tradeBuy/tradeSell both implemented",
+    "F9": "resolveHazard() every 6 turns, severity scales w/ turn, disabled buildings skip production, repairBuilding spends parts",
+    "F10": "serializeState/deserializeState with field validation and thrown Error shown in #loadmsg",
+    "F11": "checkEndConditions() win+lose branches, computeScore(), checkGameOverOverlay() renders summary",
+    "F12": "switchTab(), log '[T'+turn+']', data-tip tooltips, keydown Space/1-5, media query",
+    "F13": "runTests() 18 real-invariant asserts, runBenchmark() headless 200-turn loop + hashState",
+    "G1": "efficient_chains.mult and advanced_filtration.mult read as chainMult/condMult in doProduction",
+    "G2": "resolveNeeds shortage -> adjustAllMorale(-5) -> computeMoraleFatigueFactor used in every production call",
+    "G3": "resolveHazard damages hp/disables; doProduction skips disabled buildings; repairBuilding restores hp for parts, but partial (non-disabled) damage doesn't reduce output",
+    "G4": "resolveTrade buyPrice/sellPrice formulas read stockRatio and market.drift[g] random walk",
+    "G5": "migrants and sickness choice options each mutate distinct state (colonists/resources/morale), not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm damage only cuts production to zero at full building disable (hp<=0); partial hp damage does not reduce output at all, weakening the damage->output-loss link."
+}
+```

@@ -1,0 +1,69 @@
+I'll grade this directly since I already have the full HTML in context — no codebase exploration is needed. Let me work through the worksheet and write my findings to the plan file.
+
+**F1 Core loop**: `STATE` object, `mulberry32(seed)` → `s.rng` used for all randomness, `resolveTurn()` resolves 9 steps in fixed documented order. Score 2.
+
+**F2 Map**: 8x8 loop in `makeGrid`, terrain from seeded rng, `canBuild()` checks `def.terrain.includes(tile.terrain)`, `adjacencyBonus()` multiplies into `amt` in production. Score 2.
+
+**F3 Economy**: forge(power→metal), generator(metal→power), workshop(metal→parts), greenhouse(water→food) — chained inputs/outputs; `addRes()` enforces `STORAGE_CAP` and logs overflow loss. Score 2.
+
+**F4 Population**: colonists have `skill{}, fatigue, morale, assigned`; `skillMult`/`moraleMult` read `col.skill`/`col.morale` in production, but `fatigue` is never read in the production formula (only in the separate needs step). Score 1.
+
+**F5 Needs**: `foodNeed`/`waterNeed` per pop, shortage sets `moraleDelta -= 10`, `moraleMult` reads morale in production, recovery via `+3` when no shortage. Score 2.
+
+**F6 Research**: 8 nodes in `RESEARCH_NODES`, `canResearch` enforces prereq+cost, `doResearch` deducts cost, each `effect()` writes a `s.mods.*` field read elsewhere (`buildingMult`, `priceFor`, storm mitigation, quit chance). Score 2.
+
+**F7 Events**: 12 entries in `EVENTS`, `rngWeighted` selection, 5 events (`scavenger_find`, `refugees`, `toxic_vent`, `skilled_wanderer`, `morale_festival`) with 2 differing-outcome choices, `s.eventCooldowns` tracked/decremented. Score 2.
+
+**F8 Trade**: `priceFor()` uses `s.market.supply[key]` (drifts via rng each turn) and `s.res[key]/cap`; `s.caravan.inv` limited stock decremented on buy; `doTrade` handles both directions. Score 2.
+
+**F9 Hazard**: storm every 8 turns, `severity = 0.25 + turn/200` scales with turn; damaged tiles `continue` (zero output) until repaired; `stormResist` mod + windbreak count reduce chance; `doRepairNow` costs 4 parts, passive repair via `repairTurns` countdown. Score 2 (note: damage is binary on/off, not partial degradation).
+
+**F10 Save/load**: `JSON.stringify(STATE,...)` into textarea, `loadbtn` parses+validates required fields, catch block shows error in `#loaderr`. Score 2.
+
+**F11 End conditions**: `checkEndConditions()` called every turn — lose on `colonists.length<=0` or failed turn-60 check, win on turn 60 + pop≥12 + needsMet; `scoreOf()` combines pop/research/turn/stockpile; `renderModal()` shows summary. Score 2.
+
+**F12 UI**: `switchTab`, log lines `[T${e.turn}]`, `title=` tooltips throughout (resbar, tiles, research), `Space`/`1-5` keydown handler, `@media (max-width:480px)`. Score 2.
+
+**F13 Dev panel**: `runTests()` asserts real invariants (caps, prereqs, save/load hash equality, PRNG determinism, skill cap); `runBenchmark()` runs 200 headless turns via `greedyPolicy`, prints `stateHash()`. Score 2.
+
+**G1**: `irrigation.effect` sets `mods.greenhouseMult`; `buildingMult()` reads it into `bMult` used in production `amt` calc — full chain, every turn. Score 4.
+
+**G2**: `foodShort`/`waterShort` from consumption step → `moraleDelta -= 10` → `moraleMult` (0.2/0.6/1.0) directly scales output. Full chain, every turn. Score 4.
+
+**G3**: storm sets `tile.damaged`/`repairTurns` → damaged tiles skip production (`continue`) → `doRepairNow` costs 4 parts and clears damage; but passive repair via `repairTurns` countdown recovers for free, bypassing the cost link. Score 3.
+
+**G4**: `priceFor()` reads both `s.market.supply[key]` (drifts every turn) and `s.res[key]/STORAGE_CAP[key]` (stockFactor) — both mechanisms wired into buy/sell. Score 4.
+
+**G5**: `refugees` choice: take-in costs food + `addColonist()`x2 vs decline (log only); `skilled_wanderer`: recruit costs scrip + adds colonist with skill 4 vs decline. Durable state mutation, not cosmetic. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 3, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "STATE + mulberry32 rng, resolveTurn() fixed 9-step order",
+    "F2": "makeGrid 8x8 seeded terrain; canBuild checks terrain; adjacencyBonus multiplies amt",
+    "F3": "forge/generator/workshop chain metal<->power/parts; addRes enforces STORAGE_CAP, logs overflow",
+    "F4": "skillMult/moraleMult read col.skill/morale in production; col.fatigue never read there",
+    "F5": "foodShort/waterShort -> moraleDelta -10; moraleMult scales output; +3 recovery",
+    "F6": "8 RESEARCH_NODES; canResearch enforces prereq/cost; effect() writes mods read in buildingMult/priceFor",
+    "F7": "12 EVENTS, rngWeighted pick, 5 with 2-choice branches, eventCooldowns decremented",
+    "F8": "priceFor uses market.supply (drifts) and res/cap; caravan.inv limited; doTrade both ways",
+    "F9": "turn%8 storm, severity scales w/ turn; damaged tiles skip production; doRepairNow costs parts",
+    "F10": "savebtn JSON.stringify to textarea; loadbtn JSON.parse + field validation + loaderr message",
+    "F11": "checkEndConditions win/lose branches; scoreOf() combines state; renderModal summary",
+    "F12": "switchTab, log [T#], title= tooltips, Space/1-5 keydown, @media 480px",
+    "F13": "runTests asserts caps/prereqs/hash-equality/determinism; runBenchmark 200 turns + stateHash",
+    "G1": "irrigation.effect sets mods.greenhouseMult, read by buildingMult() in production amt",
+    "G2": "foodShort/waterShort -> moraleDelta -10 -> moraleMult scales production output",
+    "G3": "storm sets tile.damaged -> skipped production -> doRepairNow costs parts; passive free repair also exists",
+    "G4": "priceFor reads market.supply (turn drift) and res/cap stockFactor for buy/sell",
+    "G5": "refugees/skilled_wanderer choices durably change res+colonists array, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Fatigue is tracked and displayed but never actually read by the production formula, so it has no mechanical effect beyond feeding into morale."
+}
+```

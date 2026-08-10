@@ -1,0 +1,73 @@
+Since this request is a pure read-only grading/analysis task (the candidate HTML is already provided inline, no code changes are being made, and no plan for implementation work is needed), I'll proceed directly to grading rather than drafting an implementation plan.
+
+## Worksheet
+
+**F1 — Core loop**: One `GS` state object; `makeRng`/mulberry32 used for all randomness (map, colonists, events, trade, hazard); `beginEndTurn()` calls hazard→production→needs→population→events→(finishTurn: caravan→endcheck) in fixed order. Score: 2
+
+**F2 — Map**: `genMap()` builds 8x8 grid from seeded `pickTerrain`; `canBuildOn()` checks `def.terrain.includes(tile.terrain)`; `adjacencyMultiplier()` feeds into `resolveProduction()`'s `total` multiplier. Score: 2
+
+**F3 — Economy**: ore→metal (mine→forge), soil→food (composter→greenhouse) chains; `storageCaps` enforced in `addResource()`/`recalcStorageCaps()` with overflow logged. Score: 2
+
+**F4 — Population**: `makeColonist()` records skill/fatigue/morale/job/assigned; `colonistSkillMult`, `colonistFatigueMult`, `colonistMoraleMult` all read in `resolveProduction()`. Score: 2
+
+**F5 — Needs**: `resolveNeeds()` consumes food/water per pop, shortage drops morale via `c.morale -= 8`; `colonistMoraleMult` reduces output; resting colonists recover morale/fatigue (not instant loss). Score: 2
+
+**F6 — Research**: 12 nodes in `RESEARCH_ORDER`; `researchPrereqsMet()` enforced in `doResearch()`; cost paid via `payCost`; effects read via `researchEffectsFlat()`→`productMultForBuilding` etc., consumed in production/trade/storm code. Score: 2
+
+**F7 — Events**: 15 events in `EVENT_ORDER`; `weightedEventPick()` uses `EVENTS[id].weight`; 6 events have `choices` (wanderers, dispute, old_cache, illness, migrants_skilled — 5 total) with differing `effects`; `gs.eventCooldowns` set per event and decremented each turn. Score: 2
+
+**F8 — Trade**: `tradePrice()` reads `stockRatio` from `gs.resources`/`storageCaps` and `globalDrift` (random-walked each turn); caravan `inventory` capped and decremented on buy/refilled on sell; both `tradeBuy`/`tradeSell` implemented and wired to UI. Score: 2
+
+**F9 — Hazard**: `resolveHazard()` fires storm every 6 turns via `hazard.nextStormTurn`; `stormSeverityForTurn()` scales with turn; `applyDamage` reduces tile.hp, `resolveProduction` skips `tile.hp<=0`; `stormDamageMult` from research and `windbreak` mitigation reduce damage; `repairTile()` costs parts. Score: 2
+
+**F10 — Save/load**: `serializeState()`→JSON in textarea; `deserializeState()` validates required fields, map shape, colonist records, resource types, throws clear `Error` messages shown in `#saveError`. Score: 2
+
+**F11 — End conditions**: `checkEndConditions()` checks pop===0 (lose) and turn>=maxTurns (win/lose based on pop>=12 & no shortage); `computeScore()` combines stock/research/pop/turn scores; `renderOverlay()` renders summary screen. Score: 2
+
+**F12 — UI**: `switchTab()` wired to `.tabbtn` clicks; log lines show `T'+e.turn` via `renderLog()`; `data-tip` tooltips throughout (`showTooltip`); keyboard shortcuts for tabs/space in `wireStaticEvents()`; `@media (max-width:480px)` adapts layout. Score: 2
+
+**F13 — Dev panel**: `runTests()` has ~25 real invariant assertions (storage cap enforcement, terrain rejection, damage mitigation, save/load hash roundtrip, etc.), not trivial; `runBenchmark()` runs 200 turns headlessly via `greedyPolicyTurn`+`beginEndTurn`, prints `stateHash()`. Score: 2
+
+## Category G
+
+**G1 — research→production**: `RESEARCH.filtration` effect `buildingMult` stored in `gs.research.done`; `productMultForBuilding()` reads it; multiplied into `total` in `resolveProduction()`. Fully wired every turn. Score: 4
+
+**G2 — shortfall→morale→output**: `resolveNeeds()` computes shortage, `c.morale -=8`; `colonistMoraleMult` in `resolveProduction()` halves output below 30 morale. Full pipeline, applied every turn. Score: 4
+
+**G3 — storm→damage→output loss→repair→recovery**: `resolveHazard()`→`applyDamage` sets `tile.hp`; `resolveProduction()` skips tile.hp<=0 (full stop) but does NOT scale output by partial hp>0 damage (e.g. hp=50 still produces at 100%) — a gap; `repairTile()` spends parts and restores hp=100 and output. Score: 3
+
+**G4 — trade prices vs stockpile/drift**: `tradePrice()` reads `stockRatio` from `gs.resources`/`storageCaps` and `globalDrift` random-walked each turn in `resolveCaravanSchedule()`. Fully wired. Score: 4
+
+**G5 — event choices mutate state**: `wanderers` choice A calls `addColonist`+resource consume vs choice B `addRes scrip`+`moraleAll` — different state paths; `illness` choice A consumes food/water/morale vs choice B fatigue/morale — durable state changes via `applyEffectOps`. Score: 4
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 3, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "GS state, makeRng()/rngNext used throughout, beginEndTurn() fixed order",
+    "F2": "genMap()+pickTerrain() seeded; canBuildOn() checks terrain; adjacencyMultiplier() in resolveProduction()",
+    "F3": "mine->forge (ore->metal), composter->greenhouse (soil->food); storageCaps enforced in addResource()",
+    "F4": "makeColonist() fields read by colonistSkillMult/FatigueMult/MoraleMult in resolveProduction()",
+    "F5": "resolveNeeds() shortage->morale-=8; colonistMoraleMult halves output; resting restores morale",
+    "F6": "12 RESEARCH nodes, researchPrereqsMet() enforced, effects read via researchEffectsFlat()",
+    "F7": "15 EVENTS, weightedEventPick() by weight, 5 choice events, eventCooldowns decremented",
+    "F8": "tradePrice() reads stockRatio+globalDrift; inventory capped; tradeBuy/tradeSell both work",
+    "F9": "resolveHazard() every 6 turns, severity scales with turn, applyDamage+windbreak mitigation, repairTile costs parts",
+    "F10": "serializeState()/deserializeState() with field validation and thrown Error messages",
+    "F11": "checkEndConditions() win/lose both reachable; computeScore(); renderOverlay() summary",
+    "F12": "switchTab() wired, T+turn in renderLog(), data-tip tooltips, keydown shortcuts, media query",
+    "F13": "runTests() ~25 real invariants; runBenchmark() 200-turn headless with stateHash()",
+    "G1": "RESEARCH.filtration buildingMult read by productMultForBuilding() in resolveProduction() every turn",
+    "G2": "resolveNeeds() shortage->morale-8; colonistMoraleMult() factors into production total",
+    "G3": "applyDamage sets hp; resolveProduction only checks hp<=0 not partial damage scaling; repairTile restores",
+    "G4": "tradePrice() reads gs.resources/storageCaps ratio and gs.caravan.globalDrift updated each turn",
+    "G5": "wanderers/illness choices branch into addColonist vs addRes/moraleAll via applyEffectOps"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm damage only fully disables buildings at hp<=0; partial damage (hp 1-99) does not reduce output proportionally."
+}
+```

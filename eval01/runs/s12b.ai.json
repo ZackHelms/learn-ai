@@ -1,0 +1,69 @@
+Grading by reading source only, no code execution.
+
+**F1 Core loop** — `freshState()` builds one state object; `rngNext(rng)` (mulberry32-style) is the only randomness source (no `Math.random` calls found); `resolveTurn()` calls production→needs→morale→skill→crisis→hazard→trade→growth→endcheck in fixed order. Score 2.
+
+**F2 Map** — `generateGrid()` builds 8x8 via `rngWeighted(s.rng,...)`; `tryBuild()` checks `def.terrain.includes(t.terrain)`; `adjMult`/`hasAdjTerrain()` adds real amounts to ore/water/metal/power in `doProduction()`. Score 2.
+
+**F3 Economy** — forge consumes ore+power→metal; greenhouse ash(implicit)→soil→(soil+water)→food; `addResource()` enforces `s.caps` and `logOverflow()` handles spillover. Score 2.
+
+**F4 Population** — colonist records `{skill,fatigue,morale,job,assignedBuildingId}`; `skillFactor(c.skill)` and `computeMoraleFatigueFactor(c)` (reads fatigue+morale) both consumed in `doProduction()`. Score 2.
+
+**F5 Needs** — `resolveNeeds()` consumes food/water per colonist, shortage calls `adjustAllMorale(s,-5)`; morale feeds `computeMoraleFatigueFactor` in production; `resolveMoraleFatigue()` allows morale recovery (not instant loss). Score 2.
+
+**F6 Research** — 10 nodes in `RESEARCH_TREE`; `researchPrereqsMet()` gates `tryResearch()`; `payCost()` deducts; effects (`chainMult`,`condMult`,`mitigation`,unlock flags) read in `doProduction()`/`resolveHazard()`/`isBuildingUnlocked()`. Score 2.
+
+**F7 Events** — 13 entries in `EVENTS`; `rngWeighted()` selection; 5 choice events (sickness, migrants, festival, wanderer, toxic_cloud) with distinct option effects; `eventCooldowns` set on fire and decremented every turn in `resolveHazard()`. Score 2.
+
+**F8 Trade** — `resolveTrade()` prices use `stockRatio` (player stock/cap) and `market.drift[g]` (random-walked each caravan turn); `tradeBuy`/`tradeSell` both wired to UI and decrement/increment resources and caravan `qty`. Score 2.
+
+**F9 Hazard** — `resolveHazard()` fires every 6 turns, severity scales with `s.turn`; but `doProduction()` only skips output when `b.disabled||b.hp<=0` — partial damage (hp>0) still produces at full rate, so "damaged buildings produce less" is binary not graduated; storm_walls/storm_shelter mitigate, `repairBuilding()` costs parts and restores. Score 1.
+
+**F10 Save/load** — `serializeState()`→JSON into `#savearea` textarea; `deserializeState()` validates required fields/array shapes/rng shape and throws descriptive errors shown in `#loadmsg`. Score 2.
+
+**F11 End conditions** — `checkEndConditions()` has reachable win (turn≥60, pop≥12, needs met) and lose (pop 0, or turn 60 without conditions) branches; `computeScore()` combines pop/research/turn/stockpile; `checkGameOverOverlay()` renders summary. Score 2.
+
+**F12 UI** — `switchTab()` wired to nav buttons; log entries prefixed `[T'+e.turn+']`; `data-tip` tooltips explain resource/job/morale mechanics; keyboard Space + digits 1-5 wired in `init()`; `@media (max-width:500px)` adapts layout. Score 2.
+
+**F13 Dev panel** — `runTests()` has 18 assertions on real invariants (prereqs, save/load hash roundtrip, terrain rules, RNG determinism, clamps); `runBenchmark()` runs `greedyPolicyTurn()` headlessly for up to 200 turns and returns `hashState()`. Score 2.
+
+**G1** — `efficient_chains`/`advanced_filtration` researchDone flags read as `chainMult`/`condMult` in `doProduction()`, applied to forge/greenhouse/condenser output every turn. Score 4.
+
+**G2** — `resolveNeeds()` shortage → `adjustAllMorale(-5)` → `computeMoraleFatigueFactor(c)` multiplies output in `doProduction()`; fully wired each turn. Score 4.
+
+**G3** — `resolveHazard()` damages `b.hp`; but `doProduction()` only zeroes output at `b.hp<=0` (disabled), partial damage produces at full rate; `repairBuilding()` restores hp/output for parts cost. Weak link matches rubric's "full rate until disabled" case. Score 1.
+
+**G4** — `resolveTrade()` buy/sell prices computed from `stockRatio` and `market.drift[g]` (random-walked every caravan turn), read by `tradeBuy`/`tradeSell`. Score 4.
+
+**G5** — sickness event: quarantine spends food/water+morale vs. ignore risks morale differently; migrants event: welcome calls `addColonist`+resource spend vs. turn-away grants scrip — real differing state mutations, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "rngNext(rng) sole RNG; resolveTurn() fixed-order pipeline",
+    "F2": "hasAdjTerrain() adds adjBonus to ore/water/metal/power in doProduction()",
+    "F3": "forge consumes ore+power->metal; greenhouse soil+water->food; addResource() caps+overflow",
+    "F4": "skillFactor(c.skill) and computeMoraleFatigueFactor(c) read in doProduction()",
+    "F5": "resolveNeeds() shortage -> adjustAllMorale(-5); morale feeds production factor",
+    "F6": "researchPrereqsMet()/payCost() gate tryResearch(); chainMult/condMult read in doProduction()",
+    "F7": "13 EVENTS, rngWeighted() select, eventCooldowns set+decremented in resolveHazard()",
+    "F8": "resolveTrade() price = f(stockRatio, market.drift); tradeBuy/tradeSell mutate state",
+    "F9": "resolveHazard() damages b.hp but doProduction() only gates at hp<=0, not graduated",
+    "F10": "serializeState()/deserializeState() validate fields, throw errors shown in #loadmsg",
+    "F11": "checkEndConditions() win/lose branches; computeScore() + checkGameOverOverlay()",
+    "F12": "switchTab(), log '[T'+turn+']', data-tip tooltips, Space/1-5 keys, @media narrow layout",
+    "F13": "runTests() 18 real-invariant asserts; runBenchmark() headless 200-turn + hashState()",
+    "G1": "researchDone.efficient_chains -> chainMult read in doProduction() forge/greenhouse",
+    "G2": "resolveNeeds() shortage->morale->computeMoraleFatigueFactor() in doProduction()",
+    "G3": "resolveHazard() damages hp; doProduction() only zeroes output at hp<=0 (binary)",
+    "G4": "resolveTrade() buyPrice/sellPrice use stockRatio and market.drift each caravan turn",
+    "G5": "sickness/migrants choice branches call addResource/addColonist/adjustAllMorale differently"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ashstorm damage only stops production when a building is fully disabled at hp=0; partially damaged buildings still produce at full rate, weakening both F9 and G3."
+}
+```

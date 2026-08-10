@@ -38,27 +38,31 @@ that never talk to each other," which is where mid models separate from strong o
 ### 2. Score - deterministic half
 
 ```bash
-# static checks only: stdlib, no dependencies, safe on untrusted output
+# full grade: static + runtime checks (headless Chromium; needed for all 54 points).
+# Args are candidate paths or bare run stems; several at once are fine:
 python3 eval_ashfall.py runs/<candidate>.html
+python3 eval_ashfall.py s1{1..5}               # -> runs/s11.html ... runs/s15.html
 
-# static + runtime checks (headless Chromium; needed for the full 54 points)
-python3 eval_ashfall.py runs/<candidate>.html --runtime
+# static checks only: stdlib, no dependencies, safe on untrusted output (out of 26)
+python3 eval_ashfall.py runs/<candidate>.html --noruntime
 ```
 
-The runtime pass needs Playwright. On Ubuntu 24.04 a bare `pip install` fails (PEP 668,
-externally-managed Python), so use a venv:
+The runtime pass is on by default and needs Playwright; if Playwright or its Chromium is
+missing, the script fails fast before grading (pass `--noruntime` to run the static half
+only). On Ubuntu 24.04 a bare `pip install` fails (PEP 668, externally-managed Python),
+so use a venv:
 
 ```bash
 python3 -m venv ~/.venvs/eval && ~/.venvs/eval/bin/pip install playwright
 ~/.venvs/eval/bin/playwright install chromium
-~/.venvs/eval/bin/python3 eval_ashfall.py runs/<candidate>.html --runtime
+~/.venvs/eval/bin/python3 eval_ashfall.py runs/<candidate>.html
 ```
 
-(`uv run eval_ashfall.py ... --runtime` also resolves playwright via the script's inline
-metadata, but you still need `playwright install chromium` once for the browser itself.)
+(`uv run eval_ashfall.py ...` also resolves playwright via the script's inline metadata,
+but you still need `playwright install chromium` once for the browser itself.)
 
-A static-only run reports `scored_out_of` below 100. Never compare a static-only score
-against a runtime-scored one without noting that.
+A static-only (`--noruntime`) run reports `scored_out_of` below 100. Never compare a
+static-only score against a runtime-scored one without noting that.
 
 ### 3. Score - model-graded half
 
@@ -82,13 +86,16 @@ blinding than an agentic session. Each job runs from an empty temp directory, so
 CLAUDE.md, project settings, or session memory leak into the grader's context.
 
 ```bash
-./grade.sh -s b runs/r01.html      # one candidate -> runs/r01b.ai.json
-./grade.sh -s c -j 5 runs/r0*.html # all candidates, 5 in parallel -> runs/r0Nc.ai.json
-./grade.sh -m claude-opus-5 -e xhigh -s o runs/r01.html   # different judge, suffix "o"
+./grade.sh s11b                    # one grading run -> runs/s11b.ai.json
+./grade.sh s1{1..5}{a..e}          # 5 grading runs x 5 candidates, 5 in parallel
+./grade.sh -m claude-opus-5 -e xhigh s11o   # different judge, grading suffix "o"
 ```
 
-The `-s` suffix labels repeat gradings (`r01a`, `r01b`, ...): same grader twice measures
-grader variance; two different graders measure inter-rater agreement (glossary below).
+Args are grading-run stems in the `listscore.py` spelling - the trailing letter is the
+grading-run suffix, the rest names the candidate (`s11a` grades `runs/s11.html` into
+`runs/s11a.ai.json`). Candidate paths plus `-s <suffix>` still work. Repeat gradings
+(`s11a`, `s11b`, ...) with the same grader measure grader variance; two different graders
+measure inter-rater agreement (glossary below).
 Parallel jobs share nothing except the server-side prompt cache, which reuses identical
 prefix tokens for speed/cost and cannot carry content between jobs.
 
@@ -107,7 +114,7 @@ Grader column; a prompt edit is a grader change (see rules below).
 ### 4. Merge and record
 
 ```bash
-python3 eval_ashfall.py runs/<candidate>.html --runtime --merge runs/<candidate>.ai.json
+python3 eval_ashfall.py runs/<candidate>.html --merge runs/<candidate>.ai.json
 python3 eval_ashfall.py --report runs/     # compare everything scored so far
 ./listscore.py r01a r01b ...               # quick "det + ai = total" per grading run
 ```

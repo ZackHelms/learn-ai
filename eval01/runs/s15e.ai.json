@@ -1,0 +1,69 @@
+## Grading Worksheet
+
+**F1 — Core loop:** `state` object; `makeRng`/`rngNext` seeded PRNG used for map gen, events, caravan, excavation; `endTurnLogic()` calls resolveStorm→resolveProduction→resolveNeeds→resolveColonistUpdates→resolvePopGrowth→resolveEvents→finishTurnLogic in fixed order. Score 2.
+
+**F2 — Map:** `CONFIG.GRID=8`, `genMap()` builds 8x8 from seeded rng; `canBuildAt()` checks `def.terrain.indexOf(t.terrain)`; `adjacencyMultiplier()` feeds directly into production formulas in `resolveProduction()`. Score 2.
+
+**F3 — Economy:** ore→metal (forge consumes `state.resources.ore`+power), soil→food (greenhouse consumes soil+water); `getCap`/`addResource` enforce caps and log overflow loss. Score 2.
+
+**F4 — Population:** colonist records `{skill, fatigue, morale, job, assignedBuilding}`; `c.skill`, `moraleMult(c)`, `fatigueMult(c)` read directly in `resolveProduction()`. Score 2.
+
+**F5 — Needs:** `resolveNeeds()` consumes food/water, flags shortage; `resolveColonistUpdates()` cuts morale by `foodShortSeverity*15`; `moraleMult(c)` feeds back into output; morale recovers gradually (not instant loss). Score 2.
+
+**F6 — Research:** 10 `RESEARCH_DEFS` nodes; `researchPrereqsMet()` enforced in `purchaseResearch()`; costs deducted via `addResource`; effects applied via `researchYieldBonus()` in production and `def.unlock` gating buildings, `coldstorage` raising `getCap()`. Score 2.
+
+**F7 — Events:** 12 `EVENT_DEFS`; `weightedEventPick()` by `.weight`; 4 events (`wanderers`, `fever`, `dispute`, `ruins_rumor`) have 2-3 choices with distinct `apply()` mutations; `eventCooldowns` checked in `resolveEvents()`. Score 2.
+
+**F8 — Trade:** `tradePrice()` reads `stockFrac` from `state.resources[key]/cap` and `market.globalFactor` drifted each turn by `driftMarket()`; `caravan.inventory[key].sellQty/buyMax` decremented; both `tradeBuy()`/`tradeSell()` implemented. Score 2.
+
+**F9 — Hazard:** `resolveStorm()` fires every `STORM_INTERVAL` turns, severity grows with `Math.floor(turn/10)`; `integrityMult=b.integrity/100` cuts every production formula; `stormwall`/`stormshelter`/`windbreak` reduce `mitigation`; `repairBuilding()` spends parts and restores integrity. Score 2.
+
+**F10 — Save/load:** `JSON.stringify(state)` into textarea; `loadBtn` handler `JSON.parse`s pasted text, `validateSaveData()` checks resources/tiles/buildings/colonists/research/rng, sets clear `saveError` text on failure. Score 2.
+
+**F11 — End conditions:** `checkEndConditions()` sets `gameOver="lose"` on empty roster or failed timeout conditions, `"win"` on turn 60 with needs+pop met; `computeScore()` combines pop/research/turn/stock; `renderModal()` shows summary table. Score 2.
+
+**F12 — UI:** `setActiveTab()` toggles tabs; `logLine` shows `"T"+entry.turn`; extensive `data-tip` tooltips via `showTooltip()`; Space/digit keyboard shortcuts wired in `keydown` listener; `@media (max-width:600px)` responsive rules. Score 2.
+
+**F13 — Dev panel:** `runTests()` asserts real invariants (overflow clamp, PRNG determinism, save/load hash round-trip, assignment consistency, end-condition consistency); `runBenchmark()` runs `stepTurnHeadless`+`greedyPolicyStep` for up to 200 turns headlessly and prints `hashState()`. Score 2.
+
+**G1:** `researchYieldBonus(state,"sifting",0.25)` multiplies forge output in `resolveProduction()`, read every turn, visible via tooltip. Score 4.
+
+**G2:** `resolveNeeds()` sets `foodShortSeverity`; `resolveColonistUpdates()` subtracts `severity*15` from morale; `moraleMult(c)` used in next turn's `resolveProduction()` — full loop, one-turn lag per documented fixed order. Score 4.
+
+**G3:** `resolveStorm()` damages `b.integrity`; `integrityMult` cuts output in `resolveProduction()`; `repairBuilding()` spends parts+idle colonist, restores to 100 integrity. Score 4.
+
+**G4:** `tradePrice()` reads `stockFrac` from live `state.resources` and `market.globalFactor` drifted every turn in `driftMarket()` (called from `resolveCaravan()`). Score 4.
+
+**G5:** `wanderers` choice calls `spawnColonist()`+resource deltas; `fever` choice sets `turnEffects.quarantineTurn` or mutates parts/scrip/morale — real state writes, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "state object; makeRng/rngNext PRNG; endTurnLogic() fixed resolve order",
+    "F2": "genMap() 8x8 from seed; canBuildAt() terrain check; adjacencyMultiplier() in production",
+    "F3": "forge consumes ore+power->metal; greenhouse consumes soil+water->food; addResource caps/overflow",
+    "F4": "colonist {skill,fatigue,morale}; read via moraleMult/fatigueMult in resolveProduction()",
+    "F5": "resolveNeeds() shortage -> resolveColonistUpdates() morale hit -> moraleMult() in output",
+    "F6": "10 RESEARCH_DEFS; researchPrereqsMet() gate; researchYieldBonus() applied in production",
+    "F7": "12 EVENT_DEFS; weightedEventPick(); 4 events with choices; eventCooldowns enforced",
+    "F8": "tradePrice() uses stockFrac+globalFactor; caravan.inventory decremented; tradeBuy/tradeSell",
+    "F9": "resolveStorm() severity grows w/ turn; integrityMult cuts output; repairBuilding() costs parts",
+    "F10": "JSON.stringify(state) to textarea; validateSaveData() + saveError on bad input",
+    "F11": "checkEndConditions() win/lose reachable; computeScore(); renderModal() summary table",
+    "F12": "setActiveTab(); logLine T+turn; data-tip tooltips; Space/digit keys; media query",
+    "F13": "runTests() real invariants; runBenchmark() headless stepTurnHeadless + hashState()",
+    "G1": "researchYieldBonus('sifting',0.25) multiplies forge output every resolveProduction()",
+    "G2": "foodShortSeverity -> morale drop in resolveColonistUpdates() -> moraleMult() in next production",
+    "G3": "resolveStorm() damages integrity -> integrityMult cuts output -> repairBuilding() restores",
+    "G4": "tradePrice() reads state.resources stockFrac and driftMarket()-updated globalFactor",
+    "G5": "wanderers/fever/dispute choices mutate resources, morale, turnEffects directly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Shortage-driven morale penalties apply on the following turn's production rather than the same turn, due to the fixed resolve order (production before needs)."
+}
+```

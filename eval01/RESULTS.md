@@ -39,15 +39,26 @@ sonnet5: eval01/generate.sh was created in order to get clean bare bones generat
 v1.2 & v1.3 correspond to grader updates (eval01/grade.sh), i.e. the back end grading work.
 generate.sh impacts the front end work by the LLM+effort, so I will eventually re-run haiku with it and call those runs something other than r0{1,2,3,4,5} like r5{1,2,3,4,5} or s0{1,2,3,4,5}
 
-|                Datetime |     Harness | LLM (Reasoning effort) | Run |  Time |     Cost | det + ai  = Score | Notes |
-| ----------------------- | ----------- | ---------------------- | --- | ----- | -------- | ----------------- | ----- |
-| 2026-08-09_17:11:22_EDT | Claude Code | claude-haiku-4-5 (low) | r01 | 1m57s | $ 0.1742 | 32 + 18.8 =  50.8 | v1.2, 3.4k input, 19.7k output, 0 cache read, 36.1k cache write ($0.1742) |
-| 2026-08-09_20:05:28_EDT | Claude Code | claude-haiku-4-5 (med) | r02 | 3m01s | $ 0.2933 | 45 + 32.8 =  77.8 | v1.2, 100 input, 21.9k output, 101.8k cache read, 86.8k cache write ($0.2933) |
-| 2026-08-09_20:05:35_EDT | Claude Code | claude-haiku-4-5 ( hi) | r03 | 2m44s | $ 0.2755 | 31 + 34.0 =  65.0 | v1.2, 1.3k input, 20.6k output, 98.1k cache read, 80.7k cache write ($0.2755) |
-| 2026-08-09_20:05:40_EDT | Claude Code | claude-haiku-4-5 (xhi) | r04 | 2m27s | $ 0.2671 | 52 + 33.6 =  85.6 | v1.2, 1.3k input, 20.1k output, 98.2k cache read, 77.7k cache write ($0.2671) |
-| 2026-08-09_20:05:46_EDT | Claude Code | claude-haiku-4-5 (max) | r05 | 2m28s | $ 0.2536 | 39 + 27.0 =  66.0 | v1.2, 1.3k input, 17.3k output, 98.7k cache read, 78.0k cache write ($0.2536) |
-| 2026-08-09_22:37:30_EDT | Claude Code | claude-opus-5 (xhigh)  | r21 | 50m9s | $21.23   | 34 + 46.0 =  80.0 | v1.3, 731 input, 223.3k output, 25.0m cache read, 312.6k cache write ($21.23) |
+| 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (max)      | t15 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
+|                Datetime |            Harness |   LLM (Reasoning effort) | Run |   Time |     Cost | det + ai  = Score | Notes |
+| ----------------------- | -------------------| -------------------------| --- | ------ | -------- | ----------------- | ----- |
+| 2026-08-09_17:11:22_EDT | Claude Code        | claude-haiku-4-5 (low)   | r01 | 01m57s | $ 0.1742 | 32 + 18.8 =  50.8 | v1.2, 3.4k input, 19.7k output,      0 cache read, 36.1k cache write ($0.1742) |
+| 2026-08-09_20:05:28_EDT | Claude Code        | claude-haiku-4-5 (medium)| r02 | 03m01s | $ 0.2933 | 45 + 32.8 =  77.8 | v1.2,  100 input, 21.9k output, 101.8k cache read, 86.8k cache write ($0.2933) |
+| 2026-08-09_20:05:35_EDT | Claude Code        | claude-haiku-4-5 (high)  | r03 | 02m44s | $ 0.2755 | 31 + 34.0 =  65.0 | v1.2, 1.3k input, 20.6k output,  98.1k cache read, 80.7k cache write ($0.2755) |
+| 2026-08-09_20:05:40_EDT | Claude Code        | claude-haiku-4-5 (xhigh) | r04 | 02m27s | $ 0.2671 | 52 + 33.6 =  85.6 | v1.2, 1.3k input, 20.1k output,  98.2k cache read, 77.7k cache write ($0.2671) |
+| 2026-08-09_20:05:46_EDT | Claude Code        | claude-haiku-4-5 (max)   | r05 | 02m28s | $ 0.2536 | 39 + 27.0 =  66.0 | v1.2, 1.3k input, 17.3k output,  98.7k cache read, 78.0k cache write ($0.2536) |
 
+| 2026-08-10_09:22:17_EDT | Claude Code (bare) | claude-sonnet-5 (low)    | s11 | 04m31s | $ 1.0978 | 48 + 45.0 =  93.0 |  46 input,  30.7k output,  1278.2k cache read,  42.0k cache write ($1.0978) |
+| 2026-08-10_09:21:57_EDT | Claude Code (bare) | claude-sonnet-5 (medium) | s12 | 10m11s | $ 2.2728 | 54 + 42.4 =  96.4 |  58 input,  60.5k output,  2461.2k cache read, 104.1k cache write ($2.2728) |
+| 2026-08-10_09:21:35_EDT | Claude Code (bare) | claude-sonnet-5 (high)   | s13 | 17m04s | $ 3.9825 | 32 + 45.8 =  77.8 |  88 input, 102.8k output,  5455.7k cache read, 133.5k cache write ($3.9825) |
+| 2026-08-10_09:21:14_EDT | Claude Code (bare) | claude-sonnet-5 (xhigh)  | s14 | 36m57s | $ 9.9160 | 34 + 42.4 =  76.4 | 228 input, 219.2k output, 17686.8k cache read, 219.9k cache write ($9.9160) |
+| 2026-08-10_09:20:54_EDT | Claude Code (bare) | claude-sonnet-5 (max)    | s15 | 43m05s | $ 9.2433 | 34 + 46.0 =  80.0 | 148 input, 250.4k output, 13214.4k cache read, 253.5k cache write ($9.2433) |
 
+| 2026-08-09_22:37:30_EDT | Claude Code        | claude-opus-5 (xhigh)    | t04 | 50m09s | $21.23   | 34 + 46.0 =  80.0 | v1.3, 731 input, 223.3k output, 25.0m cache read, 312.6k cache write ($21.23) |
 
+| 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (low)      | t11 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
+| 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (medium)   | t12 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
+| 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (high)     | t13 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
+| 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (xhigh)    | t14 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
+| 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (max)      | t15 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
 

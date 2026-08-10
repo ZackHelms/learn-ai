@@ -1,0 +1,75 @@
+I'll grade this by reading the source code directly, tracing each system's wiring without executing anything.
+
+## Worksheet
+
+**F1 (Core loop):** `state` object; `rngNext`/`rnd(s)` seeded RNG used for all randomness (grid gen, colonists, events, storms, growth, caravan); `finishTurn()` resolves storm→production→needs→departures→skill→growth→effects→caravan in fixed order. Score: 2
+
+**F2 (Map):** 8x8 grid (`s.grid`, 64 tiles) from seeded `rnd(s)` weights; `canBuild()` checks `def.terrain.includes(tile.terrain)`; `adjacencyMultiplier()` feeds `totalMult` in `processProduction()`. Score: 2
+
+**F3 (Economy):** quarry→ore→forge(consumes ore+power)→metal; ashsifter→soil→greenhouse(consumes soil+water)→food; caps via `getCap`, overflow logged and clamped in `addResource`. Score: 2
+
+**F4 (Population):** colonist records `{skill,fatigue,morale,job,assignedBuilding}`; `skillMult`, `moraleMult`, `fatigueMult` all read in `processProduction` labor calc. Score: 2
+
+**F5 (Needs):** `processNeeds()` consumes food/water per active colonist; shortage → `c.morale-=8`; `moraleMult` reads morale into output; morale recovers +1/+2/turn when met (not instant loss). Score: 2
+
+**F6 (Research):** 10 `RESEARCH_DEFS` nodes; `purchaseResearch()` checks `prereq.every(...)`, deducts cost; each `apply()` writes `s.mods`/`s.unlocked`, read in `processProduction`/`canBuild`/`processStorm`. Score: 2
+
+**F7 (Events):** 12 `EVENT_DEFS`; `drawEvent()` does weight-proportional selection; 6 events (`colonistDispute`, `refugeesArrive`, `ruinsDiscovery`, `sicknessOutbreak`, `scavengersCache`, `moraleFestival`) have 2-3 diverging choices; `s.eventCooldowns` checked in `eligibleEvents()`. Score: 2
+
+**F8 (Trade):** `caravanBuyPrice`/`caravanSellPrice` read stockpile ratio + `caravan.drift`; `item.qty`/`cap` limit inventory; `tradeBuy`/`tradeSell` both implemented and UI-wired. Score: 2
+
+**F9 (Hazard):** `processStorm()` fires every 7th turn, severity scales with `s.turn`; damaged `b.hp` reduces `hpFactor` in production; `stormDamageMult`/watchtower mitigate; `repairBuilding` spends parts/scrip. Score: 2
+
+**F10 (Save/load):** `exportSave()` serializes full `state` via JSON to textarea; `importSave()` parses, `validateStateShape()` checks fields, writes specific error to `#saveError`. Score: 2
+
+**F11 (End conditions):** `checkEndConditions()` checks win (`turn>maxTurns && active>=12 && food>0 && water>0`) and lose (`active<=0`); `computeScore()` combines pop/research/stockpile/turns; `renderEndScreen()` shows summary. Score: 2
+
+**F12 (UI):** `renderTabs()` wires tab clicks; log lines carry `T${l.turn}`; `.tip`/`data-tip` explain numbers (adjacency, caps); keydown handler for Space + 1-5; `@media max-width:480px` CSS. Score: 2
+
+**F13 (Dev panel):** `runTests()` has ~18 substantive assertions (caps, bidirectional assignment, prereqs, skill cap, storm damage, save/load hash); `runBenchmark()` runs headless greedy-policy loop, prints `hashState(s)` via `#devResults`. Score: 2
+
+**G1:** `basicMetallurgy.apply` sets `s.mods.forgeYield+=0.25`; `processProduction` reads `s.mods[RESEARCH_YIELD_KEY[type]]` into `totalMult` every turn. Score: 4
+
+**G2:** `processNeeds` shortage sets `c.morale-=8`; `moraleMult(c.morale)` multiplies into `laborMult` in `processProduction`, applied every turn. Score: 4
+
+**G3:** `processStorm` reduces `b.hp`; `processProduction` uses `hpFactor=b.hp/100`; `repairBuilding` spends parts/scrip and resets `hp=100`. Score: 4
+
+**G4:** `caravanBuyPrice`/`sellPrice` read `stockRatio` (player stock/cap) and `s.caravan.drift[res]`, which random-walks each turn in `processCaravan`. Score: 4
+
+**G5:** `colonistDispute` options mutate `c.morale`/`s.resources.scrip` differently per branch; `refugeesArrive` "Welcome" pushes new colonists into `s.colonists`, "Turn away" adds scrip and cuts morale instead. Score: 4
+
+## Summary
+
+This submission wires almost everything through real, shared formulas rather than parallel/cosmetic systems — production reads research mods, morale, fatigue, hp, and adjacency all in one multiplier chain; storms and repairs round-trip through that same hp factor; trade prices read both stockpile and a drifting variable; event branches durably mutate colonist/resource state.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "finishTurn() calls processStorm/processProduction/processNeeds/.../processCaravan in fixed order using rnd(s)",
+    "F2": "generateGrid() fills 64 s.grid tiles from rnd(s); canBuild() checks def.terrain; adjacencyMultiplier() used in processProduction",
+    "F3": "forge consumes ore+power (def.consume) produced by quarry/generator; addResource() caps and logs overflow",
+    "F4": "skillMult(c.skill)*moraleMult(c.morale)*fatigueMult(c.fatigue) computed in processProduction laborMult",
+    "F5": "processNeeds() shortage lowers c.morale; moraleMult(c.morale) read in processProduction; morale regains +1/+2 when met",
+    "F6": "10 RESEARCH_DEFS; purchaseResearch() enforces rd.prereq.every(...); apply() writes s.mods read in processProduction",
+    "F7": "12 EVENT_DEFS; drawEvent() weighted pick; 6 multi-choice events; s.eventCooldowns checked in eligibleEvents()",
+    "F8": "caravanBuyPrice/sellPrice read stockRatio+drift; tradeBuy/tradeSell both wired to UI buttons",
+    "F9": "processStorm() damages b.hp every 7th turn scaling with s.turn; hpFactor in processProduction; repairBuilding spends parts/scrip",
+    "F10": "exportSave() -> JSON.stringify(state); importSave() -> validateStateShape() writes error to #saveError",
+    "F11": "checkEndConditions() sets outcome win/lose; computeScore() combines active/research/stockpile/turns; renderEndScreen()",
+    "F12": "renderTabs() wires clicks; log lines show T${l.turn}; .tip data-tip tooltips; keydown handles Space and 1-5",
+    "F13": "runTests() ~18 real invariant checks; runBenchmark() headless loop prints hashState(s) via #devResults",
+    "G1": "s.mods.forgeYield set by basicMetallurgy.apply, read via RESEARCH_YIELD_KEY in processProduction every turn",
+    "G2": "processNeeds shortage -> c.morale-=8 -> moraleMult(c.morale) factored into laborMult in processProduction",
+    "G3": "processStorm reduces b.hp -> hpFactor=b.hp/100 in processProduction -> repairBuilding spends resources, resets hp",
+    "G4": "caravanBuyPrice/sellPrice read stockRatio and s.caravan.drift, drift updated每 turn in processCaravan",
+    "G5": "colonistDispute/refugeesArrive choice branches write different s.colonists/s.resources changes, not just log()"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research is purchased instantly with stockpiled resources rather than accruing via a per-turn research-points mechanic, simplifying the intended progression pacing."
+}
+```

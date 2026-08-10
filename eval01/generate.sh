@@ -73,8 +73,9 @@ Examples:
   ./generate.sh -e "xhigh" -f sonnet5 r1   # redo just r14
 
 Afterwards:
-  ./eval_ashfall.py runs/r11.html --runtime     # deterministic half
-  ./grade.sh -s a -j 5 runs/r1[1-5].html        # AI-judged half
+  ./eval_ashfall.py r1{1..5}       # deterministic half (runtime on by default)
+  ./grade.sh r1{1..5}{a..e}        # AI-judged half, 5 grading runs per candidate
+  ./listscore.py r1{1..5}{a..e}    # det + ai = total, with per-candidate AVG
 EOF
 }
 

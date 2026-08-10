@@ -1,0 +1,69 @@
+# Worksheet
+
+**F1 Core loop** — `STATE` single object; `rng={s:seed}` used for all randomness via `rngNext`; `resolveTurn()` calls systems in fixed documented order. Score 2.
+
+**F2 Map** — `generateGrid` builds 8x8 via `rngWeighted`; `tryBuild` checks `def.terrain.includes(t.terrain)`; `hasAdjTerrain`+`adjBonus` added to `amt` in `doProduction` for mine/condenser/forge/generator. Score 2.
+
+**F3 Economy** — `forge` consumes ore+power→metal; `greenhouse` stage B consumes soil+water→food; caps enforced in `addResource`, overflow logged via `logOverflow`. Note: greenhouse stage A "ash→soil" doesn't consume an actual ash resource (ash is terrain only), a minor gap. Score 2.
+
+**F4 Population** — `addColonist` creates records w/ skill,fatigue,morale,job; `skillFactor(c.skill)` and `computeMoraleFatigueFactor(c)` read in `doProduction`. Score 2.
+
+**F5 Needs** — `resolveNeeds` consumes food/water, shortage calls `adjustAllMorale(-5)`; morale read via `mf` in production; `resolveMoraleFatigue` allows morale recovery when fatigue<50. Score 2.
+
+**F6 Research** — 10 nodes in `RESEARCH_TREE`; `researchPrereqsMet` enforced in `tryResearch`; `payCost` deducts; unlocks read via `isBuildingUnlocked` and mult effects (`efficient_chains`, `advanced_filtration`, `storm_walls`) read in `doProduction`/`resolveHazard`. Score 2.
+
+**F7 Events** — 13 events in `EVENTS`; `rngWeighted` selection in `resolveEvents`; 5 choice events (sickness, migrants, festival, wanderer, toxic_cloud) with differing branches; `eventCooldowns` set and decremented in `resolveHazard`, filtered in `resolveEvents`. Score 2.
+
+**F8 Trade** — `resolveTrade` computes buy/sell price from `stockRatio` and `market.drift[g]` (random walk); `tradeBuy` decrements `item.qty` (limited); `tradeSell` works but doesn't cap caravan inventory. Score 2.
+
+**F9 Hazard** — `resolveHazard` fires every 6 turns, `severity` grows with `s.turn`; `storm_walls`/`reinforced_housing` mitigate; `repairBuilding` costs parts and restores. BUT `doProduction` only skips output for `b.disabled||b.hp<=0` — partial damage produces at full rate, no proportional loss. Score 1.
+
+**F10 Save/load** — `serializeState`→JSON in `#savearea`; `deserializeState` validates required fields, throws on bad input, caught and shown in `#loadmsg`. Score 2.
+
+**F11 End conditions** — `checkEndConditions` checks pop==0 (lose) and turn>=60+pop>=12+needsMet (win); `computeScore` uses pop/research/turn/stockpile; `checkGameOverOverlay` renders summary. Score 2.
+
+**F12 UI** — `switchTab` toggles panels; log entries `'[T'+e.turn+']'`; `data-tip`/`title` tooltips via `attachTooltipEvents`; keyboard Space/1-5 handled in `keydown` listener; `@media (max-width:500px)` layout. Score 2.
+
+**F13 Dev panel** — `runTests()` 18 real-invariant assertions (prereqs, save/load hash, terrain rules, RNG determinism, clamps); `runBenchmark` runs 200-turn headless loop with `greedyPolicyTurn`, prints `hashState` twice to show determinism. Score 2.
+
+**G1** — `efficient_chains`/`advanced_filtration` set `chainMult`/`condMult`, read directly in forge/greenhouse/condenser formulas in `doProduction`. Score 4.
+
+**G2** — `resolveNeeds` shortage → `adjustAllMorale(-5)` → `computeMoraleFatigueFactor` (`mf`) multiplies output in `doProduction`. Score 4.
+
+**G3** — storm damages `b.hp` in `resolveHazard`; repair (`repairBuilding`) restores hp and disables=false; BUT damaged-not-disabled buildings still produce at full rate in `doProduction` (only `b.disabled` checked). Capped per rubric rule. Score 1.
+
+**G4** — `resolveTrade` price formulas read `stockRatio=(resources[g]/caps[g])` and `market.drift[g]` which random-walks every caravan visit. Score 4.
+
+**G5** — sickness (quarantine: -food/-water/-morale vs ignore: variable morale loss) and migrants (welcome: `addColonist`+resource cost vs turn away: +scrip) both durably mutate differing state. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "STATE object; rng.s used everywhere via rngNext; resolveTurn() fixed order",
+    "F2": "tryBuild checks def.terrain; hasAdjTerrain adds adjBonus in doProduction",
+    "F3": "forge consumes ore+power->metal; greenhouse consumes soil+water->food; caps in addResource",
+    "F4": "skillFactor(c.skill), computeMoraleFatigueFactor(c) read in doProduction",
+    "F5": "resolveNeeds shortage -> adjustAllMorale(-5); mf read in doProduction; recovery in resolveMoraleFatigue",
+    "F6": "researchPrereqsMet in tryResearch; chainMult/condMult read in doProduction",
+    "F7": "rngWeighted in resolveEvents; eventCooldowns set/decremented in resolveHazard/resolveEvents",
+    "F8": "resolveTrade price from stockRatio+market.drift; tradeBuy decrements item.qty",
+    "F9": "resolveHazard damages b.hp but doProduction only checks b.disabled, no partial-damage penalty",
+    "F10": "serializeState to #savearea; deserializeState validates, error shown in #loadmsg",
+    "F11": "checkEndConditions pop==0/turn>=60 checks; computeScore uses multiple fields; checkGameOverOverlay renders",
+    "F12": "switchTab, log '[T'+e.turn+']', data-tip tooltips, Space/1-5 keydown, @media narrow layout",
+    "F13": "runTests() 18 invariant asserts; runBenchmark prints hashState via hashState(s)",
+    "G1": "efficient_chains chainMult read in forge/greenhouse formulas in doProduction",
+    "G2": "resolveNeeds -> adjustAllMorale(-5) -> mf factor in doProduction output",
+    "G3": "storm damages b.hp, repairBuilding restores, but non-disabled damaged buildings produce at full rate",
+    "G4": "resolveTrade buyPrice/sellPrice read stockRatio and market.drift[g] (random-walked)",
+    "G5": "sickness/migrants choice branches write different addResource/addColonist/morale changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Damaged (but not fully disabled) buildings still produce at full output, breaking the storm-damage-recovery chain (G3)."
+}
+```

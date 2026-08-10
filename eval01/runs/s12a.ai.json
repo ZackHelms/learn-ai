@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** `STATE`/`freshState()` single state object; `rng={s:seed}` used via `rngNext` throughout; `resolveTurn()` calls systems in fixed documented order. Score 2.
+
+**F2 (Map):** 8x8 loop in `generateGrid`; terrain from `rngWeighted(s.rng,...)`; `tryBuild` checks `def.terrain.includes(t.terrain)`; `hasAdjTerrain`+`adjBonus` change production amounts in `doProduction`. Score 2.
+
+**F3 (Economy):** ore→metal (forge consumes ore+power), ash→soil→food (greenhouse two-stage); caps enforced + overflow logged in `addResource`/`logOverflow`. Score 2.
+
+**F4 (Population):** colonist records {skill,fatigue,morale,job,assignedBuildingId}; `skillFactor(c.skill)` and `computeMoraleFatigueFactor(c)` read fatigue/morale in `doProduction`. Score 2.
+
+**F5 (Needs):** `resolveNeeds` consumes food/water, shortage calls `adjustAllMorale(-5)`; morale drives `computeMoraleFatigueFactor` in production; recovery via fatigue<50 morale regen and 50% chance to stay at morale 10. Score 2.
+
+**F6 (Research):** 10 nodes; `researchPrereqsMet` enforced; `payCost` deducts; effects (`chainYield`, `condenserYield`, `stormDamage`, `housingDurability`) read in `doProduction`/`resolveHazard`. Score 2.
+
+**F7 (Events):** 13 events in `EVENTS`; `rngWeighted` selection; 5 choice events (sickness, migrants, festival, wanderer, toxic_cloud) with differing branches; `eventCooldowns` set/decremented/checked. Score 2.
+
+**F8 (Trade):** `resolveTrade` prices use `stockRatio` (player resources) and `market.drift` (random-walked); `caravan.inventory[i].qty` capped; `tradeBuy`/`tradeSell` both implemented and wired to buttons. Score 2.
+
+**F9 (Hazard):** storms fire every 6 turns, severity scales with turn (`1+floor(turn/12)*0.3`); repair costs parts and restores hp; BUT `doProduction` only checks `b.disabled||b.hp<=0` — partially-damaged buildings (hp>0) produce at full rate, so "damaged buildings produce less" is essentially unmet. Score 1.
+
+**F10 (Save/load):** `serializeState`→JSON text in textarea; `deserializeState` validates required fields, throws descriptive `Error`, caught and shown in `#loadmsg`. Score 2.
+
+**F11 (End conditions):** win (turn≥60, pop≥12, needs met) and lose (pop 0 or turn 60 fail) both in `checkEndConditions`, reachable; `computeScore` uses pop/research/turn/stockpile; `checkGameOverOverlay` renders summary. Score 2.
+
+**F12 (UI):** `switchTab` toggles panels; `logMsg` stores `turn` shown as `[T+turn]`; `data-tip` tooltips explain resource sources; Space/1-5 keyboard shortcuts in `init`; `@media max-width:500px` responsive layout. Score 2.
+
+**F13 (Dev panel):** `runTests()` has 18 assertions on real invariants (terrain rules, prereqs, save/load hash roundtrip, RNG determinism); `runBenchmark()` runs 200 turns headlessly on cloned state via `greedyPolicyTurn`, prints `hashState`. Score 2.
+
+**G1:** `efficient_chains`/`advanced_filtration` effects stored in `RESEARCH_TREE`, read as `chainMult`/`condMult` in `doProduction`, applied to forge/greenhouse/condenser output every turn. Score 4.
+
+**G2:** `resolveNeeds` shortage → `adjustAllMorale(-5)` → `computeMoraleFatigueFactor` (threshold-based 0.5x/0x) consumed in `doProduction`; works but via step-function thresholds not continuous scaling. Score 3.
+
+**G3:** storm damages `b.hp` in `resolveHazard`; repair costs parts and restores hp/disabled — but `doProduction` only gates on `b.disabled||hp<=0`, so partially damaged buildings still produce at full rate (rule 3 caps this at 1). Score 1.
+
+**G4:** `resolveTrade` buy/sell price formulas read `stockRatio=(s.resources[g])/(s.caps[g])` and `market.drift[g]` which random-walks every caravan turn. Score 4.
+
+**G5:** sickness/migrants/festival/wanderer/toxic_cloud choice options call `addResource`, `adjustAllMorale`, `addColonist`, `s._eventMods` mutations — real state changes, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 3, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "freshState() builds state; rngNext(rng) used everywhere; resolveTurn() fixed order",
+    "F2": "generateGrid loops 8x8 with rngWeighted; hasAdjTerrain bonus applied in doProduction",
+    "F3": "forge consumes ore+power->metal, greenhouse soil->food chain in doProduction; addResource caps/overflow",
+    "F4": "skillFactor(c.skill), computeMoraleFatigueFactor(c.fatigue) read in doProduction",
+    "F5": "resolveNeeds shortage calls adjustAllMorale(-5); mf factor consumed in doProduction",
+    "F6": "researchPrereqsMet + payCost gate tryResearch; chainMult/condMult read in doProduction",
+    "F7": "rngWeighted(s.rng, available...) in resolveEvents; eventCooldowns set/decremented",
+    "F8": "resolveTrade price formula reads stockRatio and market.drift; tradeBuy/tradeSell both work",
+    "F9": "doProduction only checks b.disabled||b.hp<=0, no proportional output loss for partial damage",
+    "F10": "serializeState/deserializeState with field validation, error shown in #loadmsg",
+    "F11": "checkEndConditions sets won/lost; computeScore + checkGameOverOverlay renders summary",
+    "F12": "switchTab, logMsg turn-tagged entries, data-tip tooltips, Space/1-5 keys, media query",
+    "F13": "runTests() 18 real-invariant asserts; runBenchmark() headless 200-turn loop prints hashState",
+    "G1": "RESEARCH_TREE effect fields read as chainMult/condMult in doProduction every turn",
+    "G2": "resolveNeeds shortage -> adjustAllMorale -> computeMoraleFatigueFactor in doProduction (threshold-based)",
+    "G3": "resolveHazard damages hp, repairBuilding restores it, but doProduction ignores partial hp damage",
+    "G4": "resolveTrade buyPrice/sellPrice formula uses stockRatio and market.drift random walk",
+    "G5": "event option.apply() calls addResource/adjustAllMorale/addColonist, mutating real state"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm/building damage only stops production when a building is fully disabled (hp<=0); partial damage has no effect on output, breaking the damage->output-loss link."
+}
+```

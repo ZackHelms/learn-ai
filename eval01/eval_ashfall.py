@@ -4,8 +4,9 @@
 # dependencies = ["playwright"]
 # ///
 # The PEP 723 block above lets `uv run eval_ashfall.py` resolve playwright for the
-# --runtime pass. Plain `python3 eval_ashfall.py` also works: the static pass is
-# stdlib-only, and --runtime degrades gracefully when playwright is missing.
+# runtime pass, which is on by default. Plain `python3 eval_ashfall.py` also works
+# when playwright is installed; without it the script fails fast - install it, or
+# pass --noruntime for the stdlib-only static pass.
 """
 eval_ashfall.py - deterministic scorer for the ASHFALL OUTPOST LLM eval.
 
@@ -30,23 +31,32 @@ HOW IT SCORES
 Static checks are regex and structure checks over the raw HTML text. They never execute the
 candidate. Static checks are cheap, dependency-free, and safe to run on untrusted output.
 
-Runtime checks (--runtime) load the file in headless Chromium via Playwright, click controls
-found by visible text, and diff the rendered page. They are more informative and more fragile;
-see "Known weak spots" in RUBRIC.md. Without --runtime the script still runs, but reports a
-lower scored_out_of so you do not accidentally compare a static-only run against a full one.
+Runtime checks (on by default) load the file in headless Chromium via Playwright, click
+controls found by visible text, and diff the rendered page. They are more informative and
+more fragile; see "Known weak spots" in RUBRIC.md. If playwright or its chromium browser is
+missing, the script fails fast before grading anything. With --noruntime it still runs, but
+reports a lower scored_out_of so you do not accidentally compare a static-only run against
+a full one.
 
 B1 and B2 are all-or-nothing on purpose: a single banned API call or a single remote resource
 means the constraint was not followed.
 
 USAGE
 -----
-    python3 eval_ashfall.py candidate.html
-    python3 eval_ashfall.py candidate.html --runtime
-    python3 eval_ashfall.py candidate.html --runtime --merge candidate.ai.json
-    python3 eval_ashfall.py --report runs/
+    ./eval_ashfall.py runs/candidate.html          # static + runtime checks
+    ./eval_ashfall.py s11                          # same, by run stem (-> runs/s11.html)
+    ./eval_ashfall.py s1{1..5}                     # a whole generation sweep in one call
+    ./eval_ashfall.py candidate.html --noruntime   # static checks only (out of 26)
+    ./eval_ashfall.py candidate.html --merge candidate.ai.json
+    ./eval_ashfall.py --report runs/
+
+Bare stems resolve inside runs/ (s11 -> runs/s11.html). A trailing grading-run letter is
+tolerated when no such candidate exists (s11a -> runs/s11.html), and arguments resolving to
+the same file are graded once, so a pasted listscore-style expansion also works. --runtime
+is still accepted (it is now the default) so old command lines keep working.
 
 Writes <candidate>.eval.json next to the candidate unless --no-write is passed.
-Exit code is 0 on a completed grade, 1 on a usage or IO error.
+Exit code is 0 on a completed grade, 1 on a usage, IO, or missing-playwright error.
 """
 
 import argparse
@@ -55,6 +65,8 @@ import json
 import os
 import re
 import sys
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 STATIC_TOTAL = 26.0   # A1(3) A2(3) B(15) C1_static(2) D1(3)
 RUNTIME_TOTAL = 28.0  # A3(4) C1_runtime(2) C2(5) C3(6) D2(3) D3(4) E1(2) E2(2)
@@ -242,104 +254,116 @@ def find_button_in_tabs(page, pattern):
     return None
 
 
-def runtime_checks(path, timeout_ms=15000):
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        return None, "playwright not installed (pip install playwright && playwright install chromium)"
+def runtime_checks(path, timeout_ms=15000, pw=None):
+    """Run the browser checks for one candidate.
 
-    url = "file://" + os.path.abspath(path)
+    pw is an already-started Playwright driver (shared across candidates by main);
+    when None, a private one is started and stopped here so programmatic callers
+    keep the old one-shot behavior. Each candidate gets its own fresh browser."""
     r = {}
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            ctx = browser.new_context(viewport={"width": 1280, "height": 900})
-            page = ctx.new_page()
-            errors = []
-            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(url, timeout=timeout_ms)
-            page.wait_for_timeout(1200)
-
-            # A3 - clean load
-            r["A3"] = {"pts": 4.0 if not errors else 0.0, "max": 4.0,
-                       "detail": "errors=%d %s" % (len(errors), errors[:3])}
-
-            # C1 runtime half + C2 + C3 - self tests
-            btn = find_button_in_tabs(page, r"run\s*tests?")
-            r["C1_runtime"] = {"pts": 2.0 if btn else 0.0, "max": 2.0,
-                               "detail": "clickable_control=%s" % bool(btn)}
-            n_assert, n_fail = 0, None
-            if btn:
-                before = page.inner_text("body")
-                try:
-                    btn.click(timeout=4000)
-                except Exception:
-                    pass
-                page.wait_for_timeout(1500)
-                after = page.inner_text("body")
-                delta = after.replace(before, "") if before in after else after
-                n_pass = len(re.findall(r"\bPASS(?:ED)?\b|\bOK\b|(?<![a-z])\u2713", delta, re.I))
-                n_fail = len(re.findall(r"\bFAIL(?:ED)?\b|(?<![a-z])\u2717", delta, re.I))
-                m = re.search(r"(\d+)\s*/\s*(\d+)\s*(?:tests?|assertions?|passed)", delta, re.I)
-                if m:
-                    n_pass, n_assert = int(m.group(1)), int(m.group(2))
-                    n_fail = n_assert - n_pass
-                else:
-                    n_assert = n_pass + n_fail
-            r["C2"] = {"pts": round(min(n_assert, 15) / 15.0 * 5.0, 1), "max": 5.0,
-                       "detail": "assertions_detected=%d" % n_assert}
-            r["C3"] = {"pts": 6.0 if (n_assert > 0 and n_fail == 0) else 0.0, "max": 6.0,
-                       "detail": "failures_detected=%s" % n_fail}
-
-            # D2 + D3 - benchmark determinism across a full reload
-            hashes = []
-            for _ in range(2):
-                page.goto(url, timeout=timeout_ms)
-                page.wait_for_timeout(1000)
-                b = find_button_in_tabs(page, r"run\s*benchmark")
-                if not b:
-                    break
-                try:
-                    b.click(timeout=4000)
-                except Exception:
-                    break
-                page.wait_for_timeout(2500)
-                body = page.inner_text("body")
-                m = HASH_RX.search(body)
-                hashes.append(m.group(1) if m else None)
-            got = [h for h in hashes if h]
-            r["D2"] = {"pts": 3.0 if got else 0.0, "max": 3.0, "detail": "hashes=%s" % hashes}
-            same = len(got) == 2 and hashes[0] == hashes[1]
-            r["D3"] = {"pts": 4.0 if same else 0.0, "max": 4.0, "detail": "identical=%s" % same}
-
-            # E1 - 360px overflow
-            page.goto(url, timeout=timeout_ms)
-            page.set_viewport_size({"width": 360, "height": 740})
-            page.wait_for_timeout(1200)
-            sw = page.evaluate("() => document.documentElement.scrollWidth")
-            r["E1"] = {"pts": 2.0 if sw <= 372 else 0.0, "max": 2.0, "detail": "scrollWidth=%s" % sw}
-
-            # E2 - End Turn mutates rendered state
-            page.set_viewport_size({"width": 1280, "height": 900})
-            page.wait_for_timeout(500)
-            eb = find_button(page, r"end\s*turn|next\s*turn")
-            changed = False
-            if eb:
-                before = page.inner_text("body")
-                try:
-                    eb.click(timeout=4000)
-                    page.wait_for_timeout(1200)
-                    changed = page.inner_text("body") != before
-                except Exception:
-                    changed = False
-            r["E2"] = {"pts": 2.0 if changed else 0.0, "max": 2.0,
-                       "detail": "control=%s text_changed=%s" % (bool(eb), changed)}
-
-            browser.close()
+        if pw is not None:
+            _browser_checks(pw, path, r, timeout_ms)
+        else:
+            try:
+                from playwright.sync_api import sync_playwright
+            except ImportError:
+                return None, "playwright not installed (pip install playwright && playwright install chromium)"
+            with sync_playwright() as p:
+                _browser_checks(p, path, r, timeout_ms)
     except Exception as exc:  # a crash here is itself a signal, but do not lose the static score
         return r or None, "runtime pass aborted: %s" % exc
     return r, None
+
+
+def _browser_checks(p, path, r, timeout_ms):
+    url = "file://" + os.path.abspath(path)
+    browser = p.chromium.launch()
+    try:
+        ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        page = ctx.new_page()
+        errors = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(url, timeout=timeout_ms)
+        page.wait_for_timeout(1200)
+
+        # A3 - clean load
+        r["A3"] = {"pts": 4.0 if not errors else 0.0, "max": 4.0,
+                   "detail": "errors=%d %s" % (len(errors), errors[:3])}
+
+        # C1 runtime half + C2 + C3 - self tests
+        btn = find_button_in_tabs(page, r"run\s*tests?")
+        r["C1_runtime"] = {"pts": 2.0 if btn else 0.0, "max": 2.0,
+                           "detail": "clickable_control=%s" % bool(btn)}
+        n_assert, n_fail = 0, None
+        if btn:
+            before = page.inner_text("body")
+            try:
+                btn.click(timeout=4000)
+            except Exception:
+                pass
+            page.wait_for_timeout(1500)
+            after = page.inner_text("body")
+            delta = after.replace(before, "") if before in after else after
+            n_pass = len(re.findall(r"\bPASS(?:ED)?\b|\bOK\b|(?<![a-z])\u2713", delta, re.I))
+            n_fail = len(re.findall(r"\bFAIL(?:ED)?\b|(?<![a-z])\u2717", delta, re.I))
+            m = re.search(r"(\d+)\s*/\s*(\d+)\s*(?:tests?|assertions?|passed)", delta, re.I)
+            if m:
+                n_pass, n_assert = int(m.group(1)), int(m.group(2))
+                n_fail = n_assert - n_pass
+            else:
+                n_assert = n_pass + n_fail
+        r["C2"] = {"pts": round(min(n_assert, 15) / 15.0 * 5.0, 1), "max": 5.0,
+                   "detail": "assertions_detected=%d" % n_assert}
+        r["C3"] = {"pts": 6.0 if (n_assert > 0 and n_fail == 0) else 0.0, "max": 6.0,
+                   "detail": "failures_detected=%s" % n_fail}
+
+        # D2 + D3 - benchmark determinism across a full reload
+        hashes = []
+        for _ in range(2):
+            page.goto(url, timeout=timeout_ms)
+            page.wait_for_timeout(1000)
+            b = find_button_in_tabs(page, r"run\s*benchmark")
+            if not b:
+                break
+            try:
+                b.click(timeout=4000)
+            except Exception:
+                break
+            page.wait_for_timeout(2500)
+            body = page.inner_text("body")
+            m = HASH_RX.search(body)
+            hashes.append(m.group(1) if m else None)
+        got = [h for h in hashes if h]
+        r["D2"] = {"pts": 3.0 if got else 0.0, "max": 3.0, "detail": "hashes=%s" % hashes}
+        same = len(got) == 2 and hashes[0] == hashes[1]
+        r["D3"] = {"pts": 4.0 if same else 0.0, "max": 4.0, "detail": "identical=%s" % same}
+
+        # E1 - 360px overflow
+        page.goto(url, timeout=timeout_ms)
+        page.set_viewport_size({"width": 360, "height": 740})
+        page.wait_for_timeout(1200)
+        sw = page.evaluate("() => document.documentElement.scrollWidth")
+        r["E1"] = {"pts": 2.0 if sw <= 372 else 0.0, "max": 2.0, "detail": "scrollWidth=%s" % sw}
+
+        # E2 - End Turn mutates rendered state
+        page.set_viewport_size({"width": 1280, "height": 900})
+        page.wait_for_timeout(500)
+        eb = find_button(page, r"end\s*turn|next\s*turn")
+        changed = False
+        if eb:
+            before = page.inner_text("body")
+            try:
+                eb.click(timeout=4000)
+                page.wait_for_timeout(1200)
+                changed = page.inner_text("body") != before
+            except Exception:
+                changed = False
+        r["E2"] = {"pts": 2.0 if changed else 0.0, "max": 2.0,
+                   "detail": "control=%s text_changed=%s" % (bool(eb), changed)}
+    finally:
+        browser.close()
 
 
 # --------------------------------------------------------------------------------------
@@ -446,14 +470,14 @@ def load_ai(path):
     return f_pts, g_pts, data, missing
 
 
-def grade(path, use_runtime, merge_path):
+def grade(path, use_runtime, merge_path, pw=None):
     with open(path, encoding="utf-8", errors="replace") as fh:
         raw = fh.read()
 
     checks = static_checks(raw)
     runtime_note = None
     if use_runtime:
-        rt, runtime_note = runtime_checks(path)
+        rt, runtime_note = runtime_checks(path, pw=pw)
         if rt:
             checks.update(rt)
 
@@ -540,11 +564,82 @@ def report(dirpath):
             "%.1f" % g["total"], "%.0f" % g["scored_out_of"]))
 
 
+def resolve_candidates(args):
+    """Map CLI args (paths or run stems) to candidate HTML paths, in order.
+
+    Same spellings as listscore.py: an existing path is used as-is; anything else
+    is a stem resolved inside runs/ (s11 -> runs/s11.html), with one trailing
+    grading-run letter stripped as a fallback (s11a -> runs/s11.html). Returns
+    (paths, errors); duplicates collapse to their first occurrence."""
+    seen, paths, errors = set(), [], []
+    for arg in args:
+        if os.path.isfile(arg):
+            path = arg
+        else:
+            stem = re.sub(r"\.(ai\.json|eval\.json|html?)$", "", arg)
+            base = stem if "/" in stem else os.path.join(SCRIPT_DIR, "runs", stem)
+            tried = [base + ".html"]
+            cand = re.sub(r"(?<=\d)[A-Za-z]$", "", base)
+            if cand != base:
+                tried.append(cand + ".html")
+            path = next((p for p in tried if os.path.isfile(p)), None)
+            if path is None:
+                errors.append("%s: no candidate found (tried %s)" % (arg, ", ".join(tried)))
+                continue
+        key = os.path.realpath(path)
+        if key not in seen:
+            seen.add(key)
+            paths.append(path)
+    return paths, errors
+
+
+def start_playwright():
+    """Start the one Playwright driver shared by every candidate this invocation.
+
+    Doubles as the fail-fast gate: exits with actionable instructions, before any
+    grading, when the default runtime pass cannot run. The caller must stop() the
+    returned driver."""
+    hint = (
+        "  install:  pip install playwright && python3 -m playwright install chromium\n"
+        "            (or `uv run eval_ashfall.py ...` for the package; the browser still\n"
+        "            needs `playwright install chromium` once - see README.md)\n"
+        "  or skip:  --noruntime  runs the static checks only, scored out of %.0f not %.0f;\n"
+        "            do not compare those totals against runtime-scored runs"
+        % (STATIC_TOTAL, DETERMINISTIC_TOTAL))
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise SystemExit(
+            "error: the runtime pass (on by default) needs playwright, which is not installed.\n" + hint)
+    try:
+        pw = sync_playwright().start()
+    except Exception as exc:
+        raise SystemExit("error: playwright is installed but failed to start (%s: %s).\n%s"
+                         % (type(exc).__name__, exc, hint))
+    browser_path = pw.chromium.executable_path
+    if not os.path.exists(browser_path):
+        try:
+            pw.stop()
+        except Exception:
+            pass
+        raise SystemExit("error: playwright is installed but its chromium browser is not (checked %s).\n%s"
+                         % (browser_path, hint))
+    return pw
+
+
 def main():
     ap = argparse.ArgumentParser(description="Deterministic scorer for the Ashfall Outpost eval.")
-    ap.add_argument("candidate", nargs="?", help="path to the model's HTML output")
-    ap.add_argument("--runtime", action="store_true", help="run headless browser checks (needs playwright)")
-    ap.add_argument("--merge", help="path to the AI grader's JSON reply, to produce a score out of 100")
+    ap.add_argument("candidates", nargs="*", metavar="candidate",
+                    help="candidate HTML path or run stem (s11 -> runs/s11.html); "
+                         "several may be given, e.g. s1{1..5}")
+    rt = ap.add_mutually_exclusive_group()
+    rt.add_argument("--noruntime", action="store_true",
+                    help="skip the headless-browser checks (static only, scored out of %.0f)"
+                         % STATIC_TOTAL)
+    rt.add_argument("--runtime", action="store_true",
+                    help="run headless browser checks (now the default; kept for old command lines)")
+    ap.add_argument("--merge", help="path to the AI grader's JSON reply, to produce a score "
+                                    "out of 100 (single candidate only)")
     ap.add_argument("--report", help="print a comparison table of *.eval.json in this directory")
     ap.add_argument("--no-write", action="store_true", help="do not write <candidate>.eval.json")
     a = ap.parse_args()
@@ -552,26 +647,56 @@ def main():
     if a.report:
         report(a.report)
         return 0
-    if not a.candidate:
+    if not a.candidates:
         ap.print_help()
         return 1
-    if not os.path.isfile(a.candidate):
-        print("no such file: %s" % a.candidate, file=sys.stderr)
-        return 1
-    if a.merge and not os.path.isfile(a.merge):
-        print("no such file: %s (expected the saved grader reply)" % a.merge, file=sys.stderr)
-        return 1
 
-    g = grade(a.candidate, a.runtime, a.merge)
-    out = None
-    if not a.no_write:
-        # written before printing so a truncated or piped stdout cannot lose the result
-        out = re.sub(r"\.html?$", "", a.candidate) + ".eval.json"
-        with open(out, "w") as fh:
-            json.dump(g, fh, indent=2)
-    print_grade(g)
-    if out:
-        print("wrote %s" % out)
+    paths, errors = resolve_candidates(a.candidates)
+    for err in errors:
+        print("error: %s" % err, file=sys.stderr)
+    if errors:
+        return 1
+    if len(paths) < len(a.candidates):
+        print("note: %d arguments -> %d unique candidate(s)" % (len(a.candidates), len(paths)),
+              file=sys.stderr)
+
+    if a.merge:
+        if len(paths) > 1:
+            print("error: --merge pairs one candidate with one grader reply; got %d candidates"
+                  % len(paths), file=sys.stderr)
+            return 1
+        if not os.path.isfile(a.merge):
+            print("no such file: %s (expected the saved grader reply)" % a.merge, file=sys.stderr)
+            return 1
+
+    use_runtime = not a.noruntime
+    pw = start_playwright() if use_runtime else None
+
+    graded = []
+    try:
+        for path in paths:
+            g = grade(path, use_runtime, a.merge, pw)
+            out = None
+            if not a.no_write:
+                # written before printing so a truncated or piped stdout cannot lose the result
+                out = re.sub(r"\.html?$", "", path) + ".eval.json"
+                with open(out, "w") as fh:
+                    json.dump(g, fh, indent=2)
+            print_grade(g)
+            if out:
+                print("wrote %s" % out)
+            graded.append(g)
+    finally:
+        if pw is not None:
+            pw.stop()
+
+    if len(graded) > 1:
+        print()
+        print("%-34s %8s %11s" % ("candidate", "det", "total"))
+        print("-" * 56)
+        for g in graded:
+            print("%-34s %8.1f %6.1f/%.0f" % (g["candidate"][:34], g["deterministic_points"],
+                                              g["total"], g["scored_out_of"]))
     return 0
 
 
