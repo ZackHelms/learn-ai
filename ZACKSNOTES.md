@@ -187,35 +187,28 @@ Before getting started, ask me questions to maximize alignment between my intent
 
 ### Eval: Haiku 4.5 (low)
 ```bash
-export REPOROOT=$( realpath ~/gitrepos/learn-ai )
-cd $REPOROOT/eval01
 
-MMMM=haiku-4-5; EEEE=low; RRRR=001
-date +"%Y-%m-%d_%H:%M:%S_%Z"
-claude --model claude-$MMMM --effort $EEEE --permission-mode auto
-
-./eval_ashfall.py /home/zmhel/gitrepos/learn-ai/ashfalloutpost.html --runtime
-claude --model claude-sonnet-5 --effort high --permission-mode auto
-`/home/zmhel/gitrepos/learn-ai/eval01/GRADER_PROMPT.md` the candidate is at `/home/zmhel/gitrepos/learn-ai/ashfalloutpost.html`
-mv /home/zmhel/gitrepos/learn-ai/ashfalloutpost.html    /home/zmhel/gitrepos/learn-ai/eval01/runs/${MMMM}-${EEEE}-${RRRR}.html
-mv /home/zmhel/gitrepos/learn-ai/ashfalloutpost.ai.json /home/zmhel/gitrepos/learn-ai/eval01/runs/${MMMM}-${EEEE}-${RRRR}.ai.json
-
-# open 4 shells (split screen with claude on left and shell on right) to run these in parallel
+# open 5 shells (split screen with claude on left and shell on right) to run these in parallel
+claude --model claude-haiku-4-5 --effort low    --permission-mode auto
 claude --model claude-haiku-4-5 --effort medium --permission-mode auto
 claude --model claude-haiku-4-5 --effort high   --permission-mode auto
 claude --model claude-haiku-4-5 --effort xhigh  --permission-mode auto
 claude --model claude-haiku-4-5 --effort max    --permission-mode auto
 date +"%Y-%m-%d_%H:%M:%S_%Z"
+`/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r01.html`
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r02.html`
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r03.html`
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r04.html`
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r05.html`
 
 claude --model claude-sonnet-5 --effort high --permission-mode auto
+in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r01.html` and write results to `runs/r01.ai.json`
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r02.html` and write results to `runs/r02.ai.json`
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r03.html` and write results to `runs/r03.ai.json`
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r04.html` and write results to `runs/r04.ai.json`
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r05.html` and write results to `runs/r05.ai.json`
+
+./eval01/eval_ashfall.py eval01/runs/r01.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r02.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r03.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r04.html --runtime
