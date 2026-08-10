@@ -227,7 +227,10 @@ claude --model claude-opus-5 --effort xhigh --permission-mode auto
 # `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/hold/opus5xhigh.html`
 
 
-./grade.sh -s b -j 5 runs/r0*.html # 
+./evals01/grade.sh -s b -j 5 ./evals01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}b.ai.json
+./evals01/grade.sh -s c -j 5 ./evals01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}c.ai.json
+./evals01/grade.sh -s d -j 5 ./evals01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}d.ai.json
+./evals01/grade.sh -s e -j 5 ./evals01/runs/r0*.html # 5 in parallel, creates runs/r0{1,2,3,4,5}e.ai.json
 
 claude --model claude-sonnet-5 --effort high --permission-mode auto
 

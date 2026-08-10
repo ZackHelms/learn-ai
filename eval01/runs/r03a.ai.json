@@ -1,0 +1,68 @@
+Worksheet (F1-F13, G1-G5), graded from runs/r03.html source only.
+
+F1 Core loop: GameState class + fixed-order endTurn() (consume->produce->morale/fatigue->ashstorm->caravan->events->departures->end-check). But createColonist() sets `id: Math.random()` (line 422) - not all randomness goes through SeededRNG. Required part "seeded PRNG used for all randomness" fails. Score 1.
+
+F2 Map: 8x8 (64 tiles, x=i%8,y=floor(i/8)) via generateMap() using this.rng; canBuild() checks tile.terrain !== building.terrain; getBuildingBonus() returns 1.25x read via `baseOutput *= bonus` in endTurn(). All parts present. Score 2.
+
+F3 Economy: only forge is a real consumed-input chain (`productionMetalNeeded` capped by `this.resources.power`, power then decremented). BUILDINGS.greenhouse declares consumes:'water' but endTurn()'s greenhouse branch never reads/subtracts water. Storage caps enforced via getStorageCapacity()+Math.min everywhere. Score 1 (one real chain, not "chains"; one declared input never enforced).
+
+F4 Population: createColonist() gives skill/fatigue/morale/job/assigned. fatigue read only to modify morale (`fatigue>=8 -> morale-=2`); colonist.skill/fatigue never read anywhere in the production formula in endTurn(). Score 1.
+
+F5 Needs: consumption = colonists.length subtracted from food/water each turn; shortage sets `morale -=10`. But `moraleMod` (line 553) is computed and never used again - morale never multiplies into any output. Score 1.
+
+F6 Research: RESEARCH_TREE has exactly 8 nodes; completeResearch() enforces prereq.completed and deducts scrip/parts; every node's id is checked in endTurn()'s baseOutput calc (irrigation/refinement/windmills/recycling/farming/powerplant) or handleAshstorm() (shelter/shielding) - all 8 apply a real effect. Score 2.
+
+F7 Events: EVENTS_DECK has 12 entries; fireEvent() picks `validEvents[this.rng.nextInt(0, validEvents.length-1)]` - uniform, no weight field anywhere in the file. recentEvents Set caps at 4 for cooldown. 5 choice events (ids 5,6,9,10,12) each write different state per branch. Weighted-selection requirement fails. Score 1.
+
+F8 Trade: renderTrade()/executeTrade() price formulas read this.state.resources[food/water/metal/parts] directly. Buy qty's `max` is `scrip/price` (affordability), not a separate caravan stock - no caravan inventory variable exists anywhere. Both buy and sell paths execute. Score 1 (no real caravan inventory cap).
+
+F9 Hazard: handleAshstorm() fires on ashstormTurnsLeft countdown; severity = min(3, floor(turn/20)) grows with turn; shelter/shielding research reduce damageMultiplier. Production loop only checks `tile.hp<=0 -> continue` (binary), never scales output by partial hp damage. No `repair` function/cost/hp-restore exists anywhere in the file (grep confirms only the word "repair" appears in flavor text). Score 1.
+
+F10 Save/load: serialize() covers seed/turn/resources/morale/colonists/map/research/eventLog/ashstormCounter/ashstormTurnsLeft but omits tradeMultiplier and gameOver/gameOverType - a real gameplay field silently resets on reload. deserialize() is try/catch-wrapped, loadBtn shows `alert('Failed to load: invalid game state JSON')` on bad input. Score 1 (not truly "full state").
+
+F11 End conditions: loss = colonists.length===0; win = turn>=60 && colonists.length>=12 && food>=5 && water>=5, both reachable. showEndGame() computes score from colonists/research/resources/turn and renders a modal. Score 2.
+
+F12 UI: tab-button listeners toggle .active on buttons/panels; renderLog() prefixes `Turn ${entry.turn}:`; tile tooltips show HP%/bonusText and buildable options+cost; keypress handler wires Space + '1'-'5'; @media(max-width:600px) resizes header/map/tiles/modal. Score 2.
+
+F13 Dev panel: runTests() asserts 15 real invariants (no negative resources, storage cap, prereqs enforced, morale 0-100, HP bounds, unique colonist ids, etc.), not trivialities. runBenchmark() builds a fresh headless GameState, runs endTurn() x200 without touching UI state, prints start/end getStateHash() and a determinism check. Score 2.
+
+G1 research->yield: `research.completed=true` set in completeResearch(); endTurn()'s baseOutput calc directly reads `this.research.find(r=>r.id==='irrigation')?.completed` etc. for 6 nodes, applied every production tick, visible in header resource counts. Score 4.
+
+G2 shortfall->need->morale->output: consumption step subtracts food/water; `food===0||water===0` sets `this.morale-=10` (real state write, not cosmetic). But moraleMod (line 553) is dead code - no production/output formula anywhere reads this.morale, so the final "reduced labor output" link is entirely absent. Score 1.
+
+G3 storm->damage->loss->repair->recovery: handleAshstorm() subtracts tile.hp by `damage`. Production loop only excludes tiles at `hp<=0`; a tile at hp=10 or hp=90 produces identically to hp=100 - partial damage never reduces output. No repair function exists (grep confirms), so hp can never be restored. Score 1.
+
+G4 trade prices<->stockpiles: both renderTrade() and executeTrade() compute `Math.max(1, Math.round(2 - resources.food/20) * tradeMultiplier)` etc. directly from this.state.resources, recalculated on every render/execute, so buying/selling changes the player's stockpile which changes the very next price calc; tradeMultiplier is also durably set by event id 9's choices. Score 4.
+
+G5 event choices->state: event 5 Wanderer: 'Welcome' pushes a new colonist via `state.colonists.push(state.createColonist())` vs 'Turn them away' does `state.morale-=10`. Event 9 Trading Opportunity: choices set `state.tradeMultiplier` to 1.5 vs 1.0, durably changing future trade prices. Event 10 Medical Crisis: -3 parts vs morale-15. All branches write directly into state.resources/colonists/morale/tradeMultiplier, not just eventLog. Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 2, "3": 1, "4": 1, "5": 1, "6": 2, "7": 1,
+        "8": 1, "9": 1, "10": 1, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 1, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "createColonist() uses Math.random() for id (line 422), not this.rng; endTurn() otherwise fixed-order",
+    "F2": "getBuildingBonus() 1.25x read via baseOutput*=bonus in endTurn() production loop",
+    "F3": "forge: productionMetalNeeded capped by resources.power then power-=metalProduced; greenhouse consumes:'water' never subtracted",
+    "F4": "colonist.skill/fatigue set in createColonist(), never read in endTurn() production formula",
+    "F5": "moraleMod (line 553) computed, never referenced again - morale never affects output",
+    "F6": "8 RESEARCH_TREE nodes, each id checked in endTurn() baseOutput calc or handleAshstorm()",
+    "F7": "fireEvent() uses rng.nextInt uniformly over validEvents, no weight field defined anywhere",
+    "F8": "buy input max = floor(scrip/price) (affordability), no separate caravan stock variable",
+    "F9": "handleAshstorm() reduces tile.hp; production only checks hp<=0 (binary); no repair() function exists",
+    "F10": "serialize() omits tradeMultiplier/gameOver; deserialize() try/catch + alert('Failed to load...') on bad JSON",
+    "F11": "win/loss checked in endTurn(); showEndGame() computes score from colonists/research/resources/turn",
+    "F12": "tab-button listeners toggle .active; renderLog() prefixes Turn N; keypress handler for Space/1-5; media query at 600px",
+    "F13": "runTests() 15 invariant checks; runBenchmark() runs 200 headless endTurn() calls, prints getStateHash()",
+    "G1": "research.completed read directly in endTurn() baseOutput calc for 6 of 8 nodes, every turn",
+    "G2": "food===0||water===0 sets morale-=10, but no output formula reads this.morale/moraleMod",
+    "G3": "handleAshstorm() sets tile.hp; production ignores partial hp damage, only hp<=0 blocks output; no repair exists",
+    "G4": "renderTrade()/executeTrade() price formula reads this.state.resources directly, recalculated each call",
+    "G5": "event 5/9/10 choice branches write state.colonists/morale/tradeMultiplier/resources differently per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "single_biggest_weakness": "Colonist skill/fatigue and morale are tracked and displayed but never wired into any production or output formula, so population and needs systems are cosmetic rather than load-bearing."
+}
+```

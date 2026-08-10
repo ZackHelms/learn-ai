@@ -1,0 +1,68 @@
+## Worksheet
+
+F1 Core loop: one `GameState` object, single `game` instance; `endTurn()` calls produceTurn/consumeTurn/updateMorale/stormTurn/eventTurn/caravanTurn in fixed order — but `generateMap()` uses `Math.random()` (line 586), not `this.rng`, so PRNG is not seeded for all randomness. Score 1.
+
+F2 Map: 64-tile 8x8 grid (`map-grid`, `new Array(64)`); `canBuild()` checks `terrain !== required`; `getAdjacencyBonus()` changes `output` in `produceTurn()`. But terrain comes from `Math.random()` in `generateMap()`, not the seed — not reproducible per seed. Score 1.
+
+F3 Economy: two-hop chain ore->metal (`forge`) ->parts (`refinery`); water->food (`greenhouse`); caps enforced via `Math.min(x, resourceCaps[k])` everywhere; overflow silently capped, not lost negatively. Score 2.
+
+F4 Population: colonist records have id/name/job/skill/morale/fatigue/assignedBuilding; `colonist.skill` read in `produceTurn()` output formula, but `colonist.fatigue` is only written there (never read by `produceTurn()`, only by `updateMorale()`). Score 1.
+
+F5 Needs: `consumeTurn()` computes food/water shortage each turn, shortage cuts `c.morale`; `updateMorale()` recovers morale when `fatigue<30` (not instant loss). But `colonist.morale` is never read anywhere inside `produceTurn()`'s output formula — morale never changes output. Score 1.
+
+F6 Research: `RESEARCH_NODES` has 8 entries with prereqs enforced (`node.prereqs.every`), costs deducted, and effects (`stormDamageMult`, `colonistMoraleMult`) applied inside `research(nodeIdx)`. But `this.research` is reassigned to a boolean array in the constructor, shadowing the prototype method `research()` on every instance — the only call site, `game.research(${node.id})` (line 1058), calls a non-function and throws, so purchases can never succeed through play. Score 1.
+
+F7 Events: `EVENTS_DECK` has exactly 10 entries; `eventCooldowns` blocks reselection for 10 turns in `eventTurn()`. Selection is `EVENTS_DECK[this.rngInt(...)]` — uniform, not weighted. Several choice effect keys (`damageReduction`, `constructionDelay`, `outputBoost`) are defined on events but never read by `handleEventChoice()` — dead no-ops on those branches. Score 1.
+
+F8 Trade: `buy()`/`sell()` exist and are wired to caravan UI buttons. `caravan.inventory` prices are freshly randomized each `caravanTurn()` call (`0.8 + rngRandom()*0.4`) independent of `this.resources` or any carried-over price state — no stockpile/drift link. `buy()` never checks `qty <= item.qty`, so the "limited" inventory cap is UI-only (`max` attribute), not enforced in game logic. Score 1.
+
+F9 Hazard: `stormTurn()` fires every 8 turns, `severity` grows with `this.turn`; `produceTurn()` skips any building with `damage > 0` entirely; Storm Shield research effect and the `dust_storm_mild` event both write `stormDamageReduction`, read by `stormTurn()`; `repairBuilding()` spends `parts` and zeroes `damage` to restore output. Score 2.
+
+F10 Save/load: `saveState()`/`loadState()` exist, textarea copy/paste wired, `loadBtn` shows a clear alert on failure. But `saveState()` omits `map`, `stormDamage`, `nextStormModifier`, `eventCooldowns`; `loadState()` only try/catches `JSON.parse`, no field validation beyond that. Score 1.
+
+F11 End conditions: `endTurn()` returns `'win'` (turn>60 & pop>=12) or `'loss'` (pop===0), both reachable; `getScore()` combines population/research/stockpiles/turns; `showEndScreen()` renders the summary. Score 2.
+
+F12 UI: tab buttons toggle `.active` panels; `addLog` entries carry `turn`; keyboard shortcuts (`Space`, `1-5`) wired via `keydown` listener; `@media (max-width:600px)` adapts layout. `.tile-tooltip` only restates terrain/building name and damage, never explains how any resource or output number is derived. Score 1.
+
+F13 Dev panel: `runTests()` asserts real invariants (resource caps, colonist skill/morale ranges, research-prereq consistency, save/load hash round-trip). `runBenchmark()` builds a fresh `benchGame`, runs 200 turns via `endTurn()` with no DOM/UI calls in the loop, and prints `stateHash()`. Score 2.
+
+G1 research->yield: research effects are limited to `stormDamageMult` and `colonistMoraleMult`; `produceTurn()`'s `output` formula reads only `colonist.skill` and `getAdjacencyBonus()` — never `this.research` or any research-derived modifier. Score 0.
+
+G2 shortfall->morale->output: `consumeTurn()` writes `c.morale -= Math.floor(shortageAmount/5)` on shortage (real state change), but `produceTurn()` never reads `colonist.morale`, so the final link to output is absent. Score 1.
+
+G3 storm->damage->loss->repair->recovery: `stormTurn()` sets `building.damage`; `produceTurn()` `continue`s (zero output) while `damage>0`; `repairBuilding()` spends `parts` and resets `damage=0` restoring production. Binary (fully off, not scaled) counts as a minor gap. Score 3.
+
+G4 trade prices vs stockpiles/supply: `caravanTurn()` recomputes `item.price` from `this.rngRandom()` fresh on every arrival; no read of `this.resources` or any persistent drifting price variable anywhere. Score 0.
+
+G5 event choices durably mutate state: `discovery` choices write `parts`/`researchProgress` vs `scrip` differently; `refugee_arrival` choices write `colonists`/`food` vs `morale` differently — both via `handleEventChoice()`'s resource/population/morale branches, not just `addLog`. Some other events' effect keys (`damageReduction`, `outputBoost`) are dead (see F7), so it's not uniformly wired across the whole deck. Score 3.
+
+```json
+{
+  "F": {"1": 1, "2": 1, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 1, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 0, "G2": 1, "G3": 3, "G4": 0, "G5": 3},
+  "evidence": {
+    "F1": "GameState/game singleton, endTurn() fixed order; generateMap() uses Math.random() not this.rng",
+    "F2": "64-tile grid, canBuild() terrain check, getAdjacencyBonus() in produceTurn(); terrain not seed-derived",
+    "F3": "forge ore->metal, refinery metal->parts, caps via Math.min(x, resourceCaps[k])",
+    "F4": "colonist.skill read in produceTurn(); colonist.fatigue only read by updateMorale()",
+    "F5": "consumeTurn() shortage cuts c.morale, updateMorale() recovers; morale never read in produceTurn()",
+    "F6": "research(nodeIdx) method shadowed by this.research=array in constructor; onclick call site throws",
+    "F7": "EVENTS_DECK.length===10, eventCooldowns gate reselection; selection is rngInt (uniform, not weighted)",
+    "F8": "buy()/sell() wired to caravan UI; prices randomized fresh each caravanTurn(), no stockpile/drift read",
+    "F9": "stormTurn() periodic+severity scaling, produceTurn() skips damaged buildings, repairBuilding() restores",
+    "F10": "saveState()/loadState() + textarea wired; loadState() only try/catches JSON.parse, no field checks",
+    "F11": "endTurn() returns win/loss, getScore() combines 4 values, showEndScreen() renders summary",
+    "F12": "tab-button listeners toggle .active panels; keydown Space/1-5; tile-tooltip only restates terrain",
+    "F13": "runTests() checks save/load hash round-trip; runBenchmark() runs 200 turns headless, prints stateHash()",
+    "G1": "research effects (stormDamageMult, colonistMoraleMult) never read by produceTurn()'s output formula",
+    "G2": "consumeTurn() writes colonist.morale on shortage; produceTurn() never reads colonist.morale",
+    "G3": "stormTurn() sets building.damage, produceTurn() skips it, repairBuilding() spends parts and restores",
+    "G4": "caravanTurn() prices are rngRandom() each arrival, never reads this.resources or a drifting variable",
+    "G5": "discovery and refugee_arrival choices each write distinct resource/population/morale state via handleEventChoice()"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "single_biggest_weakness": "game.research(nodeIdx) is shadowed by the this.research boolean-array instance property set in the constructor, so the only UI call site for purchasing research always throws and research can never be completed through play."
+}
+```
