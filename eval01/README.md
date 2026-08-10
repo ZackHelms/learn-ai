@@ -72,6 +72,38 @@ against a runtime-scored one without noting that.
 5. Save the grader's **entire reply** to `runs/<candidate>.ai.json`. The merge step extracts
    the last JSON object and tolerates surrounding prose and markdown fences.
 
+#### Scripted grading (recommended when the grader is Claude)
+
+[`grade.sh`](grade.sh) runs the whole step with headless Claude Code (`claude -p`), using
+whatever account `claude` is logged in as. The grader gets **no tools** and receives
+GRADER_PROMPT.md plus the candidate HTML on stdin, so it *cannot* peek at scores (rule 11),
+cannot delegate to a subagent (rule 13), and never sees the candidate's filename - stronger
+blinding than an agentic session. Each job runs from an empty temp directory, so no
+CLAUDE.md, project settings, or session memory leak into the grader's context.
+
+```bash
+./grade.sh -s b runs/r01.html      # one candidate -> runs/r01b.ai.json
+./grade.sh -s c -j 5 runs/r0*.html # all candidates, 5 in parallel -> runs/r0Nc.ai.json
+./grade.sh -m claude-opus-5 -e xhigh -s o runs/r01.html   # different judge, suffix "o"
+```
+
+The `-s` suffix labels repeat gradings (`r01a`, `r01b`, ...): same grader twice measures
+grader variance; two different graders measure inter-rater agreement (glossary below).
+Parallel jobs share nothing except the server-side prompt cache, which reuses identical
+prefix tokens for speed/cost and cannot carry content between jobs.
+
+If you grade in an **interactive** agent session instead, use a fresh session that has not
+explored the repo, and lead with read discipline:
+
+> Read ONLY these two files, in this order: `eval01/GRADER_PROMPT.md` then
+> `eval01/runs/r01.html`. No directory listings, no other files, no commands, no
+> subagents - do the grading yourself in this session. Then follow GRADER_PROMPT.md and
+> write your full reply verbatim to `eval01/runs/r01b.ai.json`.
+
+Grader-prompt version: **v1.3** (2026-08-09: added rules 13-14 - never delegate, declare
+contamination - and the `contamination` output field). Record the version in the RESULTS.md
+Grader column; a prompt edit is a grader change (see rules below).
+
 ### 4. Merge and record
 
 ```bash

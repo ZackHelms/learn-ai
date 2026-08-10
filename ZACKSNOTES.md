@@ -201,6 +201,7 @@ date +"%Y-%m-%d_%H:%M:%S_%Z"
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r04.html`
 `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/learn-ai/eval01/runs/r05.html`
 
+
 ./eval01/eval_ashfall.py eval01/runs/r01.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r02.html --runtime
 ./eval01/eval_ashfall.py eval01/runs/r03.html --runtime
@@ -213,6 +214,22 @@ in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `ru
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r03.html` and write results to `runs/r03a.ai.json`
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r04.html` and write results to `runs/r04a.ai.json`
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r05.html` and write results to `runs/r05a.ai.json`
+
+
+claude --model claude-fable-5 -effort max --permission-mode auto
+# I keep trying to run ```in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r01.html` and write results to `runs/r01b.ai.json````
+# in sonnet-5(high) claude code cli sessions, but frequently they take a peek at eval_ashfall.py or other results and then learn (from GRADER_PROMPT.md) that they should not have, so they spin up a haiku subagent to do the grading in order to avoid bias...
+# can you update GRADER_PROMPT.md 
+# or my prompt that I run to feed in the GRADER_PROMPT for a particular candidate input and output file name
+# or recommend an alternative approach (like creating an sdk based agent that strictly follows the grading process that I want and might enable me to queue up 10 or more such ai grading jobs to run sequentially or in parallel without them sharing anything (like if cached tokens might be a problem or if they are a good thing still))?
+
+claude --model claude-opus-5 --effort xhigh --permission-mode auto
+# `/home/zmhel/gitrepos/learn-ai/eval01/make-game-ashfall-outpost.prompt.md` and save output to `/home/zmhel/gitrepos/hold/opus5xhigh.html`
+
+
+./grade.sh -s b -j 5 runs/r0*.html # 
+
+claude --model claude-sonnet-5 --effort high --permission-mode auto
 
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r01.html` and write results to `runs/r01b.ai.json`
 in `/home/zmhel/gitrepos/learn-ai/eval01/` do GRADER_PROMPT.md for candidate `runs/r02.html` and write results to `runs/r02b.ai.json`

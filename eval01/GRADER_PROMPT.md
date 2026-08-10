@@ -37,6 +37,15 @@ You will score 18 items by reading the code:
 12. Do NOT infer, guess, or state which model, harness, or reasoning-effort level produced the
     candidate. Ignore what the filename or file path seems to imply about authorship - grade
     the code, not the label on it.
+13. Do ALL grading yourself, in this session, as the model the operator launched. NEVER
+    delegate grading to a subagent or a different model - not for speed, and not to "avoid
+    bias" after an accidental peek. The operator chose the grader model deliberately; a
+    silently substituted grader makes every score incomparable, which is worse than any
+    anchoring it was trying to fix. If contamination happened, rule 14 is the remedy.
+14. If you did see a forbidden file or result (rule 11) before reading these rules, keep
+    grading yourself anyway: set it aside as best you can, and declare exactly what you saw
+    in the `contamination` field of the output JSON. An honest contamination flag lets the
+    human rerun or discard the grade; a substituted grader or an abandoned session does not.
 
 ## Procedure
 
@@ -128,6 +137,7 @@ a fenced code block. Fill in every value; integers only.
   },
   "todo_notes": ["systems the candidate explicitly marked TODO"],
   "grader_confidence": "high | medium | low",
+  "contamination": "none | one line naming what you saw before grading (deterministic results, a prior AI grade, another candidate, ...)",
   "single_biggest_weakness": "one sentence"
 }
 ```
@@ -137,18 +147,30 @@ Before sending, check:
 - All 13 F keys ("1" through "13") and all 5 G keys ("G1" through "G5") are present.
 - F values are only 0, 1, or 2. G values are only 0, 1, 2, 3, or 4.
 - There is an `evidence` entry for every item scored above 0.
+- `contamination` is "none" unless you really did see a forbidden file or result (rule 14).
 - The JSON code block is the last thing in your reply.
 
 ## If you are grading agentically (file access, not paste-in-chat)
 
-Name output files generically from the candidate's own filename - never from a guessed model
-name, harness, or run id. Take the candidate's filename, strip its extension, and use that stem:
+Touch exactly three paths this session, and nothing else:
+
+1. READ this prompt file (done).
+2. READ the candidate HTML file the operator named.
+3. WRITE one output file (naming below).
+
+No directory listings, no other reads - per rule 11 that includes `eval_ashfall.py`,
+`RUBRIC.md`, `RESULTS.md`, `README.md`, every `*.ai.json` / `*.eval.json`, and every other
+candidate - no shell commands, and no subagents (rule 13).
+
+Output naming: if the operator's instruction names an output path, write to EXACTLY that
+path - the operator's path wins. Only when no path was given, derive one from the
+candidate's own filename: strip the extension and append `.ai.json`:
 
 - candidate `ashfalloutpost.html` -> reply saved as `ashfalloutpost.ai.json`
 - candidate `runs/haiku-4-5-low-001.html` -> reply saved as `runs/haiku-4-5-low-001.ai.json`
 
-Save your full reply (worksheet + trailing JSON block, verbatim) next to the candidate file
-using that name. Do not invent a different stem, do not rename or move the candidate, and do
-not create `<stem>.eval.json` yourself - that merged deterministic+model-graded file is
-produced by `eval_ashfall.py --merge`, run by the human after your reply, not by you (see rule
-11 - you do not run that script).
+Never name the output from a guessed model, harness, or run id (rule 12). Save your full
+reply (worksheet + trailing JSON block, verbatim) to that one file. Do not rename or move
+the candidate, and do not create `<stem>.eval.json` yourself - that merged
+deterministic+model-graded file is produced by `eval_ashfall.py --merge`, run by the human
+after your reply, not by you (see rule 11 - you do not run that script).
