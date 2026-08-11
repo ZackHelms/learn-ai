@@ -228,18 +228,42 @@ def find_button(page, pattern):
 HASH_RX = re.compile(r"hash\W{0,12}([0-9a-zA-Z_\-]{6,64})", re.I)
 
 
+def extract_hash(text):
+    """Last hash-looking token after the word 'hash', preferring tokens with a digit.
+
+    UI labels also match the loose regex ("Hash Current State" -> "Current",
+    "Benchmark: running" near a hash label -> "running"), and comparing two such words
+    makes the D3 determinism check vacuously true. Real hashes carry digits. Last
+    match, not first: pages may show a static "current state hash" (identical across
+    reloads no matter what the benchmark does) above the benchmark's own final-hash
+    line, which is appended after it."""
+    cands = HASH_RX.findall(text)
+    for c in reversed(cands):
+        if any(ch.isdigit() for ch in c):
+            return c
+    return cands[-1] if cands else None
+
+
+# Controls that mutate game state; the tab walk below must never click these.
+STATEFUL_LABEL_RX = re.compile(
+    r"new\s*game|end\s*turn|next\s*turn|save|load|export|import|reset|restart|clear", re.I)
+
+
 def find_button_in_tabs(page, pattern):
     """find_button, but if the control is hiding inside an inactive tab, switch tabs.
 
     The prompt asks for Run Tests / Run Benchmark inside a "Dev" panel, and visible-text
     discovery cannot see into a tab that is not active. Try the current view first, then
-    click a Dev/Debug-looking tab, then walk every short-labelled control that looks like
-    a tab header.
+    click a Dev/Debug-looking control, then walk every short-labelled control that looks
+    like a tab header. Candidates label the toggle "Dev Panel", "6 Dev", "6. Dev",
+    "Dev 6", ... - match the word anywhere in the label, never anchored: the anchored
+    ^dev\\w*$ used in the first pass zeroed the whole runtime cluster (C1/C2/C3/D2/D3)
+    for 9 of 20 candidates whose panels worked fine when opened by their real label.
     """
     btn = find_button(page, pattern)
     if btn is not None:
         return btn
-    for tab_pat in (r"^dev\w*$", r"^debug$", r"^tests?$"):
+    for tab_pat in (r"\bdev\w*\b", r"\bdebug\b", r"\btests?\b", r"\btools?\b"):
         tab = find_button(page, tab_pat)
         if tab is None:
             continue
@@ -248,6 +272,30 @@ def find_button_in_tabs(page, pattern):
             page.wait_for_timeout(400)
         except Exception:
             continue
+        btn = find_button(page, pattern)
+        if btn is not None:
+            return btn
+    # Last resort: click every remaining short-labelled control that cannot mutate
+    # state (bounded), re-running discovery after each - custom tab bars whose labels
+    # never mention dev/debug end up here.
+    clicked = 0
+    for el in page.query_selector_all(CONTROL_TIERS[0] + ", " + CONTROL_TIERS[1]):
+        if clicked >= 12:
+            break
+        try:
+            if not el.is_visible():
+                continue
+            txt = (el.inner_text() or "").strip()
+        except Exception:
+            continue
+        if not txt or len(txt) > 24 or STATEFUL_LABEL_RX.search(txt):
+            continue
+        try:
+            el.click(timeout=1500)
+            page.wait_for_timeout(300)
+        except Exception:
+            continue
+        clicked += 1
         btn = find_button(page, pattern)
         if btn is not None:
             return btn
@@ -309,9 +357,15 @@ def _browser_checks(p, path, r, timeout_ms):
             n_pass = len(re.findall(r"\bPASS(?:ED)?\b|\bOK\b|(?<![a-z])\u2713", delta, re.I))
             n_fail = len(re.findall(r"\bFAIL(?:ED)?\b|(?<![a-z])\u2717", delta, re.I))
             m = re.search(r"(\d+)\s*/\s*(\d+)\s*(?:tests?|assertions?|passed)", delta, re.I)
+            m2 = re.search(r"(\d+)\s+passed\b\W{0,12}(\d+)\s+failed\b", delta, re.I)
             if m:
                 n_pass, n_assert = int(m.group(1)), int(m.group(2))
                 n_fail = n_assert - n_pass
+            elif m2:
+                # "45 passed, 0 failed" summaries: without this branch the word
+                # "failed" itself is counted as one failing test.
+                n_pass, n_fail = int(m2.group(1)), int(m2.group(2))
+                n_assert = n_pass + n_fail
             else:
                 n_assert = n_pass + n_fail
         r["C2"] = {"pts": round(min(n_assert, 15) / 15.0 * 5.0, 1), "max": 5.0,
@@ -331,10 +385,13 @@ def _browser_checks(p, path, r, timeout_ms):
                 b.click(timeout=4000)
             except Exception:
                 break
-            page.wait_for_timeout(2500)
-            body = page.inner_text("body")
-            m = HASH_RX.search(body)
-            hashes.append(m.group(1) if m else None)
+            h = None
+            for _ in range(4):  # poll: some benchmarks show "running..." before the hash
+                page.wait_for_timeout(2000)
+                h = extract_hash(page.inner_text("body"))
+                if h is not None:
+                    break
+            hashes.append(h)
         got = [h for h in hashes if h]
         r["D2"] = {"pts": 3.0 if got else 0.0, "max": 3.0, "detail": "hashes=%s" % hashes}
         same = len(got) == 2 and hashes[0] == hashes[1]

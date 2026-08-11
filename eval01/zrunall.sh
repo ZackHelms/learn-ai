@@ -9,7 +9,7 @@ function zrunall {
     local NOWDTTM=$(date +"%Y%m%d_%H%M%S_%Z")
     local LOGFILE="$THISDIR/runall.${NOWDTTM}.log"
     {
-        date +"%Y-%m-%d_%H:%M:%S_%Z"
+        echo "INFO: `date +"%Y-%m-%d_%H:%M:%S_%Z"` QQQ($QQQ) PPP($PPP) MODEL($MODEL) LOGFILE($LOGFILE) - BEGIN"
         echo "INFO: THISSCRIPT($THISSCRIPT)"
         echo "INFO:    THISDIR($THISDIR)"
         echo "INFO:    LOGFILE($LOGFILE)"
@@ -17,7 +17,7 @@ function zrunall {
         $THISDIR/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
         $THISDIR/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
         $THISDIR/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
-        date +"%Y-%m-%d_%H:%M:%S_%Z"
+        echo "INFO: `date +"%Y-%m-%d_%H:%M:%S_%Z"` QQQ($QQQ) PPP($PPP) MODEL($MODEL) LOGFILE($LOGFILE) - END"
     } | tee $LOGFILE
 
     echo
