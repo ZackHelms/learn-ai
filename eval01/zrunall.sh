@@ -40,10 +40,11 @@ function zrunall {
 }
 export -f zrunall
 
-# QQQ=1 # DONE 10Aug2026 eval01 set1
+# QQQ=1 # DONE 22:00 10Aug2026 eval01 set1
+# QQQ=2 # DONE 10:16 11Aug2026 eval01 set2
 
-QQQ=2
-# zrunall $QQQ r haiku45    # 20m
-# zrunall $QQQ s sonnet5    # 47m
-zrunall $QQQ t opus5      # 
-# zrunall $QQQ u fable5     # 60m
+QQQ=3
+zrunall $QQQ r haiku45    # 20m
+zrunall $QQQ s sonnet5    # 47m
+zrunall $QQQ t opus5      # 47m
+zrunall $QQQ u fable5     # 60m

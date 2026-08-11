@@ -293,16 +293,54 @@ PPP=u; QQQ=1; MODEL=fable5
 ./eval01/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
 ./eval01/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
 
-
-# TODO: .claude/plans/20260810124155.00-eval01-first-pass-review.md
+# DONE .claude/plans/20260810124155.00-eval01-first-pass-review.md
 claude --model claude-fable-5 --effort xhigh --permission-mode auto
 
-
-
 ```
+## 11Aug2026
+
+`./eval01/zrunall.sh # set2 QQQ=2 DONE`
+
+TODO ask fable5-max to do analysis:
+Me:
+Analyze results of eval01 set2 to see if there is room for improvement in the procedure I am using with `./eval01/zrunall.sh` (most recently run with QQQ=2). 
+For example (things on my mind but likely not a comprehensive list of things to investigate & improve):
+- confirm that haiku-4-5 low/medium/high/xhigh/max are all actualy "effort=none"
+- why do I see input tokens increase as effort levels increase with sonnet & opus but not with fable?
+- I'm trying to develop an intuition for what to expect for variability like the 5 haiku runs variability in run time (& cost) and output quality and also ai-grading score (from static llm+effort) if all are effort=none vs if effort level actually is different for the 5 runs with haiku-4-5
+- Sometimes seeing max (or even xhigh) scores drop a bit; I am guessing this could be due to variability that comes with "overthinking" with the higher effort levels. My instinct is to default to high effort level and only increase to xhigh or max if the task I am asking the AI to work on is challenging in the sense that this "overthinking" might be valuable but also potentially take the ai down a rabbit hole somewhere that is not valuable; this is very similar to how humans work when brainstorming and opening up to ideate "out of the box" which produces some no-good ideas but sometimes some very good unexpected solutions. 
+  In general is this a reasonable way to think about effort level max and xhigh?
+  If yes then the eval01/README.md should include some top level guidance about this when it comes to interpreting results.
+- I expected fable5 to get 100 score for effort level high(78) & max(72) (only xhigh got a 100).
+  Investigate this and see it points to a flaw in the procedure (e.g. grader, rubric, etc)
+  or perhaps something went wrong during the initial eval/generate.sh process (like connection dropped 
+  and broke output or a quota limit was hit or any other type of unexpected connectivity issue) and we need
+  to harden the generate.sh script to detect such "harness failures" and throw away the run and try again.
+  It is possible that the weekly quota reset happened during this test run and it might be possible
+  that this introduced some kind of instability in the availability of models or something... or it 
+  could have just been my home internet connectivity dropped due to some environmental factor out of my
+  control (like a tree falling on some cables). Any retry mechanism should have a limit to number of retries
+  or time spent retrying, and these limit value(s) should be at the top of the file so I can fine tune it later
+  if needed.
+- Something similar happened with the opus5 run where effort level max failed to run and generate.sh 
+  moved along without any concern (I stashed the output for that in `eval01/runs/zHOLD-t2-fail/`). 
+  Then the followup scripts eval_ashfall.py and grade.sh did not run possibly because not all expected
+  files were there. Lets update those scripts so they evaluate and grade whatever is there and print
+  ERROR message for any expected files that it could not find.
+Ask me questions now if needed, otherwise I'm going to step away for a few hours.
+Leave eval01-set2 alone and re-test with zrunall.sh which is currently configured to run eval01-set3 (QQQ=3).
 
 
 
+
+
+
+
+
+
+
+
+## Later
 
 
 TODO
