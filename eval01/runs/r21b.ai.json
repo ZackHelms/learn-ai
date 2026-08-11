@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `GameState` class holds all state; `mulberry32(seed)` rng used for map/colonists/events/storms; `advanceTurn()` calls production→consumption→events→hazard→morale in fixed order. Score 2.
+
+**F2 Map**: `generateMap()` builds 64 tiles from `this.rng()`; `canBuild()` checks `building.terrain.includes(tile.terrain)`; `getAdjacencyBonus()` feeds into `amt` calc in `runProduction()`. Score 2.
+
+**F3 Economy**: forge/greenhouse consume ore/water to produce metal/food, caps enforced via `Math.min(...,resourceCaps)`, but production is added to `newResources` unconditionally before the consumption check — output isn't gated by input availability. Score 1.
+
+**F4 Population**: colonists have `skill{job}`, `fatigue`, `morale`, `job`, `assigned`; both `skill` and `fatigue` read in `runProduction()` to compute `output`. Score 2.
+
+**F5 Needs**: `runConsumption()` decrements food/water; `updateMorale()` drops morale on shortage and recovers fatigue/morale over time; but morale is never read in `runProduction()`, so it never actually changes output. Score 1.
+
+**F6 Research**: 8 nodes in `initResearch()`; prereq check uses `game.map.some(t=>t.building===node.prereq)` which is correct for `labExpansion`(building) but wrong for `massCulture`/`resilience` (research-key prereqs, never satisfiable); `powerEfficiency`, `massCulture`, `resilience` bonuses never read anywhere. Score 1.
+
+**F7 Events**: 10 entries in `EVENT_DEFS`; selection is uniform (`Math.floor(rng()*events.length)`), not weighted; only 3 events (`sickness`,`visitor`,`contamination`) have choices, below required 4; `getAvailableEvents()` cooldown logic doesn't track per-event fire time, just gates on `turn>6`. Score 1.
+
+**F8 Trade**: `doTrade()` buy/sell both work, but `tradePrices` are static constants never updated from `resources`/turns, and `tradeVol` is defined but never read; no caravan inventory limit tracked. Score 1.
+
+**F9 Hazard**: `fireAshstorm()` fires periodically, `stormSeverity*=1.1`; `runProduction` only skips output at `tile.damage>=2` (binary, single hits often produce no effect); `stormShield`/`wall` reduce damage; `repairBuilding()` spends parts and restores output. Score 1.
+
+**F10 Save/load**: `serialize()`→JSON, `doSave()` copies to clipboard; `doLoad()`/`GameState.deserialize()` parses pasted text with try/catch and clear `alert` error on failure. Score 2.
+
+**F11 End conditions**: `checkWinLose()` sets `isGameOver/isWon` on pop==0 or turn/pop/food/water thresholds; `doEndTurn()` computes score from colonists/research/turn but only shows it via a native `alert()`, not a rendered screen. Score 1.
+
+**F12 UI**: tab switching via delegated click handler; log entries show `TURN {n}`; keyboard shortcuts (`Space`, `Digit1-5`) wired; responsive `@media(max-width:600px)`; but `.tooltip-anchor`/`.tooltip` CSS classes are never emitted by any render function — dead. Score 1.
+
+**F13 Dev panel**: `runTests()` asserts real invariants (caps, skill/morale/fatigue ranges, save/load hash match, prereq validity); `runBenchmark()` runs 200 headless `advanceTurn()` calls off a fresh `GameState` and prints `stateHash()`. Score 2.
+
+**G1**: `research.betterFarming.bonus.food`/`advancedOre.bonus.ore`/`labExpansion.parts_bonus` read directly in `runProduction()`; but `powerEfficiency`,`massCulture`,`resilience` effects unused. Score 3.
+
+**G2**: shortage sets `foodShortest`/`waterShortest` → `c.morale -=10` in `updateMorale()`, a real state write, but `runProduction()` never reads `c.morale`, so labor output is unaffected. Score 1.
+
+**G3**: `fireAshstorm()` sets `tile.damage`; `runProduction` skips output only at `damage>=2` (binary threshold, single-hit damage often invisible); `repairBuilding()` spends parts and restores production. Score 2.
+
+**G4**: `tradePrices` object is static, never derived from `resources` or a drifting variable (`tradeVol` unused). Score 0.
+
+**G5**: `sickness` choices (`food:-5` vs `population:-1`) and `contamination` choices (`water/food` combos) both write distinct, durable resource/colonist changes via `applyEvent()`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 2, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 1, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 2, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "GameState + mulberry32(seed) rng; advanceTurn() fixed order production/consumption/events/hazard/morale",
+    "F2": "generateMap() seeded terrain; canBuild() checks terrain; getAdjacencyBonus() feeds runProduction() amt calc",
+    "F3": "forge consumes ore/produces metal but production added before consumption check gates it, caps via Math.min",
+    "F4": "colonist.skill/fatigue read in runProduction() to compute output",
+    "F5": "runConsumption() drains food/water, updateMorale() drops/recovers morale, but morale never read in runProduction()",
+    "F6": "8 nodes in initResearch(); massCulture/resilience prereq checks reference building names that never exist",
+    "F7": "10 EVENT_DEFS, uniform pick via Math.floor(rng()*len), only 3 events have choices, cooldown logic doesn't track per-event fire turn",
+    "F8": "doTrade() buy/sell work but tradePrices static, tradeVol defined unused, no caravan inventory cap",
+    "F9": "fireAshstorm() sets tile.damage, runProduction() only zeroes output at damage>=2 (binary), repairBuilding() spends parts",
+    "F10": "serialize()/deserialize() with clipboard copy and prompt paste, try/catch error alert on bad input",
+    "F11": "checkWinLose() sets isGameOver/isWon, doEndTurn() computes score from colonists/research/turn shown via alert()",
+    "F12": "tab click delegation, log-turn shows TURN n, keydown shortcuts wired, but .tooltip-anchor never rendered by JS",
+    "F13": "runTests() asserts caps/ranges/hash-match; runBenchmark() loops advanceTurn() 200x headless, prints stateHash()",
+    "G1": "research.betterFarming.bonus.food/advancedOre.bonus.ore read in runProduction(), 3 of 8 research effects unused",
+    "G2": "foodShortest/waterShortest -> c.morale -=10 in updateMorale(), but morale never read in runProduction()",
+    "G3": "fireAshstorm() sets tile.damage; runProduction() skips output only at damage>=2; repairBuilding() spends parts",
+    "G4": "tradePrices object never modified from resources or turns anywhere in advanceTurn()",
+    "G5": "sickness/contamination choice branches in applyEvent() write distinct resource/colonist state changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale never feeds back into production output, breaking the needs->morale->labor chain, and several research effects (powerEfficiency, massCulture, resilience) and trade price dynamics are entirely dead code."
+}
+```

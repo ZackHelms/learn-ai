@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: `newGame()` builds one state object `S`; `rand(S)` mulberry32 uses `S.rngState` for all randomness; `endTurn()` calls runStorm→runProduction→runNeeds→runMorale→runEvents→runTrade in fixed order. Score 2.
+
+**F2 – Map**: 8x8 grid (`m.length===64`); `genMap` uses `rand(S)` to place terrain; `canBuild` checks `B.terrain.includes(t.t)`; `adjKey/adjBonus` multiply output in `workerMult` (e.g. condenser +50% near water). Score 2.
+
+**F3 – Economy**: chains ash→soil (`soilworks`), soil+water→food (`greenhouse`), ore→metal (`forge`), metal→parts (`workshop`); `capOf`/`addRes` enforce caps and log overflow via `S.turnLost`. Score 2.
+
+**F4 – Population**: colonist records with `skill,fatigue,morale,job,at`; both `c.skill` and `c.fatigue` read in `workerMult` to scale production. Score 2.
+
+**F5 – Needs**: `runNeeds` consumes food/water per pop; shortage calls `moraleAll(S,-12)`; morale read in `workerMult` (thresholds 0/30/70); recovery via `moraleAll(S,4)` when no shortage. Score 2.
+
+**F6 – Research**: 10 nodes in `RESEARCH`; `canResearch` enforces `R.req.every`; `payCost` deducts; each effect is read somewhere (toolmaking/metallurgy/hydroponics/geotap in `runProduction`, forecast/walls/medicine/barter/storage elsewhere). Score 2.
+
+**F7 – Events**: 12 entries in `EVENTS`; weighted pick in `runEvents` via cumulative `w`; 6 events (refugees, ashlung, blackmarket, badwater, festival, rats) have 2-3 choices with distinct `fx`; cooldown via `S.eventCd[id]=S.turn+cd`. Score 2.
+
+**F8 – Trade**: `priceOf` reads `S.res[res]/capOf` and `m.drift[r]` (random-walked each turn in `runTrade`); `cv.inv` limited and decremented; `tradeBuy`/`tradeSell` both functional. Score 2.
+
+**F9 – Hazard**: `isStormTurn`/`stormSeverity` grow with turn; `runStorm` sets `t.dmg`; `runProduction` skips damaged tiles; `forecast` research and Storm Wall reduce chance; `repairTile` costs 2 parts + idle colonist fatigue. Score 2.
+
+**F10 – Save/load**: `saveString` = full `JSON.stringify(S)` to textarea; `loadString` validates required keys and array shapes, error shown via `$("saveerr")`. Score 2.
+
+**F11 – End conditions**: win (`turn>60 && colonists>=12 && !short*`) and lose (`colonists.length<=0`) both checked in `endTurn`; `score()` combines pop/research/scrip/stock/turn; `renderModal` shows summary table. Score 2.
+
+**F12 – UI**: `setTab` toggles tabs; log lines carry `l.t` ("T"+turn); extensive `title=` tooltips explain numbers; keydown handler for Space/1-6; `@media (max-width:420px)` responsive grid. Score 2.
+
+**F13 – Dev panel**: `runTests` asserts real invariants (cap respected, prereqs enforced, save/load hash roundtrip, morale/fatigue bounds); `runBenchmark` runs `simulate(seed,200)` headless and prints `hashState`. Score 2.
+
+**G1**: `S.research.toolmaking/metallurgy/hydroponics/geotap` read directly inside `runProduction`/`workerMult` multipliers, applied every turn, shown in prodReport tooltips. Score 4.
+
+**G2**: `runNeeds` shortage → `moraleAll(-12)` → `workerMult` morale multiplier (x0.75 <30, refuse at 0); full loop every turn, visible via `short` badge and log. Score 4.
+
+**G3**: `runStorm` sets `t.dmg` → `runProduction` skips damaged tiles → `repairTile` spends 2 parts + fatigue → clears `t.dmg` restoring output. Fully traceable. Score 4.
+
+**G4**: `priceOf` reads `S.res[res]/capOf` (stock) and `m.drift[r]` (drifts randomly each `runTrade`); feeds `buyPrice`/`sellPrice`. Score 4.
+
+**G5**: `refugees` fx adds colonists/spends food differently per branch; `ashlung` fx spends parts or applies fatigue/morale differently per branch — real state mutation, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "newGame() single state S; rand(S) via S.rngState; endTurn() fixed system order",
+    "F2": "genMap() terrain from rand(S); canBuild() terrain check; adjKey/adjBonus in workerMult()",
+    "F3": "soilworks->soil, greenhouse->food chains; capOf()/addRes() cap+overflow via turnLost",
+    "F4": "colonist.skill/fatigue read in workerMult() to scale production",
+    "F5": "runNeeds() shortage -> moraleAll(-12); moraleAll(4) recovery when needs met",
+    "F6": "10 RESEARCH nodes; canResearch() checks R.req; effects read in runProduction()",
+    "F7": "12 EVENTS, weighted pick in runEvents(), 6 events w/ choices, eventCd cooldown",
+    "F8": "priceOf() reads S.res stock ratio and market.drift updated in runTrade()",
+    "F9": "runStorm() sets t.dmg; runProduction() skips damaged; repairTile() costs parts+fatigue",
+    "F10": "saveString()=JSON.stringify(S); loadString() validates keys, saveerr shows error",
+    "F11": "endTurn() win/lose checks; score(); renderModal() summary table",
+    "F12": "setTab(); log l.t turn numbers; title= tooltips; keydown Space/1-6; @media narrow",
+    "F13": "runTests() checks caps/prereqs/roundtrip invariants; runBenchmark() headless hashState",
+    "G1": "S.research.toolmaking/metallurgy read in workerMult()/runProduction() every turn",
+    "G2": "runNeeds() shortage->moraleAll(-12)->workerMult() morale multiplier reduces output",
+    "G3": "runStorm() t.dmg -> runProduction() skip -> repairTile() spends parts, clears dmg",
+    "G4": "priceOf() uses S.res[res]/capOf() stock ratio and m.drift[r] random walk in runTrade()",
+    "G5": "refugees/ashlung fx() branches mutate colonists/res differently, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Extremely thorough and tightly interconnected for a one-shot build; no clear weak system found, only minor balance/UX nuances not in scope."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** state `G`=newGame(); `mulberry32`/`rnd(S)` used for all randomness (genMap, addColonist, events); `endTurn()` executes fixed 10-step order. Score 2.
+
+**F2 (Map):** `genMap` builds 8x8 (64 tiles) from seeded `rnd`; `canBuild` checks `B.terr.includes(t.ter)`; `adjMult` reads neighbor terrain and multiplies into `outputMult` production. Score 2.
+
+**F3 (Economy):** mine→ore, forge consumes `ore+power`→metal; soilworks→soil, greenhouse consumes `soil+water`→food; `cap()` enforced in endTurn step 2, overflow logged & clamped. Score 2.
+
+**F4 (Population):** colonist records `{skill,fatigue,morale,assigned,job}`; `outputMult` reads `c.skill` and `c.fatigue>70` for production multiplier. Score 2.
+
+**F5 (Needs):** `needF/needW` consumed each turn; `shortF/shortW` write `c.morale-=10/-12`; `outputMult` reads morale; `c.morale+=2` when fed (gradual recovery, `zeroTurns` before eviction). Score 2.
+
+**F6 (Research):** 10 nodes in `RESEARCH`; `doResearch` checks `R.pre.every(...)`, deducts cost; effects read in `outputMult`, `cap()`, storm `chance`, `needF/W` ration, `price()`. Score 2.
+
+**F7 (Events):** 12 events in `EVENTS`; weighted pick via `tw/roll` loop; 5 events (refugees, sickness, cache, contam, lostcaravan) have 2-3 differently-mutating choices; `S.eventCd[id]=cd` cooldown filtered in pool. Score 2.
+
+**F8 (Trade):** `price()` reads `S.res[g]/cap` (stockF) and `S.drift[g]` (random-walked each turn); `S.caravan.inv[g]` limited/decremented; `trade()` handles both buy/sell branches. Score 2.
+
+**F9 (Hazard):** storm every 8 turns, `sev=1+floor(turn/15)` scales chance; `t.damaged` skips production entirely in loop (`if(t.damaged)continue`); `stormwalls`/`windbreak` reduce chance; `repair()` costs 2 parts + engineer. Score 2.
+
+**F10 (Save/load):** `serialize(S)`→textarea; `validateLoad` parses JSON, checks required fields/shapes, returns clear `.err` shown in `#saveerr`. Score 2.
+
+**F11 (End conditions):** win (`turn>60`,pop≥12,food&water>0) and lose (`col.length===0`) both set `S.over`; `score()` uses pop/research/stock/turn/win-bonus; `renderOver` shows breakdown table. Score 2.
+
+**F12 (UI):** `switchTab`/`TABS` wired to nav `onclick`; log lines show `T${l.t}`; `data-tt`/`resTip` tooltips explain cap/consumption; keydown handles Space & 1-6; `@media(max-width:420px)` adapts layout. Score 2.
+
+**F13 (Dev panel):** `runTests` asserts caps, hash-match across identical seeds, unique assignments, save/load round-trip (non-trivial); `runBenchmark` runs 200 headless `greedyStep` turns, prints `hashState`. Score 2.
+
+**G1:** `S.research.includes("filtration")` read directly inside `outputMult` production formula, applied every relevant turn, shown in tile tooltip breakdown. Score 4.
+
+**G2:** shortage (`shortF/shortW`) → `c.morale-=10/-12` → `outputMult` multiplies output by morale tiers (<30 ×0.6, <60 ×0.85) next turn. Score 4.
+
+**G3:** storm sets `t.damaged=true` → production loop `continue`s on damaged (zero output) → `repair()` spends 2 parts + engineer → `t.damaged=false` restores output. Score 4.
+
+**G4:** `price()` combines `stockF=f(S.res[g]/cap)` and `S.drift[g]` (random-walked each turn in endTurn step 8). Score 4.
+
+**G5:** refugee choices alter `res.food/water`+add colonists vs. morale only; contam choices alter `water`, `parts`, or morale/fatigue differently — real state mutation, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "rnd(S) drives genMap/events; endTurn() runs fixed 10-step order",
+    "F2": "genMap 8x8; canBuild checks terr; adjMult read in outputMult",
+    "F3": "forge consumes ore+power->metal; greenhouse consumes soil+water->food; cap() enforced",
+    "F4": "outputMult reads c.skill and c.fatigue>70 for production multiplier",
+    "F5": "shortF/shortW write c.morale; outputMult reads morale; morale recovers +2 when fed",
+    "F6": "doResearch checks R.pre; effects read in outputMult/cap/storm chance/price",
+    "F7": "12 EVENTS, weighted pick, 5 events w/ differing choice outcomes, eventCd cooldown",
+    "F8": "price() reads S.res[g]/cap and S.drift[g]; caravan.inv[g] limited both directions",
+    "F9": "storm sets t.damaged, production skips damaged, stormwalls/windbreak cut chance, repair costs 2 parts",
+    "F10": "serialize()+validateLoad() with field checks, error shown in #saveerr",
+    "F11": "S.over win/lose both set; score() from pop/research/stock/turn; renderOver table",
+    "F12": "switchTab wired to nav buttons; keydown Space/1-6; media query for narrow screens",
+    "F13": "runTests asserts hash-match/cap/uniqueness; runBenchmark runs 200 headless greedyStep turns",
+    "G1": "outputMult multiplies by research.includes('filtration') directly in production formula",
+    "G2": "shortage->c.morale-=10/-12->outputMult morale-tier multiplier next turn",
+    "G3": "storm damages tile->production skip->repair() spends parts+engineer->restores output",
+    "G4": "price() = BASEPRICE*drift[g]*stockF(res[g]/cap)",
+    "G5": "refugee/contam choice branches write distinct res/col mutations, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ash is an unconsumed free input (soilworks makes soil with no ash resource tracked/depleted), so the ash->soil->food chain's first link is nominal rather than a true resource drain, though this matches the header's stated design assumption."
+}
+```

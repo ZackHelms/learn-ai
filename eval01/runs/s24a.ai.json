@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1** — Single `state` object; `makeRng(seed)` mulberry32 used via `state.rng` for all rng calls; `endTurn()` calls production→needs→morale→storm→caravan→event→finalize in fixed order. Score 2.
+
+**F2** — `generateMap(rng)` builds 8x8 grid from seeded rng; `canPlaceBuilding` checks `def.terrainReq`; `adjacencyMult` in `workerEffectiveness` multiplies produced amounts. Score 2.
+
+**F3** — Chains: scraper(ash)→soilsynth(soil)→greenhouse(food); quarry(ore)→forge(metal). `computeCaps`/`addResource` enforce caps and log overflow loss. Score 2.
+
+**F4** — Colonist records `{skill,fatigue,morale,job,assignedTile}`; both `skillMult` and `fatigueMult` read in `workerEffectiveness`, used in `resolveProduction`. Score 2.
+
+**F5** — `resolveNeeds` consumes food/water, sets morale `target` lower on shortage, drifts morale toward target (recoverable); morale feeds `moraleMult` in output formula. Score 2.
+
+**F6** — 10 nodes in `RESEARCH_DEFS`; `canResearch` checks `node.prereq.every(...)`; `doResearch` deducts cost; effects read live (e.g. `state.research.efficientfarming.done` in `workerEffectiveness`, `isBuildingUnlocked`). Score 2.
+
+**F7** — 14 events in `EVENT_DEFS`; `rngWeightedPick(..., e.weight)`; 5 events (`wanderers`, `contaminatedwell`, `engineer`, `stormscouts`, `blackmarket`) have 2-3 choices with distinct state mutations; `eventCooldowns` checked in `maybeEvent`. Score 2.
+
+**F8** — `tradePrices` reads `scarcity(state,res)` (stockpile-based) and `market.drift[res]` (drifts each `generateCaravan`); `caravan.stock/demand` capped; `buyResource`/`sellResource` both functional. Score 2.
+
+**F9** — `maybeStorm` fires on interval, severity scales with `state.turn`; `b.building.hp` reduced, read via `hpFactor` in `workerEffectiveness`; `computeStormMitigation` reads research+windbreak count; `repairBuilding` spends parts, restores hp. Score 2.
+
+**F10** — `serializeState` outputs JSON to `#savebox` textarea; `deserializeState` validates required fields/types, throws descriptive errors shown in `#saveerr`. Score 2.
+
+**F11** — `tryFinalize`: win (turn≥60, pop≥12, needsMet) and lose (pop==0) both reachable; `computeScore` combines pop/research/turn/stock; `renderSummaryModal` shows summary. Score 2.
+
+**F12** — `switchTab` toggles panels; log lines show `T${e.turn}`; extensive `data-tip` tooltips explaining formulas; keydown handler for Space/1-6; `@media (max-width:480px)` reflow. Score 2.
+
+**F13** — `runTests()` asserts real invariants (storage cap, prereq enforcement, save/load hash match, win/lose reachability); `runBenchmark`/`greedyTurn` run headless loop, `hashState` printed via `benchmarkReport`. Score 2.
+
+**G1** — `state.research.efficientfarming/deepdrilling/waterrecycling/geothermalboost` read directly inside `workerEffectiveness`'s `researchMult`, applied every production tick, shown via tooltip breakdown. Score 4.
+
+**G2** — `resolveNeeds` shortfall sets lower `target` morale → `c.morale` drifts down → `moraleMult` in `workerEffectiveness` cuts output; recovery via target rising when stocked. Score 4.
+
+**G3** — `maybeStorm` reduces `b.building.hp` → `hpFactor` cuts `workerEffectiveness` output → `repairBuilding` spends parts scaled to damage → `b.hp=b.maxHp` restores output. Score 4.
+
+**G4** — `tradePrices` reads `scarcity()` (stockpile ratio) and `market.drift[res]` (random-walked each caravan) to set buy/sell. Score 4.
+
+**G5** — `wanderers` choices add colonists/spend resources/turn away lowers morale; `contaminatedwell` choices set `tempBuffs.waterCapPenalty` or damage a colonist's morale/fatigue — all write `state`, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls resolveProduction/resolveNeeds/maybeStorm/maybeCaravan/maybeEvent in fixed order using state.rng",
+    "F2": "canPlaceBuilding checks def.terrainReq; adjacencyMult applied in workerEffectiveness alters output",
+    "F3": "scraper->soilsynth->greenhouse chain; addResource enforces computeCaps and logs overflow",
+    "F4": "skillMult/fatigueMult in workerEffectiveness read colonist.skill/fatigue, used in resolveProduction",
+    "F5": "resolveNeeds lowers morale target on foodShort/waterShort; moraleMult used in workerEffectiveness",
+    "F6": "canResearch enforces node.prereq.every(...); efficientfarming.done read in workerEffectiveness",
+    "F7": "14 EVENT_DEFS, rngWeightedPick by weight; 5 choice-events mutate state differently; eventCooldowns gate maybeEvent",
+    "F8": "tradePrices() reads scarcity(state,res) and market.drift[res] drifted in generateCaravan",
+    "F9": "maybeStorm scales severity with state.turn, reduces b.hp; hpFactor cuts workerEffectiveness; repairBuilding spends parts",
+    "F10": "serializeState fills #savebox; deserializeState validates fields and throws, shown in #saveerr",
+    "F11": "tryFinalize checks turn>=60/pop>=12 (win) and pop==0 (lose); computeScore feeds renderSummaryModal",
+    "F12": "switchTab toggles panels; logline shows T${e.turn}; keydown handles Space/1-6; media query reflows layout",
+    "F13": "runTests asserts prereq/cap/hash invariants; runBenchmark+greedyTurn print hashState headlessly",
+    "G1": "researchMult in workerEffectiveness reads efficientfarming/deepdrilling/waterrecycling/geothermalboost each production tick",
+    "G2": "resolveNeeds shortfall lowers morale target -> c.morale drifts -> moraleMult cuts workerEffectiveness output",
+    "G3": "maybeStorm cuts b.hp -> hpFactor cuts workerEffectiveness -> repairBuilding spends parts and restores hp",
+    "G4": "tradePrices() = base * drift * scarcity-derived factor, drift updated each generateCaravan call",
+    "G5": "wanderers/contaminatedwell choice.apply() write state.colonists, resources, tempBuffs, not just logEvent"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "None found at the wiring level; all 13 systems are interconnected through real state reads rather than isolated stubs."
+}
+```

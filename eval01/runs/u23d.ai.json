@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** Single `G` object; `rand()` mulberry32 reads/writes `G.rngState`; `endTurn()` calls tickProduction→tickNeeds→tickMorale→resolveStorm→tickCaravan→tickGrowth→tickEvents→checkEnd in fixed order. Score 2.
+
+**F2 (Map):** 64-tile grid; terrain from `rand()` noise in `newGameState`; `canBuild` checks `def.terr.includes(t.terrain)`; `adjCount()` changes water/ore/food/scrip yields in `tickProduction`. Score 2.
+
+**F3 (Economy):** `forge` consumes ore+power→metal; `greenhouse` consumes soil+water→food; `capOf()` caps enforced in `addRes`, overflow logged to `G.lostTotal`. Score 2.
+
+**F4 (Population):** Colonist records `{skill,fatigue,morale,job,assigned}`; `effOf()` reads skill+fatigue+morale, used in `tickProduction`. Score 2.
+
+**F5 (Needs):** `tickNeeds` consumes food/water, sets `fedFood/fedWater`; `tickMorale` penalizes morale on shortage; `effOf` reads morale; morale recovers +2/turn when fed. Score 2.
+
+**F6 (Research):** 11 nodes; `researchState()` enforces `pre` array; `buyResearch` deducts cost; effects read via `G.research.includes(...)` in production/caps/popCap/trade/storm. Score 2.
+
+**F7 (Events):** 13 events; weighted pick in `tickEvents` (`e.w`, cumulative `r -= e.w`); 5 events (`refugees`,`sickness`,`wanderer`,`festival`,`contamination`) have 2-3 choices with distinct `apply()`; `G.evCd[ev.id]=G.turn+8` cooldown filtered in pool. Score 2.
+
+**F8 (Trade):** `priceRaw` uses `G.res[r]/capOf(r)` and `G.market.drift[r]`; `cv.inv[r]` decremented/capped; `doBuy`/`doSell` both functional. Score 2.
+
+**F9 (Hazard):** `resolveStorm` fires every 8 turns, severity `1+floor(turn/24)`; `tickProduction` scales by `b.hp/100` and disables at `hp<=25`; `r_shut`/windbreak reduce damage; `tryRepair` costs 2 parts+labor. Score 2.
+
+**F10 (Save/load):** `saveString()`=`JSON.stringify(G)`; `loadFromString` parses, validates fields (turn/res/map/colonists/research), returns descriptive error string. Score 2.
+
+**F11 (End conditions):** `checkEnd` win (turn≥60,pop≥12,no shortage) and lose (pop=0) both reachable; `score()` combines pop/research/stock/turns; `showEndModal` renders summary. Score 2.
+
+**F12 (UI):** `switchTab`/`TABS` wired to nav buttons; log lines show `T`+turn; `data-tt` tooltips explain formulas; keydown handles Space/1-6; `@media(max-width:520px)` adapts layout. Score 2.
+
+**F13 (Dev panel):** `runTests()` has 19 substantive assertions (PRNG determinism, terrain rules, caps, roster consistency, save round-trip); `runBenchmark()` runs 200 headless turns via `greedyPolicy`+`endTurn(true)`, prints `hashState`. Score 2.
+
+**G1:** `G.research.includes('r_sift')` etc. read as multiplier `mul` inside `tickProduction` switch cases every turn. Score 4.
+
+**G2:** `tickNeeds`→`fedFood=false`→`tickMorale` morale−10/−12→`effOf` morale term multiplies output in `tickProduction`. Score 4.
+
+**G3:** `resolveStorm` reduces `b.hp`→`tickProduction` uses `hpF=b.hp/100` and disables at ≤25→`tryRepair` spends 2 parts, restores hp+35. Score 4.
+
+**G4:** `priceRaw` reads `G.res[r]/capOf(r)` (stockpile) and `G.market.drift[r]` (random-walked each turn in `tickCaravan`), used by both `buyPrice`/`sellPrice`. Score 4.
+
+**G5:** `refugees` choice `addColonist()`/`allMorale(-8)`/`subRes+allMorale`; `sickness` choice `fatigue=100+unassign` vs `subRes(parts)+allFatigue` — distinct durable state writes, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "rand() reads/writes G.rngState; endTurn() calls systems in fixed documented order",
+    "F2": "adjCount() used in tickProduction to modify water/ore/food/scrip yields",
+    "F3": "forge consumes ore+power->metal; addRes() enforces capOf() with overflow logging",
+    "F4": "effOf() reads c.skill, c.fatigue, c.morale, used in tickProduction",
+    "F5": "tickNeeds sets fedFood/fedWater; tickMorale penalizes/recovers; effOf reads morale",
+    "F6": "researchState() enforces pre[]; G.research.includes checked in ~8 production/cap/trade sites",
+    "F7": "tickEvents weighted pick via e.w; 5 choice-events; G.evCd cooldown filter",
+    "F8": "priceRaw reads G.res[r]/capOf(r) and G.market.drift[r]; doBuy/doSell both mutate state",
+    "F9": "resolveStorm damages b.hp; tickProduction scales by hpF; tryRepair spends 2 parts",
+    "F10": "saveString()=JSON.stringify(G); loadFromString validates and returns error string",
+    "F11": "checkEnd() win/lose both reachable; score() combines 4 state values; showEndModal renders",
+    "F12": "switchTab wired to nav; data-tt tooltips; keydown Space/1-6; @media(max-width:520px)",
+    "F13": "runTests() 19 real-invariant assertions; runBenchmark() 200-turn headless w/ hashState",
+    "G1": "G.research.includes('r_sift') read as mul in tickProduction switch, every relevant turn",
+    "G2": "fedFood=false -> tickMorale morale-10 -> effOf morale term -> tickProduction output",
+    "G3": "resolveStorm reduces b.hp -> hpF factor in tickProduction -> tryRepair spends parts, +35 hp",
+    "G4": "priceRaw combines G.res[r]/capOf(r) and drifting G.market.drift[r] updated each tickCaravan",
+    "G5": "refugees/sickness choices write addColonist/morale/fatigue/resources, not just log()"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Base-tier resources (soil, ore, power) are generated from terrain without consuming any tracked input, so chains are only truly two-input at the second tier (forge, greenhouse)."
+}
+```

@@ -1,0 +1,68 @@
+## Worksheet
+
+**F1 (Core loop):** Game class holds state; mulberry32(seed) used for all RNG (terrain, colonists, events, storms, trade); endTurn() resolves storm→consumption→morale→produce→event→trade→decay→win/loss in fixed order. Score 2.
+
+**F2 (Map):** 8x8 loop in constructor; generateTerrain(rng,x,y) seeded; canBuild() checks building.terrain.includes(tile.terrain); adjacency loop in produceResources multiplies `adjacency` into produce. Score 2.
+
+**F3 (Economy):** conversions[] (ore→metal, ash→soil→food) consume input/produce output in produceResources; global storage_capacity=100 checked, overflow drops resources. Score 2.
+
+**F4 (Population):** colonist records {name,job,skills,fatigue,morale}; skill_bonus=c.skills[building.skill] read in produce formula, but fatigue is only written (+=1/-=1), never read by any formula. Score 1.
+
+**F5 (Needs):** food/water -=1/colonist/turn; shortage sets morale-=5; but produceResources never reads morale, so "morale changes output" is absent. Score 1.
+
+**F6 (Research):** 8 nodes, canResearch() enforces prereqs+cost, doResearch() deducts cost; but 4/8 nodes (advanced_forge, soil_science, preservation, advanced_lab) have zero effect code — only flag flip + log. Score 1.
+
+**F7 (Events):** 10 EVENTS, weighted fireEvent() with cooldown via fired_events[id]; but outcome is picked by `Math.floor(this.rng()*event.outcomes.length)` — never player-selected, so "offers choices" is not implemented as player agency. Score 1.
+
+**F8 (Trade):** updateTradeState() drifts trade_supply + reads resources[res]>200; buyResource/sellResource both wired to UI; but no caravan stock/inventory cap exists anywhere. Score 1.
+
+**F9 (Hazard):** ashstorm_timer periodic, severity=turn/60 scales damage/water loss; tile.building_health drives health_factor in produceResources (real output loss); shelter_tech raises storm_damage_reduction (read in triggerAshstorm); but no "repair" function/button exists anywhere — damage is permanent. Score 1.
+
+**F10 (Save/load):** serialize() JSON->textarea; Game.deserialize() try/catch throws 'Invalid save file', loadGame() alerts error. Score 2.
+
+**F11 (End conditions):** win: turn>=60 && pop>=12 && food/water>=20; lose: colonists.length===0; calculateScore() combines pop/research/scrip/turn; renderGameOverModal() shown when game_over. Score 2.
+
+**F12 (UI):** switchTab() works; log() stores {turn,text} shown as "Turn N"; keydown listener wires Space/1-6 to real functions; media query adapts layout; but tooltips (title attrs) are static descriptions, not derivations of displayed numbers. Score 1.
+
+**F13 (Dev panel):** runTests() checks 15 real invariants (morale range, save/load round-trip, cooldowns, prereqs); runBenchmark() runs 200 turns on a separate deserialized instance headlessly, prints state_hash. Score 2.
+
+**G1:** doResearch() for ore_refining/irrigation/power_grid does one-time `resources.x += 5`; produceResources() never reads research_done at all — no persistent yield modifier exists. Score 0.
+
+**G2:** food<0 → `c.morale -= 5` is a real state write, but produceResources formula uses only skill_bonus/health_factor/adjacency — morale never multiplies output. Score 1.
+
+**G3:** triggerAshstorm() sets tile.building_health -= 0.3; health_factor read in produceResources reduces output; but no repair function/button exists anywhere in source, so recovery is impossible. Score 2.
+
+**G4:** updateTradeState() sets trade_prices[res] = 2 + trade_supply[res] (rng drift) + stockpile discount if resources[res]>200; read by buyResource/sellResource. Score 3.
+
+**G5:** settler_arrival ("Welcome"=addColonist+food-10 vs "Turn away"=nothing) and morale_crisis outcomes durably mutate resources/colonists.morale differently; but outcome is chosen via rng, not player click. Score 3.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 0, "G2": 1, "G3": 2, "G4": 3, "G5": 3},
+  "evidence": {
+    "F1": "mulberry32(seed) drives terrain/colonists/events/storms; endTurn() fixed order",
+    "F2": "generateTerrain(rng) seeds terrain; canBuild() checks terrain; adjacency loop scales produce",
+    "F3": "conversions[] (ore->metal, ash->soil->food) consumed/produced; overflow drop on total>storage_capacity",
+    "F4": "c.skills[building.skill] read in produce formula; fatigue only written, never read",
+    "F5": "food<0 triggers morale-=5, but produceResources never reads morale",
+    "F6": "ore_refining/irrigation/power_grid/shelter_tech apply effects; advanced_forge/soil_science/preservation/advanced_lab do nothing",
+    "F7": "10 EVENTS with weighted fireEvent()+cooldown, but outcome picked by rng not player",
+    "F8": "updateTradeState() drift+stockpile pricing, buy/sell wired, but no caravan inventory cap",
+    "F9": "building_health -= 0.3 in triggerAshstorm, health_factor cuts output, but no repair() exists",
+    "F10": "serialize()/deserialize() with try/catch error shown via alert() in loadGame()",
+    "F11": "win/lose checks in endTurn(); calculateScore() combines 4 fields; renderGameOverModal()",
+    "F12": "switchTab(), log({turn,text}), keydown shortcuts, media query; tooltips are static text only",
+    "F13": "runTests() 15 real invariants; runBenchmark() 200-turn headless run prints state_hash",
+    "G2": "shortfall writes c.morale-=5 (real), but produceResources formula never reads morale",
+    "G3": "triggerAshstorm damages tile.building_health, health_factor cuts produce, no repair fn exists",
+    "G4": "trade_prices[res] = 2 + trade_supply[res] + stockpile term, read by buy/sellResource",
+    "G5": "settler_arrival/morale_crisis outcome branches write different resources/morale changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research unlocks mostly grant one-time resources instead of persistent yield modifiers, and event outcomes are RNG-resolved rather than player choices, so the core research->production and choice->state chains are largely disconnected."
+}
+```

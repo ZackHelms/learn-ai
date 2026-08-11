@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** GameState class = single state object; mulberry32 rng used throughout (map gen, colonist job, events, storms); advanceTurn() runs production→consumption→events→hazard→morale→winlose in fixed order. Score 2.
+
+**F2 (Map):** 64-tile array, terrain from this.rng() in generateMap(); canBuild() checks building.terrain.includes(tile.terrain); getAdjacencyBonus() feeds into production amt calc in runProduction(). Score 2.
+
+**F3 (Economy):** forge consumes ore+power→metal, greenhouse consumes water→food; resourceCaps enforced via Math.min in runProduction; overflow capped not lost. Score 2.
+
+**F4 (Population):** colonists have skill{job}, fatigue, morale, assigned; skill and fatigue both read in runProduction (`skill/5`, fatigue>30 halves output). Score 2.
+
+**F5 (Needs):** runConsumption() drains food/water; foodShortest/waterShortest drop morale in updateMorale(); BUT morale never read by runProduction — no output-formula link found. Missing required part. Score 1.
+
+**F6 (Research):** 8 nodes defined; costs deducted in doResearch(); only 5/8 nodes' `.done` flags are ever read (betterFarming, advancedOre, waterConserve, labExpansion, stormShield) — powerEfficiency/massCulture/resilience unused; also massCulture/resilience prereqs check `game.map.some(t=>t.building===prereq)` against research keys, permanently unsatisfiable (bug). Score 1.
+
+**F7 (Events):** EVENT_DEFS has 10 entries; selection is uniform `Math.floor(rng()*events.length)`, not weighted; only 3 events (sickness, visitor, contamination) have choices, not 4+; cooldown logic (getAvailableEvents) is a buggy global-turn threshold, never per-event reset. Score 1.
+
+**F8 (Trade):** tradePrices set once in constructor, never updated (tradeVol defined but unused) — no stockpile/drift response; doTrade() buy/sell functional but caravan has no inventory cap. Score 1.
+
+**F9 (Hazard):** fireAshstorm() fires at nextStormTurn, stormSeverity*=1.1 after each; tile.damage>=2 blocks production in runProduction; wall/stormShield reduce dmg; repairBuilding() spends parts and restores output. Score 2.
+
+**F10 (Save/load):** serialize() to JSON, doSave copies via textarea+execCommand; deserialize() try/catch throws 'Invalid save file' shown via alert in doLoad. Score 2.
+
+**F11 (End conditions):** lose check (pop===0) reachable; win check requires colonists.length>=12, but no code ever increases population (visitor "recruit" effect{population:1} is a no-op because applyEvent's population loop `i<-effect[key]` never runs for positive values) — win is unreachable. Score 1.
+
+**F12 (UI):** tabs wired via delegated click listener; log entries show `TURN ${entry.turn}`; keyboard Space/Digit1-5 wired in keydown; @media(max-width:600px) present; but `.tooltip-anchor` class defined in CSS is never emitted by any render function — dead. Score 1.
+
+**F13 (Dev panel):** runTests() has 15 real invariant checks (resource caps, skill/morale/fatigue ranges, save/load hash roundtrip); runBenchmark() runs 200 headless advanceTurn() calls and prints stateHash(). Score 2.
+
+**G1:** betterFarming.bonus.food and advancedOre.bonus.ore read directly in runProduction() output calc every relevant turn; gap: 3/8 nodes unused. Score 3.
+
+**G2:** food<5/water<5 sets morale delta in updateMorale() (real state change), but runProduction() never reads colonist.morale — final "reduced output" link absent. Score 1.
+
+**G3:** fireAshstorm() sets tile.damage; runProduction() skips output when damage>=2; repairBuilding() spends parts and decrements damage restoring output. Score 3.
+
+**G4:** tradePrices object set once in constructor, never reassigned anywhere in advanceTurn or elsewhere; tradeVol unused. Score 0.
+
+**G5:** sickness choices mutate food or pop differently; contamination choices mutate water/food differently — both write real resource deltas via applyEvent(), not just logs. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 2, "11": 1, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 3, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "GameState + mulberry32 rng + advanceTurn() fixed phase order",
+    "F2": "canBuild() checks terrain; getAdjacencyBonus() used in runProduction amt calc",
+    "F3": "forge consumes ore/power->metal; resourceCaps enforced via Math.min",
+    "F4": "assigned.skill[bldg.labor] and assigned.fatigue read in runProduction",
+    "F5": "updateMorale() drops morale on shortage but runProduction never reads c.morale",
+    "F6": "8 nodes, but only 5/8 .done flags read anywhere; massCulture/resilience prereq unsatisfiable",
+    "F7": "10 EVENT_DEFS but uniform rng pick, only 3 events have choices, buggy cooldown",
+    "F8": "tradePrices fixed in constructor, never updated; tradeVol unused",
+    "F9": "fireAshstorm damages tiles, runProduction skips dmg>=2, repairBuilding spends parts",
+    "F10": "serialize()/deserialize() with try/catch throwing 'Invalid save file'",
+    "F11": "checkWinLose pop>=12 unreachable, no code ever increments colonists array",
+    "F12": ".tooltip-anchor defined in CSS, never emitted by any render function",
+    "F13": "runTests() 15 invariants; runBenchmark() 200-turn headless loop + stateHash()",
+    "G1": "betterFarming.bonus.food read in runProduction output formula every turn",
+    "G2": "foodShortest sets morale delta in updateMorale but morale unused in production formula",
+    "G3": "tile.damage set by fireAshstorm, checked in runProduction, cleared by repairBuilding",
+    "G4": "tradePrices never reassigned after constructor init",
+    "G5": "sickness/contamination choice effects write distinct resource/population deltas via applyEvent"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale never feeds back into production output, and population can never grow, making the win condition (pop>=12) permanently unreachable."
+}
+```

@@ -1,0 +1,64 @@
+## Worksheet
+
+**F1 — Core loop**: `state` object; `makeRng`/mulberry32 seeded PRNG used via `rngInt/rngChance/rngPick/rngWeightedPick`; `endTurn()` calls production→needs→morale→storm→caravan→event→finalize in fixed order. Score 2.
+
+**F2 — Map**: `generateMap` builds 8x8 grid from `rng.next()`; `canPlaceBuilding` checks `def.terrainReq.includes(tile.terrain)`; `hasAdjacent`+`def.adjacency.mult` multiplies `eff` in `workerEffectiveness`, changing production. Score 2.
+
+**F3 — Economy**: chains scraper(ash)→soilsynth(soil)→greenhouse(food); quarry(ore)→forge(metal); `computeCaps`/`addResource` enforce caps and log overflow. Score 2.
+
+**F4 — Population**: colonists have `skill,fatigue,morale,job,assignedTile`; both `skill` and `fatigue` read in `workerEffectiveness`, feeding `resolveProduction`. Score 2.
+
+**F5 — Needs**: `resolveNeeds` consumes food/water per pop; shortage lowers `target` morale; morale drives `moraleMult` in `workerEffectiveness`; delta clamped ±8/turn so recovery is gradual not instant. Score 2.
+
+**F6 — Research**: 10 nodes in `RESEARCH_DEFS`; `canResearch` enforces `prereq.every(done)`; `doResearch` deducts scrip/parts; each id (smelting, efficientfarming, waterrecycling, etc.) read by `isBuildingUnlocked`/`workerEffectiveness`/`resolveNeeds`/`computeStormMitigation`/`tradePrices`. Score 2.
+
+**F7 — Events**: 14 entries in `EVENT_DEFS`; `rngWeightedPick(...,e=>e.weight)`; 5 events (`wanderers`, `contaminatedwell`, `engineer`, `stormscouts`, `blackmarket`) have 2-3 choices with distinct `apply`; `eventCooldowns` filtered in `maybeEvent`. Score 2.
+
+**F8 — Trade**: `tradePrices` reads `scarcity(state,res)` (stockpile) and `market.drift` (updated in `generateCaravan` via rng); `caravan.stock/demand` finite and decremented; `buyResource`/`sellResource` both functional. Score 2.
+
+**F9 — Hazard**: `maybeStorm` periodic via `nextStormInterval`; `severity = 0.15+turn*0.01` grows with turn; `hpFactor=building.hp/maxHp` in `workerEffectiveness` reduces output; `computeStormMitigation` reads research+windbreak buildings; `repairBuilding` costs parts scaled to damage. Score 2.
+
+**F10 — Save/load**: `serializeState`→JSON into `#savebox` textarea for copy; `deserializeState` validates required fields/map size/resource types, throws clear `Error`, caught in `onLoad` and shown in `#saveerr`. Score 2.
+
+**F11 — End conditions**: `tryFinalize` checks `colonists.length<=0` (lose) and `turn>=60` with pop≥12/needsMet (win) vs timeup; both reachable from `endTurn`; `computeScore` combines pop/research/turn/stockpile; `renderSummaryModal` shows it. Score 2.
+
+**F12 — UI**: `switchTab` wired to `#tabnav` buttons; log lines show `T${e.turn}`; `data-tip` + mousemove tooltip handler; keydown listener for Space/1-6; `@media max-width:480px` layout. Score 2.
+
+**F13 — Dev panel**: `runTests` asserts cap enforcement, prereq gating, terrain checks, morale/fatigue bounds, save/load hash equality, win/lose triggers — non-trivial; `runBenchmark`/`greedyTurn` runs headless loop, `hashState` printed via `benchmarkReport`. Score 2.
+
+**G1**: `state.research.efficientfarming.done` etc. read in `workerEffectiveness` → `researchMult` → multiplies `eff` → scales `def.produces` in `resolveProduction`; effectiveness shown in mapside panel. Score 4.
+
+**G2**: `resolveNeeds` shortfall sets lower `target` morale → `c.morale` updated → `moraleMult` in `workerEffectiveness` reduces `eff` → reduces production next turn. Score 4.
+
+**G3**: `maybeStorm` reduces `b.building.hp` → `hpFactor` cuts `eff` in `workerEffectiveness` → `repairBuilding` spends `parts` scaled to damage and restores `hp=maxHp`. Score 4.
+
+**G4**: `tradePrices` reads `scarcity(state,res)` from `state.resources` and `state.market.drift` (mutated per caravan in `generateCaravan`) for both buy/sell formulas. Score 4.
+
+**G5**: `wanderers` choices mutate `state.colonists`/`resources` differently per branch; `contaminatedwell` choices mutate `tempBuffs` vs individual colonist `morale/fatigue` — real state, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "makeRng/endTurn fixed order: resolveProduction, resolveNeeds, resolveMoraleZero, maybeStorm, maybeCaravan, maybeEvent, tryFinalize",
+    "F2": "generateMap uses rng; canPlaceBuilding checks terrainReq; adjacencyMult in workerEffectiveness scales eff",
+    "F3": "scraper->ash->soilsynth->soil->greenhouse->food; quarry->ore->forge->metal; addResource enforces caps/overflow",
+    "F4": "colonist.skill, colonist.fatigue read directly in workerEffectiveness, feeding resolveProduction",
+    "F5": "resolveNeeds sets morale target lower on foodShort/waterShort; moraleMult used in workerEffectiveness",
+    "F6": "RESEARCH_DEFS x10; canResearch enforces prereq; doResearch deducts cost; ids read in workerEffectiveness/computeStormMitigation/tradePrices",
+    "F7": "EVENT_DEFS x14, rngWeightedPick by weight; 5 choice events (wanderers etc.) with distinct apply(); eventCooldowns gate maybeEvent",
+    "F8": "tradePrices() reads scarcity(state.resources) and market.drift; buyResource/sellResource both mutate state and caravan stock/demand",
+    "F9": "maybeStorm severity grows with turn; hpFactor in workerEffectiveness cuts output; repairBuilding costs parts, restores hp",
+    "F10": "serializeState->savebox textarea; deserializeState validates fields, throws Error shown in #saveerr",
+    "F11": "tryFinalize checks pop<=0 and turn>=60+conditions; computeScore combines multiple stats; renderSummaryModal displays it",
+    "F12": "switchTab wired to tabnav buttons; logline shows T${turn}; data-tip tooltip system; keydown Space/1-6; @media narrow layout",
+    "F13": "runTests asserts cap/prereq/terrain/morale invariants; runBenchmark+hashState print state hash headlessly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "effectivenessBreakdown() tooltip omits the research/buff multipliers it applies, so the per-worker number breakdown is incomplete even though the aggregate effect is correct."
+}
+```

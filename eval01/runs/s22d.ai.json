@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: `game` state object; `nextRand()` mulberry-32-style PRNG used for terrain/events/storms/trade drift; `endTurn()`→`beginTurnPart1`/`finishTurnPart2` resolves storm→production→upkeep→morale→skill→strikes→event→trade→turn++ in fixed order. Score 2.
+
+**F2 – Map**: 8x8 `grid` built from `pick(s, weightsTable)` (seeded); `canBuild()` checks `def.terrain.includes(tile.terrain)`; `adjBonus` (e.g. greenhouse+water) read in `buildingYieldMultiplier` via `neighbors()`. Score 2.
+
+**F3 – Economy**: ashscoop→ash, greenhouse consumes ash+water→food; mine→ore, forge consumes ore+power→metal; workshop consumes metal→parts; caps enforced/overflow logged in `addResourceWithOverflowLog`. Score 2.
+
+**F4 – Population**: colonist records with skill/skillXP/fatigue/morale/job/assignedBuildingId; `skillMult`/`fatigueMult` in `buildingYieldMultiplier` read `worker.skill`/`worker.fatigue`. Score 2.
+
+**F5 – Needs**: `resolveUpkeep()` consumes food/water per colonist; shortage sets `foodShort/waterShort` → `resolveMoraleFatigue` drops morale −8; morale feeds `moraleMult` in production; recovery via surplus/rest bonuses and strike (not instant death). Score 2.
+
+**F6 – Research**: 10 nodes r1–r10; `purchaseResearch` enforces `node.prereq.every(...)` and deducts cost; effects mutate `researchEffects` read by `buildingYieldMultiplier` and `buildingUnlocked`. Score 2.
+
+**F7 – Events**: 11 events; `rollEvent` does weighted pick over `eligible` by `e.weight`; 5 choice events (festival/raid/ruins/fungus/dispute) with differing state effects; `eventCooldowns` checked in `weightedEligibleEvents`. Score 2.
+
+**F8 – Trade**: `tradePrice()` reads `stockRatio` and `s.market.demand`; caravan `inventory.sell`/`buyLimit` decremented on trade and don't replenish; both `caravanSell` (buy from caravan) and `caravanBuy` (sell to caravan) wired to buttons. Score 2.
+
+**F9 – Hazard**: `resolveStorm()` fires on `turn % interval`; `baseSeverity` grows with `s.turn`; `b.damaged` zeroes output in `buildingYieldMultiplier`; `stormwall`/research (`stormMult`) reduce severity; `repairBuilding` costs parts and clears flag. Score 2.
+
+**F10 – Save/load**: `serializeState`→`JSON.stringify` into textarea (copyable text); `loadFromText` parses JSON, `validateStateShape` checks required fields/grid length, shows error in `#loadErr`. Score 2.
+
+**F11 – End conditions**: `checkEndConditions` sets `collapse` (pop 0), `win` (pop≥12 & food/water≥10 @turn60), `timeout`; `computeScore` uses pop/research/turn/stock; `renderEndScreen` shows summary. Score 2.
+
+**F12 – UI**: tab clicks wired in `#tabbar` listener; log lines show `[T${e.turn}]`; extensive `title=` tooltips (`RES_TOOLTIP`, `buildTooltip`); keys `Space`/`1-5` wired in keydown handler; `@media (max-width:700px)` + flex-wrap bars adapt layout. Score 2.
+
+**F13 – Dev panel**: `runTests()` asserts real invariants (caps, prereqs, strike-not-death, repair cost, cooldown, RNG determinism, save/load hash); `runBenchmark`/`greedyPolicyTurn` runs 200 turns headless and `stateHash` printed via `fnv1a`. Score 2.
+
+**G1**: research effect `s.researchEffects.greenhouseMult*=1.25` (r1) read in `buildingYieldMultiplier` via `researchMult`, applied every production tick. Score 4.
+
+**G2**: `resolveUpkeep` shortage flags → `resolveMoraleFatigue` (`delta-=8`) → `c.morale` → `moraleMult` in `buildingYieldMultiplier`, full chain each turn. Score 4.
+
+**G3**: `resolveStorm` sets `b.damaged=true` → `buildingYieldMultiplier` returns 0 → `repairBuilding` spends 5 parts, clears flag, restoring output. Score 4.
+
+**G4**: `tradePrice` multiplies `BASE_PRICE` by `stockRatio` (player resources) and `s.market.demand[res]` (drifted each turn in `finishTurnPart2`). Score 4.
+
+**G5**: `apFestivalYes` mutates food/water/morale; `apRaidFight`/`apRaidPay` mutate fatigue/morale/scrip differently — real state writes, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() runs beginTurnPart1/finishTurnPart2 fixed order; nextRand(s) used throughout",
+    "F2": "canBuild() checks def.terrain.includes(tile.terrain); adjBonus read in buildingYieldMultiplier",
+    "F3": "forge consumeBase{ore,power}->metal; addResourceWithOverflowLog clamps to caps",
+    "F4": "buildingYieldMultiplier reads worker.skill and worker.fatigue",
+    "F5": "resolveUpkeep sets foodShort/waterShort; resolveMoraleFatigue applies -8 delta; moraleMult used in production",
+    "F6": "purchaseResearch enforces node.prereq; researchEffects.greenhouseMult read in buildingYieldMultiplier",
+    "F7": "rollEvent weighted-picks eligible EVENTS; eventCooldowns checked in weightedEligibleEvents",
+    "F8": "tradePrice reads stockRatio/demand; caravanSell/caravanBuy both wired to Trade tab buttons",
+    "F9": "resolveStorm severity=0.18+turn*0.004; b.damaged zeroes output; repairBuilding costs parts",
+    "F10": "serializeState -> textarea; loadFromText validates via validateStateShape, shows loadErr",
+    "F11": "checkEndConditions sets win/collapse/timeout; computeScore uses pop/research/turn/stock; renderEndScreen",
+    "F12": "keydown handler wires Space/1-5; RES_TOOLTIP/buildTooltip title attrs; media query for grid2",
+    "F13": "runTests asserts prereqs/caps/strike/hash; runBenchmark+greedyPolicyTurn headless with stateHash",
+    "G1": "researchEffects.greenhouseMult set by r1 effect, read in buildingYieldMultiplier researchMult",
+    "G2": "resolveUpkeep shortage -> resolveMoraleFatigue morale-8 -> moraleMult in buildingYieldMultiplier",
+    "G3": "resolveStorm sets b.damaged -> yieldMultiplier returns 0 -> repairBuilding spends parts, clears flag",
+    "G4": "tradePrice() multiplies BASE_PRICE by stockRatio and s.market.demand drifted in finishTurnPart2",
+    "G5": "apFestivalYes/apRaidFight/apRaidPay mutate food/water/morale/fatigue/scrip differently per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ash->soil->food chain is collapsed into a single greenhouse step (soil never exists as a tracked resource) rather than a true 3-stage chain."
+}
+```

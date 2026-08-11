@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `gameState` single object; `mulberry32` seeded rng used everywhere (no `Math.random` found); `endTurn()` calls `updateResources→updateColonists→checkAshstorm→fireEvent→trade` in fixed order. Score 2.
+
+**F2 — Map**: `generateMap()` builds 8x8 from `gameState.rng()`; `buildBuilding()` checks `building.terrain.includes(tile.terrain)`; `getTileAdjacencies` feeds `adjacencyMult` into `resolveProduction()` output. Score 2.
+
+**F3 — Economy**: scavenger produces `parts` with no input, `lab` consumes `parts`→`scrip` (real chain); caps enforced/overflow logged in `updateResources()`. Score 2.
+
+**F4 — Population**: colonists have skill/fatigue/morale/job; `skillBonus` reads `c.skill` in `resolveProduction()`, but `fatigue` is never read by production, only by `updateColonists()` recovery. Score 1.
+
+**F5 — Needs**: `updateColonists()` consumes food/water, shortage drops morale -15, fatigue/morale recover; but morale is never read in `resolveProduction()` so it never changes output. Score 1.
+
+**F6 — Research**: 8 nodes in `RESEARCH_TREE`; prereqs enforced in `researchAvailable`; costs deducted in `doResearch`; but `trade-hub` and `morale-boost` have zero effect anywhere, and `mining`'s `unlock.buildings:['ore-mine']` is never read (no such building exists). Score 1.
+
+**F7 — Events**: 10 events in `EVENTS`; `fireEvent()` picks via `EVENTS[Math.floor(rng()*EVENTS.length)]` — uniform, not weighted; 8+ events have differing choice effects; `recentEvents` Set gives cooldown. Score 1.
+
+**F8 — Trade**: `updateTradeprices()` reads `gameState.globalSupply`; `tradeInventory` limited and decremented; `tradeResource()` implements both buy/sell branches. Score 2.
+
+**F9 — Hazard**: `checkAshstorm`/`triggerAshstorm` fire periodically, severity grows with `turn`, watchtower/ashfilter reduce severity, `repairBuilding` costs parts; but `resolveProduction()` never checks `b.health`/`b.damaged`, so damage never reduces output. Score 1.
+
+**F10 — Save/load**: `serializeGame()`→JSON text, `copySave()` copies to textarea/clipboard; `deserializeGame()` parses with try/catch and `alert()` on bad input. Score 2.
+
+**F11 — End conditions**: `checkEndConditions()` has both win/lose branches, called in `render()`; `calculateScore()` uses turn/population/research/scrip; `renderEndScreen()` shown. Score 2.
+
+**F12 — UI**: `switchTab` works; `event-turn` shows `entry.turn`; keyboard listener for Space/1-5; media query for narrow screens; but `tooltipBonus` field is defined on buildings and never rendered anywhere. Score 1.
+
+**F13 — Dev panel**: `runTests()` has 15 real invariant assertions (caps, prereqs, terrain validity, PRNG determinism, save/load roundtrip); `runBenchmark()` runs 200 turns via game functions only and prints `gameStateHash()`. Score 2.
+
+**G1**: `resolveProduction()` checks `researchDone.has('smelting-adv'|'hydroponics'|'industry')` directly in formula, multiplies into output — real pipeline but several nodes unused. Score 3.
+
+**G2**: `updateColonists()` writes `c.morale -=15` on shortage (real state change), but `resolveProduction()` never reads `morale` — final link absent. Score 1.
+
+**G3**: `triggerAshstorm()` sets `b.health`/`b.damaged`; `repairBuilding()` spends parts and restores health; but `resolveProduction()` ignores health/damaged entirely, so damaged buildings produce at full rate. Score 1.
+
+**G4**: `updateTradeprices()` derives prices from `gameState.globalSupply`, which drifts via `tradeResource()` buy/sell; updates on each `startTrade()`, not continuously mid-session. Score 3.
+
+**G5**: `resolveEvent()` calls `choice.effect(gameState)`; e.g. `dust-found` (+15 parts vs no-op) and `refugee` (push colonist+population vs no-op) both durably mutate state differently. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 1, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "gameState.rng via mulberry32 used throughout; endTurn() calls systems in fixed order",
+    "F2": "getTileAdjacencies() feeds adjacencyMult into resolveProduction() output calc",
+    "F3": "scavenger outputs parts consumed as lab input to produce scrip; caps enforced in updateResources()",
+    "F4": "c.skill read in resolveProduction() skillBonus; c.fatigue never read by production",
+    "F5": "updateColonists() drops morale on shortage but resolveProduction() never reads morale",
+    "F6": "resolveProduction() checks 'smelting-adv'/'hydroponics'/'industry'; 'trade-hub'/'morale-boost' unused",
+    "F7": "fireEvent() picks EVENTS[Math.floor(rng()*EVENTS.length)] — uniform not weighted",
+    "F8": "updateTradeprices() reads gameState.globalSupply, updated by tradeResource()",
+    "F9": "triggerAshstorm() sets b.health/damaged but resolveProduction() never checks it",
+    "F10": "serializeGame()/deserializeGame() with try/catch + alert() on bad input",
+    "F11": "checkEndConditions() win/lose branches called in render(); calculateScore() + renderEndScreen()",
+    "F12": "switchTab()/keydown listener/media query present; tooltipBonus field never rendered",
+    "F13": "runTests() 15 real invariants; runBenchmark() runs 200 turns headless, prints gameStateHash()",
+    "G1": "resolveProduction() multiplies researchBonus from researchDone.has(...) into output",
+    "G2": "updateColonists() writes c.morale on shortage; resolveProduction() never reads morale",
+    "G3": "triggerAshstorm() damages b.health; resolveProduction() ignores b.health entirely",
+    "G4": "updateTradeprices() computed from gameState.globalSupply, mutated in tradeResource()",
+    "G5": "resolveEvent() -> choice.effect(gameState) durably mutates resources/colonists per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale and building damage are tracked but never read by the production formula, so needs/hazard consequences don't actually reduce output."
+}
+```

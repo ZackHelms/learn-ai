@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: `gameState` single object; `mulberry32(seed)` stored as `gameState.rng`, used in generateMap/fireEvent/triggerAshstorm/trade; `endTurn()` calls production→colonists→ashstorm→event→trade in fixed order. Score 2.
+
+**F2 – Map**: 8x8 loop in `generateMap()`, terrain from `gameState.rng()`; `buildBuilding()` checks `building.terrain.includes(tile.terrain)`; but adjacency bonus checks `adj.type === 'water'` against building-type field, and no building type is named `'water'`, so it never fires. Score 1.
+
+**F3 – Economy**: chain geothermal(power)→condenser(water)→greenhouse(food) via `resolveProduction()`; caps enforced/overflow logged in `updateResources()`. (`updateStorageCaps()` is dead code, minor.) Score 2.
+
+**F4 – Population**: colonists have skill/fatigue/morale/job; `skillBonus` in `resolveProduction()` reads `c.skill`, but fatigue is never read by production code. Score 1.
+
+**F5 – Needs**: consumption in `updateColonists()`, shortage drops morale -15, fatigue/morale recovery drift exists; but morale is never read in `resolveProduction()` — output formula ignores it. Score 1.
+
+**F6 – Research**: 8 nodes in `RESEARCH_TREE`, prereqs enforced in `researchAvailable()`, costs deducted in `doResearch()`; but `mining`, `morale-boost`, `trade-hub` unlock effects are never read anywhere. Score 1.
+
+**F7 – Events**: 10 events in `EVENTS`, all with 2 differing-effect choices; `recentEvents` Set gives cooldown; but selection is uniform `EVENTS[floor(rng()*len)]`, no weighting. Score 1.
+
+**F8 – Trade**: `updateTradeprices()` reads `gameState.globalSupply`; `tradeInventory` capped and decremented; `tradeResource()` buy/sell both mutate resources/scrip/supply. Score 2.
+
+**F9 – Hazard**: `checkAshstorm`/`triggerAshstorm` fire periodically, severity scales with turn, reduced by `ashfilter` research and watchtowers, `repairBuilding` costs parts; but `resolveProduction()` never checks `b.health`/`b.damaged`, so damaged buildings produce at full rate. Score 1.
+
+**F10 – Save/load**: `serializeGame()` → JSON text in textarea; `deserializeGame()` parses with try/catch and `alert()`s on bad input. Score 2.
+
+**F11 – End conditions**: `checkEndConditions()` has reachable win (turn≥60,pop≥12,food/water≥30) and lose (pop≤0); `calculateScore()` uses turn/pop/research/scrip; `renderEndScreen()` shown. Score 2.
+
+**F12 – UI**: `switchTab()` wired to buttons; log entries show `entry.turn`; keyboard shortcuts in `keydown` listener; `@media` responsive CSS; but `tooltipBonus` field is defined per-building and never rendered anywhere. Score 1.
+
+**F13 – Dev panel**: `runTests()` has 15 real invariant assertions (caps, prereqs, terrain, pop==colonists); `runBenchmark()` runs 200 headless `endTurn()` calls and prints `gameStateHash()`. Score 2.
+
+**G1**: `doResearch` sets `researchDone`; `resolveProduction()` reads `researchDone.has('smelting-adv'/'hydroponics'/'industry')` to multiply output every turn. Score 4.
+
+**G2**: shortage → `c.morale -=15` in `updateColonists()`; but morale never feeds `resolveProduction()` directly — only indirect effect is colonist removal at morale≤0 shrinking `b.workers` matches. Score 2.
+
+**G3**: `triggerAshstorm` sets `b.health/b.damaged`; `repairBuilding` restores health and costs parts; but `resolveProduction()` never reads health/damaged, so output loss link is absent. Score 1.
+
+**G4**: `tradeResource` mutates `globalSupply`; `updateTradeprices` recomputes prices from `globalSupply` each caravan visit (not per-transaction). Score 3.
+
+**G5**: `dust-found`/`refugee`/`colonist-sick` choice effects write distinct mutations (`resources.parts`, `population`, `colonists.push`, `morale`/`fatigue`) via `resolveEvent()`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 4, "G2": 2, "G3": 1, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls updateResources, updateColonists, checkAshstorm, fireEvent, trade in fixed order",
+    "F2": "buildBuilding() checks tile.terrain; condenser adjacencyBonus.type='water' never matches any building.type",
+    "F3": "resolveProduction chains geothermal power->condenser water->greenhouse food; caps enforced in updateResources()",
+    "F4": "skillBonus in resolveProduction reads c.skill; fatigue never read there",
+    "F5": "updateColonists drops morale on shortage; resolveProduction never reads morale",
+    "F6": "researchDone.has('smelting-adv'/'hydroponics'/'industry'/'ashfilter'/'power-storage') applied; mining/morale-boost/trade-hub unused",
+    "F7": "fireEvent() picks EVENTS[floor(rng()*len)] uniformly, no weight field used",
+    "F8": "updateTradeprices reads gameState.globalSupply; tradeResource buy/sell both work and mutate supply",
+    "F9": "triggerAshstorm sets b.health/damaged but resolveProduction never checks health",
+    "F10": "deserializeGame try/catch JSON.parse, alert(`Load failed: ${e.message}`) on bad input",
+    "F11": "checkEndConditions() win/lose both reachable; calculateScore() used in renderEndScreen()",
+    "F12": "switchTab()/keydown wired; tooltipBonus field defined but never rendered in any panel",
+    "F13": "runTests() 15 invariant asserts; runBenchmark() runs 200 endTurn() calls headless, prints gameStateHash()",
+    "G1": "researchDone.has(...) read inside resolveProduction() to scale output every turn",
+    "G2": "morale -15 on shortage in updateColonists; only reaches production via colonist removal at morale<=0",
+    "G3": "b.health/damaged set in triggerAshstorm, repairBuilding restores it, but resolveProduction ignores health",
+    "G4": "tradeResource mutates globalSupply; updateTradeprices recomputes price from globalSupply per caravan",
+    "G5": "resolveEvent(event,choiceIdx) calls choice.effect(gameState) mutating resources/population/morale differently per choice"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale and building damage are tracked and displayed but never read by resolveProduction(), so two of the game's core feedback loops (needs->morale->output and storm damage->output loss) are non-functional."
+}
+```

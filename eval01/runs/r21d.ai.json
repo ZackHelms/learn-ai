@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** `GameState` single state object; `mulberry32` seeds `this.rng`; but `createColonist` uses `Math.random()` for id, breaking "seeded PRNG for all randomness". `advanceTurn()` runs fixed order production→consumption→events→hazard→morale. Score 1.
+
+**F2 (Map):** `generateMap()` builds 64 tiles from `this.rng()`; `canBuild` checks `building.terrain.includes(tile.terrain)`; `getAdjacencyBonus` added into production output in `runProduction`. Score 2.
+
+**F3 (Economy):** forge consumes ore→metal, greenhouse consumes water→food; caps enforced via `Math.min(newResources[res]+amt, resourceCaps[res])`. Score 2.
+
+**F4 (Population):** colonists have `{skill, fatigue, morale, job, assigned}`; `runProduction` reads `assigned.skill[bldg.labor]` and `assigned.fatigue`. Score 2.
+
+**F5 (Needs):** `runConsumption` drains food/water; `updateMorale` lowers morale on shortage; but morale is never read in `runProduction` (only fatigue is) — output formula never uses morale. Score 1.
+
+**F6 (Research):** 8 nodes defined; `doResearch` deducts cost; prereq check `game.map.some(t=>t.building===node.prereq)` is broken for chain prereqs (massCulture/resilience reference research keys, never satisfiable); `powerEfficiency`, `massCulture.skill_growth`, `resilience.morale_boost` never read anywhere. Score 1.
+
+**F7 (Events):** 10 EVENT_DEFS entries; only 3 events (sickness, visitor, contamination) have choices, not 4+; selection is uniform `Math.floor(rng()*events.length)`, not weighted; `getAvailableEvents` cooldown logic never tracks per-event fire turn, effectively broken after turn 6. Score 1.
+
+**F8 (Trade):** `doTrade` buy/sell both work; `tradePrices` initialized once and never modified/drifted by stockpiles; `tradeVol` defined but never referenced anywhere; no caravan inventory cap. Score 1.
+
+**F9 (Hazard):** `fireAshstorm` fires on `nextStormTurn`, `stormSeverity *= 1.1`; `tile.damage>=2` halts production in `runProduction`; `stormShield`/`wall` reduce damage; `repairBuilding` spends parts. Score 2.
+
+**F10 (Save/load):** `serialize()`/`GameState.deserialize` round-trip full state; `doSave` copies to clipboard; `doLoad` wraps parse in try/catch with `alert('Failed to load: '+e.message)`. Score 2.
+
+**F11 (End conditions):** `checkWinLose` sets both win/lose flags; `doEndTurn` computes `score` from pop/research/turn on win branch; but summary is only a native `alert()`, not a rendered screen, unlike the existing modal system. Score 1.
+
+**F12 (UI):** tab click delegation works; log entries show `TURN ${entry.turn}`; keyboard shortcuts (`Space`, `Digit1-5`) wired; `@media (max-width:600px)` responsive; `.tooltip-anchor` CSS defined but never emitted in any rendered HTML. Score 1.
+
+**F13 (Dev panel):** `runTests()` checks 15 real invariants (caps, ranges, save/load hash match); `runBenchmark()` runs 200 headless `advanceTurn()` calls and prints `stateHash()`. Score 2.
+
+**G1:** `betterFarming.bonus.food`/`advancedOre.bonus.ore`/`labExpansion.parts_bonus` read via per-building `if` checks in `runProduction`; several other research effects (`powerEfficiency`, `massCulture`, `resilience`) never read. Score 3.
+
+**G2:** `runConsumption` shortage → `updateMorale` drops colonist `morale`; but morale never factors into `runProduction`'s output formula — only affects rare colonist-departure at morale=0. Score 2.
+
+**G3:** `fireAshstorm` writes `tile.damage`; `runProduction` skips output only at `damage>=2` (binary, not graduated); `repairBuilding` spends parts and restores production. Score 2.
+
+**G4:** `tradePrices` set once in constructor, never updated by stockpiles or over turns; `tradeVol` unused. Score 0.
+
+**G5:** `applyEvent` branches on `choiceIdx` for `sickness` (food loss vs population loss) and `visitor` (pop+food vs no-op), writing directly into `game.resources`/`colonists`. Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 2, "3": 2, "4": 2, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 2, "11": 1, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 2, "G3": 2, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32 seeds this.rng used in advanceTurn order, but createColonist uses Math.random() for id",
+    "F2": "getAdjacencyBonus() result added into production output in runProduction()",
+    "F3": "forge consumes ore->metal, resources capped via Math.min(...,resourceCaps[res])",
+    "F4": "runProduction reads assigned.skill[bldg.labor] and assigned.fatigue",
+    "F5": "updateMorale lowers morale on shortage, but runProduction never reads c.morale",
+    "F6": "doResearch deducts cost; prereq check tests building match, breaks for research-key prereqs (massCulture/resilience)",
+    "F7": "EVENT_DEFS has 10 entries but only 3 have choices; getAvailableEvents cooldown logic never tracks per-event turn",
+    "F8": "doTrade buy/sell work but tradePrices never updated after constructor; tradeVol unused",
+    "F9": "fireAshstorm sets tile.damage, runProduction skips output at damage>=2, repairBuilding spends parts",
+    "F10": "serialize()/deserialize() round-trip, doLoad catches parse errors and alerts message",
+    "F11": "checkWinLose sets isWon/isGameOver; doEndTurn computes score but shows via native alert()",
+    "F12": "keyboard shortcuts and tab delegation wired; .tooltip-anchor CSS never emitted in rendered HTML",
+    "F13": "runTests() checks 15 invariants; runBenchmark() runs 200 headless advanceTurn() calls, prints stateHash()",
+    "G1": "betterFarming.bonus.food and advancedOre.bonus.ore read via per-building if in runProduction",
+    "G2": "food/water shortage lowers c.morale in updateMorale, but morale never used in runProduction output formula",
+    "G3": "fireAshstorm writes tile.damage; runProduction binary-cuts output at damage>=2; repairBuilding restores it",
+    "G4": "tradePrices static object set once in constructor, never re-computed from resources or turns",
+    "G5": "applyEvent branches per choiceIdx, writing distinct resource/population changes for sickness and visitor"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale never feeds back into production output and several research/trade values (powerEfficiency, tradeVol, massCulture/resilience effects) are defined but never read anywhere, leaving key systems shallow and disconnected."
+}
+```

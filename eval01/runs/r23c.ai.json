@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `gameState` single object; `mulberry32(seed)` rng used everywhere (no Math.random found); `endTurn()` calls updateResources→updateColonists→checkAshstorm→fireEvent→trade in fixed order. Score 2.
+
+**F2 Map**: `generateMap()` loops 8x8 using `gameState.rng()`; `buildBuilding` checks `building.terrain.includes(tile.terrain)`; `getTileAdjacencies` feeds `adjacencyMult` in `resolveProduction` (condenser+water). Score 2.
+
+**F3 Economy**: geothermal power → forge/condenser/lab power input; condenser water → greenhouse water input (shared-pool chains); caps enforced and overflow logged in `updateResources`. Score 2.
+
+**F4 Population**: colonists have skill/fatigue/morale/job; `skill` read in `resolveProduction` skillBonus, but `fatigue` never read by production, only recovered in `updateColonists`. Score 1.
+
+**F5 Needs**: `updateColonists` consumes food/water, shortage cuts morale -15; but `resolveProduction` has no morale term at all, so morale never changes output. Score 1.
+
+**F6 Research**: 8 nodes, prereqs enforced in `researchAvailable`, costs deducted in `doResearch`; but `trade-hub` and `morale-boost` effects never referenced anywhere else, and `mining` unlocks nonexistent `ore-mine` building. Score 1.
+
+**F7 Events**: 10 events in `EVENTS`, 10/10 have differing choice effects, cooldown via `recentEvents` Set (size-capped, avoid-repeat loop); but selection is uniform `EVENTS[floor(rng()*len)]`, not weighted. Score 1.
+
+**F8 Trade**: `updateTradeprices` reads `globalSupply`; `tradeInventory` capped and decremented; `tradeResource` handles both buy (scrip↓, resource↑) and sell (scrip↑, resource↓). Score 2.
+
+**F9 Hazard**: `checkAshstorm`/`triggerAshstorm` scale severity with turn, reduce via `ashfilter` research and watchtowers, `repairBuilding` costs parts; but `resolveProduction` never reads `b.health`/`b.damaged`, so damaged buildings produce at full rate. Score 1.
+
+**F10 Save/load**: `serializeGame`→JSON text in textarea (`copySave`); `deserializeGame` JSON.parse in try/catch, `alert` shown on parse failure (`loadSave`). Score 2.
+
+**F11 End conditions**: `checkEndConditions` returns 'lose' (pop<=0) or 'win' (turn/pop/food/water thresholds); `calculateScore` combines turn/pop/research/scrip; `renderEndScreen` shows summary. Score 2.
+
+**F12 UI**: `switchTab`/tab-buttons work; log entries show `Turn ${entry.turn}`; keyboard listener for 1-5/Space; `@media` narrow-screen CSS; but `tooltipBonus` field on buildings is never rendered anywhere (no tooltip UI wired). Score 1.
+
+**F13 Dev panel**: `runTests()` has 15 real invariant assertions (caps, prereqs, terrain validity, PRNG determinism, save/load roundtrip); `runBenchmark()` runs 200 headless turns via `endTurn()`, prints `gameStateHash()`. Score 2.
+
+**G1**: `smelting-adv`/`hydroponics`/`industry` in `researchDone` read as `researchBonus` multiplier inside `resolveProduction`, applied every turn, visible in resource deltas. Score 4.
+
+**G2**: shortage → `c.morale -= 15` in `updateColonists`; but morale never feeds `resolveProduction`; only indirect effect is colonist removal at morale<=0 reducing worker count. Score 2.
+
+**G3**: `triggerAshstorm` sets `b.health`/`b.damaged`; `resolveProduction` never checks health/damaged, so output is unaffected by damage despite `repairBuilding` costing parts. Score 1.
+
+**G4**: `updateTradeprices` computes prices from `gameState.globalSupply`, which drifts via `tradeResource` buy/sell; recalculated on each caravan arrival. Score 4.
+
+**G5**: `refugee` choice 0 mutates `gs.population`/`gs.colonists`; `colonist-sick` choices mutate `morale`/`fatigue` directly via `effect(gameState)`, not just logged. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 4, "G2": 2, "G3": 1, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32 rng used in generateMap/fireEvent/triggerAshstorm; endTurn() fixed order",
+    "F2": "buildBuilding checks building.terrain.includes(tile.terrain); adjacencyMult in resolveProduction",
+    "F3": "geothermal power feeds forge/condenser/lab power input; updateResources enforces caps+overflow log",
+    "F4": "skillBonus reads colonist.skill in resolveProduction; fatigue only used in updateColonists, not production",
+    "F5": "updateColonists cuts morale -15 on shortage; resolveProduction has no morale term",
+    "F6": "researchAvailable enforces prereq/cost; trade-hub and morale-boost ids never read elsewhere",
+    "F7": "EVENTS has 10 entries with differing choices; selection is EVENTS[floor(rng()*len)], not weighted",
+    "F8": "updateTradeprices reads globalSupply; tradeResource handles buy/sell against tradeInventory",
+    "F9": "triggerAshstorm sets b.health/damaged; resolveProduction never reads b.health",
+    "F10": "serializeGame->textarea; deserializeGame JSON.parse in try/catch with alert on error",
+    "F11": "checkEndConditions returns win/lose; calculateScore combines turn/pop/research/scrip",
+    "F12": "switchTab/keydown 1-5 work; tooltipBonus field defined but never rendered in any panel",
+    "F13": "runTests() 15 assertions on invariants; runBenchmark() runs 200 turns via endTurn(), hashes state",
+    "G1": "researchDone.has('hydroponics') multiplies output in resolveProduction every turn",
+    "G2": "updateColonists lowers morale on shortage; only morale<=0 colonist removal reduces output, no scaling factor",
+    "G3": "triggerAshstorm damages b.health but resolveProduction ignores health, so output unaffected by damage",
+    "G4": "updateTradeprices formula reads gameState.globalSupply, updated by tradeResource buy/sell",
+    "G5": "refugee/colonist-sick choice effects mutate gs.population/colonists/morale/fatigue directly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "resolveProduction() never reads colonist morale or building health/damaged, so morale drops and storm damage never actually reduce output despite being tracked."
+}
+```

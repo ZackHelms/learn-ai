@@ -1,0 +1,68 @@
+## Worksheet
+
+**F1 — Core loop**: One `Game` state object; `mulberry32(seed)` feeds all randomness (terrain, colonists, ashstorm, events, trade); `endTurn()` resolves 10 steps in fixed order. Score 2.
+
+**F2 — Map**: 8x8 `this.map` built with `generateTerrain(this.rng,...)`; `canBuild` checks `building.terrain.includes(tile.terrain)`; `adjacency_bonus` multiplies `produce` in `produceResources()`. Score 2.
+
+**F3 — Economy**: `conversions` chains ore→metal, ash→soil→food in `produceResources()`; total-resource cap vs `storage_capacity` with overflow drop loop. Score 2.
+
+**F4 — Population**: colonists have name/job/skills/fatigue/morale; `skill_bonus = c.skills[building.skill]` read by production, but `fatigue` is only incremented/decayed, never read by production or any decision logic. Score 1.
+
+**F5 — Needs**: consumption `-1 food/water` per colonist; shortage triggers `morale -=5`; recovery via events/production morale gains — but morale is never read back into the production formula (`produceResources` has no morale factor). Score 1.
+
+**F6 — Research**: 8 nodes in `RESEARCH_TREE`; `canResearch` enforces prereqs+cost; only 4/8 nodes (`ore_refining`,`irrigation`,`power_grid`,`shelter_tech`) apply any effect in `doResearch`, the rest (advanced_forge, soil_science, preservation, advanced_lab) do nothing. Score 1.
+
+**F7 — Events**: 10 entries in `EVENTS`; weighted pick + cooldown in `fireEvent`; 4 events have 2 outcomes, but outcome is chosen by `Math.floor(this.rng()*...)`, not the player — no real "choice" UI exists. Score 1.
+
+**F8 — Trade**: `updateTradeState()` sets prices from `trade_supply` drift + stockpile check; `buyResource`/`sellResource` both work, but no caravan inventory cap — buy/sell unlimited any turn. Score 1.
+
+**F9 — Hazard**: `triggerAshstorm` fires periodically, damages `tile.building_health`, read by `health_factor` in production; `storm_damage_reduction` reduced via `shelter_tech`; but no repair function exists anywhere — building_health never increases. Score 1.
+
+**F10 — Save/load**: `serialize()`/`Game.deserialize()` round-trip via textarea; `loadGame()` catches parse errors and `alert`s; some fields (event_log, trade_supply) omitted from serialize. Score 2.
+
+**F11 — End conditions**: win check (`turn>=60 && pop>=12 && food/water>=20`) and lose check (`colonists.length===0`) both reachable in `endTurn`; `calculateScore()` combines pop/research/scrip/turn; `renderGameOverModal()` shown. Score 2.
+
+**F12 — UI**: `switchTab`, log entries carry `entry.turn`, keyboard `1-6`/Space wired, `@media (max-width:600px)` responsive layout — but tooltips (`title=`) only describe building purpose, not numeric derivation of stats. Score 1.
+
+**F13 — Dev panel**: `runTests()` checks real invariants (save/load round-trip, cooldowns, prereqs); `runBenchmark()` clones state, runs 200 headless turns, prints `state_hash`. Score 2.
+
+**G1**: `doResearch` grants one-time resource bumps (`resources.ore += 5`) instead of storing a yield modifier; `produceResources()` never reads `research_done`. Score 0.
+
+**G2**: food/water shortfall → `colonists.forEach(c => c.morale -= 5)` real state change, but morale never enters the production formula in `produceResources()`. Score 1.
+
+**G3**: `triggerAshstorm` sets `tile.building_health`, read by `health_factor` in `produceResources` (real output loss); no repair function anywhere restores `building_health`. Score 2.
+
+**G4**: `updateTradeState()` reads `trade_supply` drift and `this.resources[res]>200` threshold into `trade_prices`, applied on caravan cycles, displayed in Trade tab. Score 3.
+
+**G5**: `settler_arrival`/`equipment_malfunction` outcome branches write different resource/colonist mutations, but branch is RNG-selected (`Math.floor(this.rng()*outcomes.length)`), not a player choice. Score 3.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 0, "G2": 1, "G3": 2, "G4": 3, "G5": 3},
+  "evidence": {
+    "F1": "Game state + mulberry32(seed) used everywhere; endTurn() fixed 10-step order",
+    "F2": "generateTerrain(rng) seeds map; adjacency_bonus multiplies produce in produceResources()",
+    "F3": "conversions chains ore->metal, ash->soil->food; overflow drop loop vs storage_capacity",
+    "F4": "c.skills[building.skill] read by production, but c.fatigue never read anywhere",
+    "F5": "morale -=5 on shortage in endTurn(), but morale unused in produceResources() formula",
+    "F6": "only 4/8 RESEARCH_TREE ids have effect code in doResearch(); rest are inert",
+    "F7": "outcome = outcomes[Math.floor(rng()*len)] — RNG picks, no player choice UI wired",
+    "F8": "buyResource/sellResource unlimited any turn, no caravan inventory cap enforced",
+    "F9": "tile.building_health drives health_factor in produceResources, but no repair() exists",
+    "F10": "serialize()/Game.deserialize() round-trip; loadGame() alerts on parse failure",
+    "F11": "win/lose checks in endTurn(); calculateScore() combines pop/research/scrip/turn",
+    "F12": "switchTab/keydown/media query work; title= tooltips only describe purpose, not numbers",
+    "F13": "runTests() checks save round-trip/cooldowns; runBenchmark() 200 headless turns + state_hash",
+    "G2": "food shortfall -> colonists morale -=5 (real), but morale never read in produceResources()",
+    "G3": "triggerAshstorm damages building_health -> health_factor cuts output; no repair function exists",
+    "G4": "trade_supply drift + resources[res]>200 check feed trade_prices in updateTradeState()",
+    "G5": "settler_arrival/equipment_malfunction outcome.effect() writes distinct state, but RNG-selected not player-chosen"
+  },
+  "todo_notes": [],
+  "grader_confidence": "medium",
+  "contamination": "none",
+  "single_biggest_weakness": "Systems are mostly parallel: research/morale/fatigue rarely feed back into the production formula, event 'choices' are RNG-picked not player-driven, and there is no repair mechanic for storm-damaged buildings."
+}
+```

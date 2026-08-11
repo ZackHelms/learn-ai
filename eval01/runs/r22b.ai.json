@@ -1,0 +1,66 @@
+## Worksheet
+
+**F1 — Core loop**: `gameState` object; `mulberry32(seed)` used in `generateMap`, `addColonist`, `fireEvent`, `endTurn`; `endTurn()` calls `produce→consume→updateColonists→checkStorm→checkTrade→fireEvent` in fixed order. Score 2.
+
+**F2 — Map**: 8x8 `gameState.map[y][x]`, terrain via `rng()` weights in `generateMap`; `placeBuilding` checks `b.terrain.includes(tile.terrain)`; no adjacency-bonus code found anywhere. Score 1.
+
+**F3 — Economy**: `greenhouse` consumes water→food; but `forge` consumes metal+power and produces nothing; `condenser` claims "Ash→Water" but consumes no ash; `clamp()` enforces caps/overflow. Broken/incomplete chains. Score 1.
+
+**F4 — Population**: colonist records with `skills`, `fatigue`, `morale`, `assigned`/`job`; `produce()` reads `c.skills[c.job]`, `c.morale`, `c.fatigue` for output. Score 2.
+
+**F5 — Needs**: `consume()` computes food/water need, shortage sets `c.morale -=5`; `produce()` uses `moraleMult`; morale can rise via events/idle tick, not instant death. Score 2.
+
+**F6 — Research**: 8 nodes in `RESEARCH_NODES`; `doResearch()` enforces `node.prereq.every(...)` and deducts cost; but no code anywhere reads `gameState.research[x].done` inside `produce()` — effects never applied. Score 1.
+
+**F7 — Events**: 11 entries in `EVENTS`; weighted pick via `wSum`/`r-=e.weight` in `fireEvent`; 5 events (`moraleCrisis`,`refugees`,`meteorite`,`ruins`,`foodBlight`) have 2 choices with distinct state changes; `eventCooldowns[id]=turn+12` filtered in `fireEvent`. Score 2.
+
+**F8 — Trade**: `caravanPrice` is a fixed object, never modified/drifted over turns; no inventory cap enforced (modal stays open, repeatable buys); `tradeAction` implements both buy and sell. Score 1.
+
+**F9 — Hazard**: `checkStorm()` fires periodically (`nextStormTurn+=8`), `weatherSeverity+=0.15` grows dmg; but it hits `colonist.morale`/`resources.water` directly — no building damage/repair state, `stormShield` research never read. Score 1.
+
+**F10 — Save/load**: `JSON.stringify(gameState)` shown in textarea; `loadSave()` does `JSON.parse` + `alert` on catch, but no structural validation of loaded shape beyond parse success. Score 1.
+
+**F11 — End conditions**: lose via `colonists.length===0`→`gameOver('DEFEAT',...)`; win via turn 60 + `hasPop&&hasFood&&hasWater`→`gameOver('VICTORY',...)`; `calcScore()` combines turn/pop/research/scrip; modal renders `.stats`. Score 2.
+
+**F12 — UI**: `switchTab`/`renderTab` work; log entries show `T${e.turn}`; keyboard `Space`/digit-tab shortcuts in `keydown` listener; `@media` layout rules present; tooltips limited to tile `title` attr only, not resource derivations. Score 1.
+
+**F13 — Dev panel**: `runTests()` asserts caps, prereqs, assignment validity, RNG determinism, save/load roundtrip (real invariants); `runBench()` runs 200 `endTurn()` calls headlessly and `hashState()` prints a hash. Score 2.
+
+**G1**: no call site reads `gameState.research[x].done` inside `produce()` — research effects never applied to yields. Score 0.
+
+**G2**: `consume()` sets `c.morale -=5` on shortage, `produce()` multiplies output by `moraleMult=c.morale/100`; full pipeline, but penalty is a flat constant regardless of shortfall size. Score 3.
+
+**G3**: `checkStorm()` never touches `gameState.buildings`; no damage flag, no repair function anywhere in source. Chain broken at first link. Score 0.
+
+**G4**: `gameState.caravanPrice` initialized once, never reassigned in any function (`checkTrade`, `tradeAction`, `endTurn`). Score 0.
+
+**G5**: `moraleCrisis`/`refugees`/`meteorite`/`ruins` choice `fn()`s each mutate `gameState.resources`/`colonists.morale` differently via `resolveEvent(idx)→e.choices[idx].fn()`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 2, "5": 2, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 1, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 0, "G2": 3, "G3": 0, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "gameState.rng from mulberry32 used in generateMap/addColonist/fireEvent; endTurn() fixed pipeline",
+    "F2": "map[y][x] 8x8 from rng(); placeBuilding checks b.terrain.includes(tile.terrain); no adjacency bonus code",
+    "F3": "greenhouse consumes water->food but forge consumes metal+power with no output; condenser ignores its ash input",
+    "F4": "colonist.skills/fatigue/morale read in produce() via skill, moraleMult, fatigueMult",
+    "F5": "consume() sets morale-=5 on shortage; produce() moraleMult=c.morale/100 affects output; morale can recover via events",
+    "F6": "doResearch enforces node.prereq/cost but no function reads gameState.research[x].done to modify production",
+    "F7": "11 EVENTS, weighted pick in fireEvent, 5 events with 2 choices, eventCooldowns[id]=turn+12 filtered",
+    "F8": "caravanPrice fixed constant never changes; tradeAction has no purchase limit besides scrip",
+    "F9": "checkStorm grows weatherSeverity and hits morale/water directly, never touches gameState.buildings",
+    "F10": "JSON.stringify(gameState) in textarea; loadSave JSON.parse+alert(e.message) but no shape validation",
+    "F11": "gameOver() reached from colonists.length===0 and turn>=60 branch; calcScore() feeds .stats modal",
+    "F12": "switchTab/renderTab, log T${e.turn}, keydown Space/digit shortcuts, @media rules; tooltip only tile title",
+    "F13": "runTests() checks caps/prereqs/RNG determinism/save-load roundtrip; runBench() runs 200 endTurn() + hashState()",
+    "G2": "consume() morale-=5 on shortfall read by produce() moraleMult; fixed constant penalty (minor gap)",
+    "G5": "resolveEvent(idx) calls e.choices[idx].fn() which writes gameState.resources/colonists.morale per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research unlocks and ashstorms never touch production/buildings — research.done and storm damage are dead-end flags with no downstream code reading them."
+}
+```

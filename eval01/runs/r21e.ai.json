@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `GameState` class holds all state; `mulberry32(seed)` seeds `this.rng`, used for map gen, colonist job, events, storms; `advanceTurn()` calls production→consumption→events→hazard→morale→win/lose in fixed order. Score 2.
+
+**F2 — Map**: 64-tile grid (8x8), `generateMap()` uses seeded rng; `canBuild()` checks `terrain.includes`; `getAdjacencyBonus()` feeds `adjBonus` into production amount in `runProduction()`. Score 2.
+
+**F3 — Economy**: mine→ore, forge consumes ore+power→metal (2-step chain); `resourceCaps` + `Math.min` cap overflow in `runProduction`/`applyEvent`. Score 2.
+
+**F4 — Population**: colonists have `skill{job}`, `fatigue`, `morale`, `assigned`; `assigned.skill[bldg.labor]` and `assigned.fatigue>30` both read in `runProduction()`. Score 2.
+
+**F5 — Needs**: `runConsumption()` deducts food/water; shortage flags feed `-10` morale in `updateMorale()`; recovery via `fatigue -=5`; but morale is never read in `runProduction()` output formula. Score 1.
+
+**F6 — Research**: 8 nodes defined; but `powerEfficiency.power_reduction`, `massCulture.skill_growth`, `resilience.morale_boost` are never read anywhere; `massCulture`/`resilience` prereqs check `t.building===node.prereq` against research keys that aren't building keys, so effectively unreachable. Score 1.
+
+**F7 — Events**: 10 `EVENT_DEFS`; selection is uniform (`Math.floor(rng()*events.length)`), not weighted; only 3 events (`sickness`,`visitor`,`contamination`) have choices, not the required 4+; cooldown logic in `getAvailableEvents` is present but shallow. Score 1.
+
+**F8 — Trade**: `tradePrices` is a static object never updated by turns/stockpiles; `tradeVol` defined but unused; `doTrade()` buy/sell both work but caravan inventory is uncapped. Score 1.
+
+**F9 — Hazard**: `fireAshstorm()` scales with `stormSeverity*=1.1`; `tile.damage>=2` fully blocks production but damage=1 has zero effect (not gradient "produce less"); `stormShield`/`wall` reduce damage; `repairBuilding()` spends parts. Score 1.
+
+**F10 — Save/load**: `serialize()`→JSON, `doSave()` copies to clipboard; `doLoad()` prompts, `GameState.deserialize()` try/catches JSON.parse and throws clear error shown via alert. Score 2.
+
+**F11 — End conditions**: `checkWinLose()` has reachable win (turn≥60,pop≥12,food/water≥10) and lose (pop=0); score computed from pop/research/turn in `doEndTurn()`; summary shown via `alert()`. Score 2.
+
+**F12 — UI**: tab click handler works; `log-turn` shows turn number; keyboard shortcuts (`Space`,`Digit1-5`) wired; media query for narrow screens; `.tooltip`/`.tooltip-anchor` CSS defined but never inserted into any rendered HTML. Score 1.
+
+**F13 — Dev panel**: `runTests()` asserts resource caps, skill/morale/fatigue ranges, save/load roundtrip hash equality, research prereq validity (15 real checks); `runBenchmark()` runs 200 headless `advanceTurn()` calls and prints `stateHash()`. Score 2.
+
+**G1**: `research.betterFarming.done`/`advancedOre.done`/`labExpansion.done` read via if-cascade inside `runProduction()`'s output calc, applied every relevant turn. Score 3.
+
+**G2**: shortage→`foodShortest`/`waterShortest`→morale `-10` in `updateMorale()`, but production formula never reads `c.morale`; only link is morale=0 → colonist removed via `colonists.filter` (hardcoded special case), which then stops that tile's production. Score 2.
+
+**G3**: `fireAshstorm()` sets `tile.damage`; `runProduction` skips tiles with `damage>=2`; `repairBuilding()` spends parts and restores production once damage<2. Full pipeline, binary threshold gap. Score 3.
+
+**G4**: `tradePrices`/`tradeVol` never updated anywhere based on `resources` or turns — static constants. Score 0.
+
+**G5**: `sickness`/`visitor`/`contamination` choice effects write directly to `game.resources`/`game.colonists` (pop via `colonists.pop()`) in `applyEvent()`, not just logged. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 2, "G3": 3, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "GameState + mulberry32(seed); advanceTurn() fixed-order phases",
+    "F2": "generateMap() seeded; getAdjacencyBonus() feeds runProduction adjBonus",
+    "F3": "mine ore -> forge consumes ore+power -> metal; resourceCaps + Math.min",
+    "F4": "assigned.skill[bldg.labor] and assigned.fatigue read in runProduction()",
+    "F5": "updateMorale() shortage->morale delta, but morale absent from output formula",
+    "F6": "massCulture/resilience prereq checks building keys that never exist, effects unread",
+    "F7": "uniform rng pick not weighted; only 3 events (sickness/visitor/contamination) have choices",
+    "F8": "tradePrices static object, tradeVol defined but never referenced",
+    "F9": "runProduction only checks tile.damage>=2, damage=1 has no output effect",
+    "F10": "serialize()/deserialize() with try/catch error shown in doLoad()",
+    "F11": "checkWinLose() reachable both ways; score computed in doEndTurn() via alert",
+    "F12": ".tooltip-anchor/.tooltip CSS defined but never emitted in any render*() function",
+    "F13": "runTests() 15 real invariants; runBenchmark() 200-turn headless loop + stateHash()",
+    "G1": "research.betterFarming.done read in runProduction() output calc, applied each turn",
+    "G2": "foodShortest/waterShortest -> morale-10 in updateMorale(), but morale unread in production; only link is colonist removal at morale=0",
+    "G3": "fireAshstorm() sets tile.damage; runProduction skips damage>=2; repairBuilding() spends parts to restore",
+    "G4": "tradePrices/tradeVol never mutated by any turn/stockpile logic",
+    "G5": "applyEvent() choice branches write different resources/colonists mutations, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale never factors into the production output formula, so the needs->morale->labor chain and several research bonuses (powerEfficiency, massCulture, resilience) are dead code paths."
+}
+```

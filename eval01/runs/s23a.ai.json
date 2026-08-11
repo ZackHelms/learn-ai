@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop** — `createInitialState` builds one state object; `mulberry32Step`/`rand(state)` seeded PRNG used for all randomness; `resolveTurn` calls systems in fixed documented order. Score 2.
+
+**F2 Map** — `generateGrid` builds 8x8 (y<8,x<8) grid from seeded `rand`; `canBuild` checks `def.terrain.indexOf(tile.terrain)`; `adjacencyBonus` multiplies `out` in `resolveProduction`. Score 2.
+
+**F3 Economy** — chains ash→soil→food (greenhouse) and ore→metal (forge), metal→parts (workshop); `storageCap`+`addResource` cap and log overflow. Score 2.
+
+**F4 Population** — colonists have `skill,fatigue,morale,job,assignedTile`; `workerFactor` reads all three via `skillMult/fatigueMult/moraleMult`, used in `resolveProduction`. Score 2.
+
+**F5 Needs** — `resolveNeedsAndFatigue` consumes food/water, sets `foodShort/waterShort`, drops morale, recovers (+3) when needs met; morale feeds `moraleMult` in production. Score 2.
+
+**F6 Research** — 10 nodes in `RESEARCH_ORDER`; `canStartResearch` enforces `node.prereq`; cost deducted in `doStartResearch`; effects (`condenserMult`, `forgeMult`, `storageCapMult`, `tradeBonus`, etc.) read via `researchMult`/direct lookups elsewhere. Score 2.
+
+**F7 Events** — `EVENT_KEYS` has 14 events; weighted pick in `maybeFireEvent` via `totalWeight`; 5 choice events (`wanderers`, `old_cache`, `water_contamination`, `colonist_dispute`, `research_opportunity`); cooldowns via `state.events.cooldowns`. Score 2.
+
+**F8 Trade** — `tradePrice` uses `stockRatio` (stockpile) and `state.trade.drift` (drifting factor); `trade.inventory` limited; `doTradeBuy`/`doTradeSell` both implemented. Score 2.
+
+**F9 Hazard** — `maybeStorm` fires on schedule, `severity=10+turn*0.4` grows; `dmgMult=hp/100` reduces production in `resolveProduction`; `stormDamageMult` research + `scrubber` mitigate; `doRepair` spends parts. Score 2.
+
+**F10 Save/load** — `exportBtn`→`JSON.stringify(GAME)`; `importBtn`→`JSON.parse`+`validateState`, shows error in `#saveError`. Score 2.
+
+**F11 End conditions** — `checkEndConditions` has both win (turn≥60,pop≥12,needs met) and lose (pop=0) branches, both reachable; `computeScore` combines pop/research/turn/stock; `renderEndScreen` shows summary. Score 2.
+
+**F12 UI** — tab buttons wired in `wireUI`; `logMsg` stores `turn`, shown as `T'+e.turn`; `tooltipForResource`/tile tooltips explain sources; Space + 1-5 keyboard shortcuts; `@media max-width:480px` layout. Score 2.
+
+**F13 Dev panel** — `runTests` asserts real invariants (cap clamp, prereq gating, save/load hash round-trip, win/lose triggers); `runHeadlessBenchmark` runs 200 turns headless with greedy policy, prints `stateHash`, wired to `runBenchBtn`. Score 2.
+
+**G1** `filtration`→`researchEffects.condenserMult` read via `researchMult(state,def.researchMultKey)` in `resolveProduction` condenser branch. Score 4.
+
+**G2** `resolveNeedsAndFatigue` shortage sets `foodShort/waterShort`→`moraleDelta`→`c.morale`; `moraleMult(c.morale)` used in `workerFactor` inside `resolveProduction` next turn. Score 4.
+
+**G3** `maybeStorm` sets `t.building.hp`↓; `dmgMult=hp/100` cuts output in `resolveProduction`; `doRepair` spends `parts`, restores `hp=100`. Score 4.
+
+**G4** `tradePrice` reads `state.resources[res]/cap` (stockRatio) and `state.trade.drift[res]` (random-walked each turn in `tickTrade`). Score 4.
+
+**G5** `wanderers` option0 pushes new `makeColonist` + spends food/water; `water_contamination` option1 cuts `resources.water` 30% + drops morale — both durable state writes, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "createInitialState builds state; resolveTurn() fixed order; mulberry32Step/rand used everywhere",
+    "F2": "generateGrid 8x8 from seed; canBuild checks terrain; adjacencyBonus multiplies out in resolveProduction",
+    "F3": "ash->soil->food, ore->metal chains; storageCap/addResource enforce cap+overflow",
+    "F4": "workerFactor(c) reads skill/fatigue/morale, used in resolveProduction",
+    "F5": "resolveNeedsAndFatigue sets shortage->morale delta; moraleMult read in workerFactor",
+    "F6": "10 RESEARCH_ORDER nodes; canStartResearch enforces prereq; researchMult read in production formulas",
+    "F7": "14 EVENT_KEYS, weighted pick in maybeFireEvent; 5 choice events; events.cooldowns enforced",
+    "F8": "tradePrice uses stockRatio + trade.drift; doTradeBuy/doTradeSell both implemented",
+    "F9": "maybeStorm severity grows with turn; dmgMult reduces output; doRepair spends parts, stormDamageMult/scrubber mitigate",
+    "F10": "exportBtn stringifies GAME; importBtn parses+validateState, errors shown in #saveError",
+    "F11": "checkEndConditions has win+lose branches; computeScore combines state; renderEndScreen shows summary",
+    "F12": "wireUI tabs, logMsg carries turn, tooltipForResource, Space/1-5 keys, media query for narrow screens",
+    "F13": "runTests asserts real invariants incl. save/load hash roundtrip; runHeadlessBenchmark prints stateHash",
+    "G1": "condenserMult from filtration read via researchMult() in condenser branch of resolveProduction",
+    "G2": "foodShort/waterShort -> c.morale in resolveNeedsAndFatigue; moraleMult used in workerFactor next production",
+    "G3": "maybeStorm lowers t.building.hp; dmgMult cuts output; doRepair spends parts and restores hp=100",
+    "G4": "tradePrice reads resources[res]/cap stockRatio and trade.drift[res] updated each tickTrade",
+    "G5": "wanderers/water_contamination choice branches mutate colonists/resources arrays directly, not just logMsg"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research effect flags unlockReinforcedHabitat/unlockExcavation are stored in researchEffects but never read; the actual unlock gating is duplicated via a separate requiresResearch check, leaving that data path dead."
+}
+```

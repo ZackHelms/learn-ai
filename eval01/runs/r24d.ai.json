@@ -1,0 +1,68 @@
+# Worksheet
+
+**F1 Core loop** — `Game` state object; `mulberry32(seed)` rng used everywhere (terrain, colonists, events, storms, trade); `endTurn()` runs storm→consumption→morale→produce→events→trade→decay→win/lose in fixed order. Score 2.
+
+**F2 Map** — 8x8 `this.map` loop; `generateTerrain(rng,x,y)` seed-derived; `canBuild()` checks `building.terrain.includes(tile.terrain)`; adjacency dx/dy loop multiplies `produce` for GENERATOR/CONDENSER. Score 2.
+
+**F3 Economy** — FORGE/GREENHOUSE `conversions` arrays consumed in `produceResources` (ore→metal, ash→soil→food); total-resource overflow check drops resources above `storage_capacity`. Score 2.
+
+**F4 Population** — colonists have `skills{}`, `fatigue`, `morale`, `job`; `skill_bonus = c.skills[building.skill]` read in `produceResources`; `fatigue` is only ever written, never read by any formula. Score 1.
+
+**F5 Needs** — per-colonist food/water `-=1`; shortage sets `c.morale -= 5`; but `produceResources` never reads `c.morale`, so it doesn't affect output; passive morale/fatigue recovery exists. Score 1.
+
+**F6 Research** — 8 nodes in `RESEARCH_TREE`; `canResearch` enforces prereqs+cost; `doResearch` deducts cost but only applies a real effect for 4/8 ids (ore_refining/irrigation/power_grid one-time grants, shelter_tech ongoing); advanced_forge/soil_science/preservation/advanced_lab do nothing. Score 1.
+
+**F7 Events** — 10 entries in `EVENTS`; `fireEvent()` does weighted pick with `cooldown_done`; 4 events have 2 outcomes with genuinely different state effects, but the outcome is chosen by `rng()`, never presented to the player as a choice. Score 1.
+
+**F8 Trade** — `updateTradeState()` drifts `trade_supply` and factors `resources[res]>200`; `buyResource`/`sellResource` both work and are wired to buttons; no caravan stock limit exists anywhere. Score 1.
+
+**F9 Hazard** — `ashstorm_timer` fires periodically; severity scales water loss only (not damage chance); `tile.building_health` degrades and `health_factor` lowers `produceResources` output; `shelter_tech` research reduces damage; no repair function exists anywhere in the file. Score 1.
+
+**F10 Save/load** — `serialize()`/`Game.deserialize()` via JSON in a copyable textarea; `loadGame()` try/catch shows `alert('Failed to load: '+e.message)` on bad input. Score 2.
+
+**F11 End conditions** — lose: `colonists.length===0`; win: `turn>=60 && pop>=12 && food>=20 && water>=20`, both reachable; `calculateScore()` combines pop/research/scrip/turn; `renderGameOverModal()` shows summary. Score 2.
+
+**F12 UI** — `switchTab()` swaps content; log entries carry `entry.turn`; `keydown` handles Space/1-6; `@media (max-width:600px)` reflows layout; tooltips are static `title=` text (terrain/description), not computed-value breakdowns. Score 1.
+
+**F13 Dev panel** — `runTests()` checks real invariants (morale range, skill range, prereqs enforced, save/load round-trip); `runBenchmark()` runs 200 headless `endTurn()` calls and prints a `state_hash`. Score 2.
+
+**G1** — `doResearch` writes one-time resource bumps (`resources.ore+=5`) not a stored modifier; `produceResources` formula never reads `research_done` or any research effect. Chain absent. Score 0.
+
+**G2** — shortage writes `c.morale -= 5` (real state change), but `produceResources` formula has no `morale` term at all, so labor output never drops. Final link missing entirely. Score 1.
+
+**G3** — `triggerAshstorm` damages `tile.building_health`; `health_factor` in `produceResources` genuinely reduces output; but no repair function anywhere raises `building_health` back, so cost/recovery links are entirely absent. Score 1.
+
+**G4** — `updateTradeState` drifts `trade_supply` via rng each caravan cycle and factors stockpile threshold; `trade_prices` read by `buyResource`/`sellResource` and rendered in Trade tab every relevant turn. Score 4.
+
+**G5** — `equipment_malfunction`/`vent_hazard`/`morale_crisis` branches write different resource deltas (`parts` vs `power`, colonist morale vs food) via `outcome.effect(this)`, not just log text. Score 3.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 0, "G2": 1, "G3": 1, "G4": 4, "G5": 3},
+  "evidence": {
+    "F1": "Game class holds state; mulberry32(seed) used for all rng; endTurn() runs fixed system order",
+    "F2": "generateTerrain(rng,x,y) seeds 8x8 map; canBuild checks terrain; adjacency loop scales produce",
+    "F3": "FORGE/GREENHOUSE conversions consumed in produceResources; total-resource overflow drop logic",
+    "F4": "c.skills[building.skill] read as skill_bonus in produceResources; c.fatigue never read anywhere",
+    "F5": "food<0/water<0 set c.morale-=5, but produceResources formula never reads c.morale",
+    "F6": "doResearch applies real ongoing/one-time effect for only 4 of 8 RESEARCH_TREE ids",
+    "F7": "fireEvent() weighted pick + cooldown_done; outcome chosen by rng, never a player-facing choice",
+    "F8": "updateTradeState drifts trade_supply, read by buy/sellResource; no caravan stock cap found",
+    "F9": "triggerAshstorm lowers building_health, health_factor cuts output; no repair function exists",
+    "F10": "serialize()/Game.deserialize() via textarea; loadGame() alerts 'Failed to load' on bad JSON",
+    "F11": "endTurn checks pop===0 lose and turn/pop/resource win; calculateScore() + renderGameOverModal()",
+    "F12": "switchTab/log turn/keydown 1-6+Space/@media all work; tooltips are static title= text only",
+    "F13": "runTests() checks real invariants; runBenchmark() runs 200 headless endTurn(), prints state_hash",
+    "G2": "shortage writes c.morale-=5 but produceResources formula has no morale term at all",
+    "G3": "storm sets building_health low, health_factor cuts output, but no code ever restores building_health",
+    "G4": "trade_supply rng-drifts each caravan cycle, feeds trade_prices used by buy/sellResource and UI",
+    "G5": "equipment_malfunction/vent_hazard outcome.effect(g) mutate different resources per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "medium",
+  "contamination": "none",
+  "single_biggest_weakness": "Research effects are almost entirely decorative or one-time grants that never feed the production formula, and there is no building-repair mechanic at all, so the research→yield and storm→repair chains are both broken."
+}
+```

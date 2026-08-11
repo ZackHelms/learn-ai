@@ -91,5 +91,36 @@ results nowhere on the page. Original values in git history and runall logs.
 
 
 ## (10Aug2026) eval01 set2
-<!-- next -->
+2026-08-10_23:03:21_EDT START
+
+|                Datetime |            Harness |   LLM (Reasoning effort) | Run |   Time |     Cost | det + ai  = Score | Notes |
+| ----------------------- | -------------------| -------------------------| --- | ------ | -------- | ----------------- | ----- |
+| 2026-08-10_23:04:41_EDT | Claude Code (bare) | claude-haiku-4-5 (low)   | r21 |  3m05s | $ 0.1571 | 23 + 30.6 =  53.6 |  17 input,  20.7k output,    42.0k cache read,  23.7k cache write ($ 0.1571) |
+| 2026-08-10_23:04:21_EDT | Claude Code (bare) | claude-haiku-4-5 (medium)| r22 |  4m33s | $ 0.2301 | 45 + 26.6 =  71.6 |  17 input,  31.2k output,    42.0k cache read,  34.1k cache write ($ 0.2301) |
+| 2026-08-10_23:04:01_EDT | Claude Code (bare) | claude-haiku-4-5 (high)  | r23 |  3m06s | $ 0.1586 | 34 + 33.8 =  67.8 |  17 input,  21.0k output,    42.0k cache read,  23.7k cache write ($ 0.1586) |
+| 2026-08-10_23:03:41_EDT | Claude Code (bare) | claude-haiku-4-5 (xhigh) | r24 |  3m01s | $ 0.1538 | 39 + 28.8 =  67.8 |  17 input,  20.3k output,    42.0k cache read,  23.2k cache write ($ 0.1538) |
+| 2026-08-10_23:03:21_EDT | Claude Code (bare) | claude-haiku-4-5 (max)   | r25 |  6m55s | $ 0.3175 | 33 + 28.2 =  61.2 |  27 input,  47.3k output,    80.1k cache read,  35.7k cache write ($ 0.3175) |
+| 2026-08-10_23:24:23_EDT | Claude Code (bare) | claude-sonnet-5 (low)    | s21 |  5m13s | $ 1.5154 | 54 + 45.0 =  99.0 |  72 input,  34.4k output,  2229.0k cache read,  54.9k cache write ($ 1.5154) |
+| 2026-08-10_23:24:03_EDT | Claude Code (bare) | claude-sonnet-5 (medium) | s22 |  9m18s | $ 2.5066 | 54 + 46.0 = 100.0 |  74 input,  58.2k output,  3413.1k cache read, 101.4k cache write ($ 2.5066) |
+| 2026-08-10_23:23:43_EDT | Claude Code (bare) | claude-sonnet-5 (high)   | s23 | 14m06s | $ 3.4277 | 47 + 45.8 =  92.8 |  98 input,  84.5k output,  5092.7k cache read, 105.1k cache write ($ 3.4277) |
+| 2026-08-10_23:23:23_EDT | Claude Code (bare) | claude-sonnet-5 (xhigh)  | s24 | 36m19s | $ 9.6881 | 48 + 45.8 =  93.8 | 216 input, 223.3k output, 16586.7k cache read, 226.7k cache write ($ 9.6881) |
+| 2026-08-10_23:23:03_EDT | Claude Code (bare) | claude-sonnet-5 (max)    | s25 | 38m03s | $ 9.4786 | 45 + 45.8 =  90.8 | 198 input, 220.0k output, 16169.5k cache read, 220.8k cache write ($ 9.4786) |
+| 2026-08-11_00:11:32_EDT | Claude Code (bare) | claude-opus-5 (low)      | t21 | 13m21s | $ 3.4206 |                   |  42 input,  71.4k output,  1677.6k cache read,  79.5k cache write ($ 3.4206) |
+| 2026-08-11_00:11:11_EDT | Claude Code (bare) | claude-opus-5 (medium)   | t22 | 25m31s | $ 6.5034 |                   |  89 input, 137.0k output,  3942.7k cache read, 110.4k cache write ($ 6.5034) |
+| 2026-08-11_00:10:51_EDT | Claude Code (bare) | claude-opus-5 (high)     | t23 | 31m13s | $ 9.0912 |                   | 120 input, 165.1k output,  7085.1k cache read, 141.9k cache write ($ 9.0912) |
+| 2026-08-11_00:10:31_EDT | Claude Code (bare) | claude-opus-5 (xhigh)    | t24 | 32m39s | $ 9.9597 |                   | 114 input, 169.1k output,  7999.1k cache read, 173.0k cache write ($ 9.9597) |
+| 2026-08-11_00:10:31_EDT | Claude Code (bare) | claude-opus-5 (max)      |     |        |          |                   |                                                                              |
+| 2026-08-11_00:44:32_EDT | Claude Code (bare) | claude-fable-5 (low)     | u21 |  5m38s | $ 2.6566 | 54 + 46.0 = 100.0 |  18 input,  30.2k output,   399.9k cache read,  37.3k cache write ($ 2.6566) |
+| 2026-08-11_00:44:12_EDT | Claude Code (bare) | claude-fable-5 (medium)  | u22 | 12m10s | $ 5.6697 | 54 + 46.0 = 100.0 |  38 input,  58.5k output,  1406.6k cache read,  66.7k cache write ($ 5.6697) |
+| 2026-08-11_00:43:51_EDT | Claude Code (bare) | claude-fable-5 (high)    | u23 | 13m39s | $ 5.9850 | 32 + 46.0 =  78.0 |  29 input,  67.2k output,  1126.5k cache read,  74.8k cache write ($ 5.9850) |
+| 2026-08-11_00:43:30_EDT | Claude Code (bare) | claude-fable-5 (xhigh)   | u24 | 43m46s | $15.3180 | 54 + 46.0 = 100.0 |  66 input, 203.8k output,  2543.6k cache read, 129.2k cache write ($15.3180) |
+| 2026-08-11_00:43:10_EDT | Claude Code (bare) | claude-fable-5 (max)     | u25 | 38m38s | $13.6410 | 29 + 43.8 =  72.8 |  48 input, 170.3k output,  2509.1k cache read, 130.7k cache write ($13.6410) |
+
+
+
+
+
+
+
+
 

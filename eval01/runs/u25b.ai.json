@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** Single state object `S`/`G`; `rand(S)` mulberry32-style PRNG seeded via `S.rngState`; `beginTurn`/`finishTurn` resolve storm→event→production→needs→fatigue→migration→trade→timers in fixed order. Score 2.
+
+**F2 (Map):** `W=8,H=8,NT=64`; `genMap` uses `rand(S)` weighted terrain table; `tryBuild` checks `B.terr.includes(t.terr)`; `adjInfo()` multipliers feed into `production()`'s `mult`. Score 2.
+
+**F3 (Economy):** Chains ore→metal (forge), metal→parts (workshop), ash→soil→food (sifter/greenhouse) in `production()`; `applyCaps()` enforces `capFor()` caps and logs overflow. Score 2.
+
+**F4 (Population):** `newColonist` records skill/fatigue/morale/job/at; `skillMult`/`fatigueMult` read `c.skill`/`c.fatigue` inside `production()`. Score 2.
+
+**F5 (Needs):** `needs()` consumes food/water, applies `-12`/`-8` morale on shortage; `moraleMult(c)` used in `production()`; fed+watered colonists regain morale, fatigue recovers via `fatigueSkill()`. Score 2.
+
+**F6 (Research):** `RESEARCH` has 10 nodes; `tryResearch` enforces `R.req`, deducts cost; `researchMult()` and direct `hasR()` checks (smelt, barter, medicine, forecast, reinforce) apply real effects. Score 2.
+
+**F7 (Events):** 12 entries in `EVENTS`; weighted pick in `drawEvent` (`e.w`); 5 events (`wanderers`,`cache`,`fever`,`preacher`,`deserter`) have differing-outcome choices; `S.eventCds`/`EVENT_CD=8` cooldown. Score 2.
+
+**F8 (Trade):** `priceOf()` reads `S.res[g]`/cap scarcity and `T.drift[g]`; `T.stock` capped/consumed; `doBuy`/`doSell` both mutate state. Score 2.
+
+**F9 (Hazard):** `stormResolve` fires by `S.stormNext`; `stormSeverity(turn)` grows; `t.dis` (fully knocked-out) skipped in `production()`; `forecast`/`reinforce`/`wall` reduce `dmg`; `repairCost` spends parts. Note: partial (non-zero) hp damage doesn't reduce output, only full knockout does. Score 2.
+
+**F10 (Save/load):** `serialize(S)`→textarea; `tryLoad` parses JSON, `validateState` checks schema, `savemsg` shows explicit error text. Score 2.
+
+**F11 (End conditions):** `S.winFlag` (pop≥12 & no shortage) and `S.dead` (pop 0) both reachable; `calcScore` combines pop/research/stock/turns/win; `showSummary` renders results. Score 2.
+
+**F12 (UI):** `data-act="tab:"` switching via `render()`; log entries carry `l.t` turn numbers; extensive `data-tip` tooltips with mult breakdowns; keydown handles Space/1-6; `@media(max-width:420px)` layout. Score 2.
+
+**F13 (Dev panel):** `runTests()` asserts real invariants (no negative res, caps, roster consistency, morale bounds, cooldowns, save/load hash match); `runBenchmark`/`benchRun` run 200 headless turns via `stepHeadless`, print `stateHash`. Score 2.
+
+**G1:** `researchMult(S,key)` reads `hasR()` flags, multiplied into `production()`'s `mult` every relevant building every turn. Score 4.
+
+**G2:** `needs()` shortage → `c.morale-=12/-8`; `moraleMult(c)` consumed next turn's `production()` mult; recovery via fed/watered `+3` morale. Score 4.
+
+**G3:** `stormResolve` damages `t.hp`, sets `t.dis` at 0; `production()` zeroes output only when `t.dis`; `tryRepair` spends parts, clears `t.dis`; but partial (non-fatal) damage doesn't reduce output at all — gap. Score 3.
+
+**G4:** `priceOf()` reads `S.res[g]`/`capFor` scarcity and `T.drift[g]` (random-walked each caravan cycle in `tradeTick`); used by both `buyPrice`/`sellPrice`. Score 4.
+
+**G5:** `wanderers` choices add colonists/spend food/adjust morale differently per branch; `fever` choices unassign+fatigue vs. mass morale hit — all mutate state beyond logging. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 3, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "rand(S) mulberry32-style PRNG; beginTurn/finishTurn fixed resolution order",
+    "F2": "genMap terrain from rand(S); adjInfo mult used in production()",
+    "F3": "production(): ore->metal->parts, ash->soil->food chains; applyCaps enforces caps",
+    "F4": "skillMult/fatigueMult read c.skill/c.fatigue inside production()",
+    "F5": "needs() shortage cuts morale; moraleMult(c) used in production()",
+    "F6": "tryResearch enforces req/cost; researchMult()/hasR() apply real effects",
+    "F7": "12 EVENTS, weighted drawEvent, 5 choice events, S.eventCds cooldown",
+    "F8": "priceOf() reads S.res scarcity + T.drift; doBuy/doSell both work",
+    "F9": "stormResolve damages t.hp/t.dis; production() skips only if t.dis; tryRepair spends parts",
+    "F10": "serialize()->textarea; tryLoad/validateState with savemsg error text",
+    "F11": "S.winFlag & S.dead both reachable; calcScore combines state; showSummary renders",
+    "F12": "tab: data-act switching; log t:S.turn; data-tip tooltips; keydown 1-6/Space; media query",
+    "F13": "runTests() asserts invariants; benchRun/stepHeadless print stateHash over 200 turns",
+    "G1": "researchMult(S,key) via hasR() feeds production() mult every turn",
+    "G2": "needs() morale penalty read by moraleMult() in next production() call",
+    "G3": "stormResolve sets t.dis; production() zeroes only on t.dis; tryRepair spends parts, clears dis",
+    "G4": "priceOf() reads S.res/capFor scarcity and T.drift updated in tradeTick",
+    "G5": "wanderers/fever choice branches mutate colonists/res/morale differently, not just logged"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Building damage only reduces output at full knockout (t.dis); partial hp damage never lowers production until zeroed."
+}
+```

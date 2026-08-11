@@ -1,0 +1,69 @@
+Now let me work through each item systematically.
+
+**F1 Core loop**: `Game` class holds all state; `mulberry32(seed)` PRNG used via `this.rng()` in events/production/storms; `endTurn()` calls fireEvent→produceResources→consumeResources→updateMorale→ashstorm in fixed order. Score 2.
+
+**F2 Map**: 64-tile grid, terrain from `(seed + i*73) % 1000`; `buildBuilding()` checks `b.terrain.includes(tile.terrain)`; `getAdjacencyBonus()` feeds `(1+adjBonus)` into forge/greenhouse/condenser output. Score 2.
+
+**F3 Economy**: ore→metal (mine/forge), ash→soil→food (soilMaker/greenhouse) chains consume inputs to produce outputs; `Math.min(caps.x, ...)` enforces storage caps everywhere. Score 2.
+
+**F4 Population**: colonists have skill/fatigue/morale/job/assignedBuilding; `avgSkill`/`fatigueModifier` read directly in `produceResources()`. Score 2.
+
+**F5 Needs**: `consumeResources()` deducts food/water per colonist, shortage lowers morale; `updateMorale()` allows recovery via restBonus — but morale is never read in `produceResources()`, so morale never changes output. Score 1.
+
+**F6 Research**: 8 nodes, prereq/available gating in `research()`, costs deducted, most unlocks apply real effects (buildings, storm mitigation, medicine morale bonus) but `efficiency` node has `unlocks:[]` and its "+20% production" is never implemented anywhere. Score 1.
+
+**F7 Events**: 10 events in `EVENTS`; weighted cumulative selection in `fireEvent()`; 4 events (morale_crisis, merchant, sickness, pests) have 2-3 choices with differing effects; cooldown via `firedEvents[e.id] < turn-10`. Score 2.
+
+**F8 Trade**: `caravanPrices` set once in `initPrices()` and never updated; `globalDemand` initialized but never read/written; buy/sell both work via `trade()` but no caravan inventory cap. Score 1.
+
+**F9 Hazard**: `ashstorm()` fires every 12 turns, severity grows with `turn/12`, damages `b.health`, reduced by construction/shielding research — but `produceResources()` never reads building health, and no repair function exists anywhere. Score 1.
+
+**F10 Save/load**: `serialize()` outputs full JSON to textarea; `deserialize()` try/catches parse errors and shows message via `doLoad()`, but does no structural validation of parsed data. Score 1.
+
+**F11 End conditions**: win (`turn>=60 && pop>=12 && food/water>=100`) and lose (`pop===0`) both reachable, summary shown in `renderMap()` ("YOU WON!"/"GAME OVER") — but no computed final score from multiple state values. Score 1.
+
+**F12 UI**: `switchTab()` works; log entries show `T${e.turn}`; keyboard shortcuts (Space, 1-6) wired via `keydown` listener; `@media(max-width:600px)` adapts layout; tile tooltips only show building name/health%, not a breakdown of resource-number derivation. Score 1.
+
+**F13 Dev panel**: `runTests()` asserts real invariants (caps, skill/morale/fatigue bounds, prereqs, save/load hash match); `runBench()` runs a headless 200-turn loop and prints `hash()`. Score 2.
+
+**G1**: research `unlocked` flag gates `buildBuilding()`, which is the only way forge/greenhouse/etc. reach `produceResources()` — effect applied through a boolean gate, not a smooth yield modifier. Score 2.
+
+**G2**: `consumeResources()` shortage → `c.morale -=5`, but `produceResources()` never reads `c.morale`, only skill/fatigue — chain breaks at final link. Score 1.
+
+**G3**: `ashstorm()` sets `b.health -= damage` (real state), but no code reads health in production and no repair function exists anywhere. Score 1.
+
+**G4**: `caravanPrices` fixed at init, `globalDemand` unused — no drift, no stockpile-based pricing. Score 0.
+
+**G5**: morale_crisis/merchant/sickness/pests choice effects directly mutate `g.resources`, `g.colonists`, `g.state.restDay` differently per branch, not just logged. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 1, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 1, "11": 1, "12": 1, "13": 2},
+  "G": {"G1": 2, "G2": 1, "G3": 1, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls fireEvent/produceResources/consumeResources/updateMorale/ashstorm in fixed order",
+    "F2": "getAdjacencyBonus() result used as (1+adjBonus) multiplier in produceResources()",
+    "F3": "forge consumes ore+power->metal, soilMaker ash->soil, greenhouse soil+water->food, capped via Math.min",
+    "F4": "avgSkill/fatigueModifier from colonist records read in produceResources()",
+    "F5": "consumeResources() drops c.morale on shortage but morale never read in produceResources()",
+    "F6": "research()/state.research gate buildBuilding(); efficiency node has unlocks:[] and no effect code",
+    "F7": "EVENTS[10], weighted loop in fireEvent(), 4 events with choices[], firedEvents cooldown check",
+    "F8": "caravanPrices set once in initPrices(), never updated; trade() does buy/sell against fixed price",
+    "F9": "ashstorm() damages b.health, reduced by research, but no code reads health in produceResources, no repair()",
+    "F10": "serialize()/deserialize() with try/catch on JSON.parse only, no field validation",
+    "F11": "win/lose checks in endTurn(), 'YOU WON!'/'GAME OVER' rendered in renderMap(), no computed score",
+    "F12": "switchTab(), keydown handler for Space/1-6, @media 600px, log shows T${e.turn}",
+    "F13": "runTests() checks caps/bounds/prereqs/hash match; runBench() runs 200 headless turns and prints hash()",
+    "G1": "BUILDINGS[bld].unlocked set true by research(), checked in buildBuilding() gate before production runs",
+    "G2": "consumeResources() lowers c.morale on shortage but produceResources() formula never reads morale",
+    "G3": "ashstorm() sets b.health but no read of health anywhere in produceResources, no repair function exists",
+    "G4": "state.globalDemand initialized in initPrices() but never read or written elsewhere",
+    "G5": "morale_crisis/merchant/sickness/pests choice effect(g) functions mutate resources/colonists/state.restDay differently"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ashstorm damage and morale are tracked as real state but never feed back into production output, and no repair mechanism exists, breaking the hazard and needs consumption chains."
+}
+```

@@ -1,0 +1,71 @@
+Reading through the candidate file to trace each system's wiring before scoring.
+
+**Worksheet**
+
+F1: state=`game` obj; PRNG `nextRand(state)` used everywhere (terrain, events, storm, benchmark), no Math.random found; `endTurn`→`beginTurnPart1`/`finishTurnPart2` resolve fixed order (storm→production→upkeep→morale→skill→strikes→events→trade→turn++). Score 2.
+
+F2: 8x8 grid loop; terrain via `pick(s, weightsTable)` seeded; `canBuild` checks `def.terrain.includes(tile.terrain)`; `adjBonus` read in `buildingYieldMultiplier` via `neighbors()`, changes `adjMult`. Score 2.
+
+F3: greenhouse ash+water→food, forge ore+power→metal, workshop metal→parts; `addResourceWithOverflowLog` enforces caps and logs loss. Score 2.
+
+F4: colonists have skill/fatigue/morale/job/assignedBuildingId; all three read in `buildingYieldMultiplier` (skillMult, moraleMult, fatigueMult). Score 2.
+
+F5: `resolveUpkeep` consumes food/water; `resolveMoraleFatigue` reduces morale on shortage; morale feeds `moraleMult`; recovery via rest (+3 surplus, fatigue decay, strike→active at morale>=30). Score 2.
+
+F6: 10 nodes r1-r10; `purchaseResearch` enforces `node.prereq.every`, deducts cost, calls `node.effect(s)` which writes `researchEffects` read in `buildingYieldMultiplier`/`buildingUnlocked`. Score 2.
+
+F7: 11 events in `EVENTS`; `rollEvent` does weighted cumulative selection; 5 choice events (festival/raid/ruins/fungus/dispute) each with distinct `apply*` state mutations; `eventCooldowns` + `weightedEligibleEvents` gate refire. Score 2.
+
+F8: `tradePrice` reads stockRatio & `market.demand`; `generateCaravanInventory` limits qty, decremented in `caravanSell`/`caravanBuy`, both wired to UI buttons. Score 2.
+
+F9: `resolveStorm` fires on `turn % interval`, severity grows with `turn*0.004`; `b.damaged` zeroes output in `buildingYieldMultiplier`; `stormwall`/research (`stormMult`) reduce severity; `repairBuilding` costs 5 parts, clears flag. Score 2.
+
+F10: `serializeState`→JSON to textarea; `loadFromText` parses, `validateStateShape` checks fields, error shown in `#loadErr`. Score 2.
+
+F11: `checkEndConditions` — pop==0 collapse, turn>=60 win/timeout; `computeScore` combines pop/research/turn/stock; `renderEndScreen` shows summary. Score 2.
+
+F12: tab click listener + `ui.tab`; log lines `[T${e.turn}]`; `RES_TOOLTIP`/`buildTooltip`/tile tooltips; keydown handles Space + digit keys; one `@media(max-width:700px)` rule plus flex-wrap layout. Score 2.
+
+F13: 17 non-trivial assertions (prereq enforcement, repair cost, cooldown, RNG determinism, save/load hash roundtrip); `runBenchmark`/`greedyPolicyTurn` run headless, `runBenchmarkReport` prints `stateHash`. Score 2.
+
+G1: `r1.effect` sets `researchEffects.greenhouseMult`, read in `buildingYieldMultiplier` per building type every turn. Score 4.
+
+G2: `resolveUpkeep` sets shortages→`resolveMoraleFatigue` subtracts morale→`moraleMult` in `buildingYieldMultiplier` every turn. Score 4.
+
+G3: `resolveStorm` sets `b.damaged`→`buildingYieldMultiplier` zeroes output→`repairBuilding` spends parts, clears flag, restores formula. Score 4.
+
+G4: `tradePrice` reads `s.resources[res]/cap` and `s.market.demand[res]`, demand drifts every `finishTurnPart2`. Score 4.
+
+G5: `apFestivalYes`(food/water/morale), `apRaidPay`(scrip), `apRuinsCareful`(parts/scrip), `apDisputeSenior`(skillXP/morale) all mutate state directly, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "nextRand(state) drives all randomness; endTurn->beginTurnPart1/finishTurnPart2 fixed order",
+    "F2": "canBuild checks def.terrain.includes; adjBonus read in buildingYieldMultiplier via neighbors()",
+    "F3": "greenhouse/forge/workshop chains; addResourceWithOverflowLog enforces caps + logs overflow",
+    "F4": "worker.skill/fatigue/morale read in buildingYieldMultiplier",
+    "F5": "resolveUpkeep shortages -> resolveMoraleFatigue delta -> moraleMult in production",
+    "F6": "purchaseResearch enforces node.prereq, calls node.effect(s) into researchEffects read elsewhere",
+    "F7": "rollEvent weighted cumulative pick; 5 choice events; eventCooldowns gate refire",
+    "F8": "tradePrice reads stockRatio+market.demand; caravanSell/caravanBuy both decrement limited inventory",
+    "F9": "resolveStorm severity grows with turn; b.damaged zeroes output; repairBuilding costs parts",
+    "F10": "serializeState->textarea; loadFromText validates via validateStateShape, errors shown",
+    "F11": "checkEndConditions collapse/win/timeout; computeScore; renderEndScreen summary",
+    "F12": "tabbar click handler; [T${turn}] log lines; RES_TOOLTIP; keydown Space/digits; one media query",
+    "F13": "17 assertPush invariants; runBenchmark headless loop + stateHash in runBenchmarkReport",
+    "G1": "r1.effect sets greenhouseMult, read per-building-type in buildingYieldMultiplier",
+    "G2": "resolveUpkeep shortages -> resolveMoraleFatigue morale drop -> moraleMult factor",
+    "G3": "resolveStorm damages b -> yieldMultiplier returns 0 -> repairBuilding restores",
+    "G4": "tradePrice(s,res) reads s.resources ratio and s.market.demand drifted each turn",
+    "G5": "apFestivalYes/apRaidPay/apRuinsCareful/apDisputeSenior write resources/colonist fields"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ashstorm damage is boolean (full output loss) rather than partial, and the ash->soil->food chain is folded into one building rather than a separate stored intermediate, per the author's own documented assumptions."
+}
+```

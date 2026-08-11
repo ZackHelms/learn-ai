@@ -1,0 +1,71 @@
+## Worksheet
+
+**F1 Core loop**: `G` is the sole state object; `rand()` reads/writes `G.rngState`; `endTurn()` calls tickProduction→tickNeeds→tickMorale→resolveStorm→tickCaravan→tickGrowth→tickEvents→checkEnd in fixed order. Score 2.
+
+**F2 Map**: 64-tile grid via `i%8`/`floor(i/8)`; terrain from `rand()` noise; `canBuild()` checks `def.terr.includes(t.terrain)`; `adjCount()` feeds real yield math (e.g. condenser `+2*adjCount`). Score 2.
+
+**F3 Economy**: soil/water→food (greenhouse consumes soil+water), ore/power→metal (forge); `capOf()` caps, `addRes()` tracks `lostTotal` overflow. Score 2.
+
+**F4 Population**: colonist records `{skill,fatigue,morale,job,assigned}`; `effOf()` reads `c.skill`/`c.fatigue`, used in `tickProduction`. Score 2.
+
+**F5 Needs**: `tickNeeds()` consumes food/water; `tickMorale()` drops morale on `!fedFood/!fedWater`; `effOf()` reads `c.morale`; morale recovers +2/turn when fed. Score 2.
+
+**F6 Research**: 11 nodes, `researchState()` enforces `pre[]`, `buyResearch()` deducts cost, each node's flag read in `tickProduction`/`capOf`/`popCap`/`canBuild`. Score 2.
+
+**F7 Events**: 13 events, weighted pool in `tickEvents` (`e.w`), 4 events (refugees, sickness, wanderer, festival) with 2-3 divergent choices, cooldown via `G.evCd[ev.id]=G.turn+8`. Score 2.
+
+**F8 Trade**: `priceRaw()` uses `G.res[r]/capOf(r)` and `G.market.drift[r]` (drifts in `tickCaravan`); `doBuy`/`doSell` both implemented, buy capped by `cv.inv[r]`. Score 2.
+
+**F9 Hazard**: `resolveStorm()` every 8 turns, `sev=1+floor(turn/24)` grows; `tickProduction` disables hp≤25 buildings and scales `hpF=b.hp/100` otherwise; `r_shut`/windbreak reduce damage; `tryRepair()` costs 2 parts. Score 2.
+
+**F10 Save/load**: `saveString()`=`JSON.stringify(G)` to textarea; `loadFromString()` validates fields, returns error string shown in `#loadErr`. Score 2.
+
+**F11 End conditions**: `checkEnd()` checks both win (turn≥60,pop≥12,no shortage) and lose (pop===0); `score()` combines pop/research/stock/turns; `showEndModal()` renders summary. Score 2.
+
+**F12 UI**: `switchTab()` wired to nav buttons; log lines show `T'+e.t`; `data-tt` tooltip system; Space/1-6 keyboard handler; one `@media(max-width:520px)` rule plus flex-wrap containers. Score 2.
+
+**F13 Dev panel**: `runTests()` has 19 real-invariant assertions (determinism, roster consistency, save/load hash roundtrip); `runBenchmark()` runs 200-turn headless `greedyPolicy()+endTurn(true)` and prints `hashState()`. Score 2.
+
+**G1**: `G.research.includes('r_sift')` read inside `tickProduction` soilworks/greenhouse case, multiplies output every turn. Score 4.
+
+**G2**: `tickNeeds` shortage → `tickMorale` `-10/-12` morale → `effOf()` uses `c.morale` in output formula, applied every turn. Score 4.
+
+**G3**: `resolveStorm` damages `b.hp` → `tickProduction` disables ≤25hp / scales `hpF` → `tryRepair` spends 2 parts + labor, restores hp and thus output. Score 4.
+
+**G4**: `priceRaw()` reads `G.res[r]/capOf(r)` and `G.market.drift[r]`, drift updates every `tickCaravan()` call. Score 4.
+
+**G5**: refugees/sickness choices call `addColonist()`, `allMorale()`, `subRes()`, `assign()` — durable state writes, not just `log()`. Score 4.
+
+## JSON
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "G.rngState mutated in rand(); endTurn() calls systems in fixed order",
+    "F2": "adjCount(i,'water') multiplies condenser/greenhouse yield in tickProduction",
+    "F3": "greenhouse consumes soil+water via subRes, produces food; capOf() enforces caps",
+    "F4": "effOf() reads c.skill and c.fatigue, called from tickProduction",
+    "F5": "tickMorale applies -10/-12 morale on !fedFood/!fedWater; effOf reads morale",
+    "F6": "G.research.includes('r_smelt') read in forge case of tickProduction",
+    "F7": "EVENTS array w/weighted pool in tickEvents; G.evCd sets 8-turn cooldown",
+    "F8": "priceRaw() reads G.res[r]/capOf(r) and G.market.drift[r]; doBuy/doSell both work",
+    "F9": "resolveStorm damages b.hp; tickProduction scales hpF; tryRepair spends 2 parts",
+    "F10": "saveString()=JSON.stringify(G); loadFromString validates and returns error string",
+    "F11": "checkEnd() sets G.won/G.dead; score() sums 4 factors; showEndModal renders it",
+    "F12": "switchTab() wired to nav buttons; keydown handler for Space/1-6; media query present",
+    "F13": "runTests() 19 assertions incl. hash roundtrip; runBenchmark() prints hashState()",
+    "G1": "r_sift flag read in tickProduction soilworks/greenhouse multiplier every turn",
+    "G2": "tickNeeds shortage sets fedFood=false -> tickMorale -10 morale -> effOf() output factor",
+    "G3": "resolveStorm lowers b.hp -> tickProduction hpF scales/disables -> tryRepair restores hp",
+    "G4": "priceRaw() combines G.res[r]/capOf(r) scarcity with G.market.drift[r] drifted in tickCaravan",
+    "G5": "refugees/sickness choice.apply() mutate G.colonists/G.res/morale directly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Caravan sell side (doSell) grows cv.inv[r] with no upper bound, so trade inventory is only truly limited on the buy side."
+}
+```

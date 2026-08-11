@@ -1,0 +1,53 @@
+Worksheet:
+
+- F1: `game` state obj; `nextRand`/mulberry32-style PRNG used everywhere (no Math.random found); `endTurn`→`beginTurnPart1`/`finishTurnPart2` resolve storm→production→upkeep→morale→skill→strikes→event→trade→turn in fixed order. Score 2
+- F2: 8x8 `grid` (64 tiles); terrain via `pick(s, weightsTable)` seeded; `canBuild` checks `def.terrain.includes`; `adjBonus.mult` read in `buildingYieldMultiplier`, changes `amt` in `resolveProduction`. Score 2
+- F3: ash→food (greenhouse consumeBase ash+water), ore→metal (forge), metal→parts (workshop); `addResourceWithOverflowLog` enforces caps and logs overflow. Score 2
+- F4: colonist records w/ skill, fatigue, morale, job, assignedBuildingId; both skill & fatigue read in `buildingYieldMultiplier`. Score 2
+- F5: `resolveUpkeep` consumes food/water/colonist; shortage sets `foodShort`/`waterShort` → `resolveMoraleFatigue` drops morale; `moraleMult` feeds `buildingYieldMultiplier`; surplus/resting restores morale (not instant loss). Score 2
+- F6: 10 nodes r1-r10; `purchaseResearch` checks `node.prereq.every`, deducts cost; each `effect(s)` mutates `researchEffects` consumed in `buildingYieldMultiplier`/`buildingUnlocked`. Score 2
+- F7: 11 events; `rollEvent` weighted by `e.weight`/total; 5 choice events (festival/raid/ruins/fungus/dispute) each 2 branches mutating state differently; `eventCooldowns` + `weightedEligibleEvents` gate refire. Score 2
+- F8: `tradePrice` reads `stockRatio` and drifting `market.demand`; `caravan.inventory` capped via `randInt`, decremented per trade, regenerated only on arrival turns; `caravanBuy`/`caravanSell` both functional. Score 2
+- F9: `resolveStorm` fires on `turn % interval===0`, severity grows w/ `turn*0.004`; damaged buildings return 0 mult in `buildingYieldMultiplier`; `stormMult` (r5/r10) and stormwall `wallCount` reduce severity; `repairBuilding` costs 5 parts and clears flag. Score 2
+- F10: `serializeState`→JSON in textarea (copyable); `loadFromText` parses, `validateStateShape` checks required fields/array shapes, error shown in `#loadErr`. Score 2
+- F11: `checkEndConditions` reaches win (pop≥12,food/water≥10) and lose (collapse pop=0, timeout turn 60); `computeScore` combines pop/research/turn/stock; `renderEndScreen` shows summary. Score 2
+- F12: `tabbar` click delegation switches `ui.tab`; log lines `[T${e.turn}]`; multiple `title=` tooltips explain formulas; Space/1-5 keydown shortcuts; `@media(max-width:700px)` reflows trade grid. Score 2
+- F13: 17 non-trivial `runTests` assertions (prereqs, repair cost, storm strike-not-leave, hash roundtrip, RNG determinism); `runBenchmark`/`greedyPolicyTurn` runs headless, `runBenchmarkReport` prints `stateHash`. Score 2
+
+- G1: `researchEffects.greenhouseMult` etc. set by node `effect`, read every production tick via `researchMult` in `buildingYieldMultiplier`. Score 4
+- G2: `resolveUpkeep` shortage flags → `resolveMoraleFatigue` morale delta -8 → `moraleMult` in `buildingYieldMultiplier` reduces next-turn output. Score 4
+- G3: `resolveStorm` sets `b.damaged=true` → `buildingYieldMultiplier` returns 0 for damaged → `repairBuilding` spends 5 parts, clears flag restoring output. Score 4
+- G4: `tradePrice` reads `s.resources[res]/cap` (stockRatio) and `s.market.demand[res]` which drifts randomly each turn in `finishTurnPart2`. Score 4
+- G5: `apFestivalYes` mutates food/water/morale; `apRaidFight` vs `apRaidPay` mutate fatigue/morale vs scrip — real divergent state writes, not just log. Score 4
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "game/s state obj, nextRand PRNG, endTurn->beginTurnPart1/finishTurnPart2 fixed order",
+    "F2": "8x8 grid, seeded terrain via pick(s,...), canBuild checks terrain, adjBonus.mult in buildingYieldMultiplier",
+    "F3": "greenhouse consumes ash+water->food, forge ore+power->metal, workshop metal->parts, caps enforced via addResourceWithOverflowLog",
+    "F4": "colonist.skill/fatigue read in buildingYieldMultiplier",
+    "F5": "resolveUpkeep shortage -> resolveMoraleFatigue delta -8 -> moraleMult in buildingYieldMultiplier; surplus restores morale",
+    "F6": "10 RESEARCH nodes, purchaseResearch enforces prereq/cost, effect() mutates researchEffects read elsewhere",
+    "F7": "11 EVENTS, rollEvent weighted by weight, 5 choice events w/ divergent apply(), eventCooldowns gate refire",
+    "F8": "tradePrice uses stockRatio+market.demand, caravan.inventory capped/decremented, caravanBuy/Sell both work",
+    "F9": "resolveStorm severity grows w/ turn, b.damaged zeroes yield, repairBuilding costs parts, stormMult/wallCount mitigate",
+    "F10": "serializeState->textarea JSON, loadFromText parses+validateStateShape+shows loadErr",
+    "F11": "checkEndConditions win/collapse/timeout all reachable, computeScore multi-factor, renderEndScreen summary",
+    "F12": "tabbar click switches ui.tab, log '[T${turn}]', title tooltips, Space/1-5 keydown, media query reflow",
+    "F13": "17 real-invariant runTests, runBenchmark/greedyPolicyTurn headless loop, runBenchmarkReport prints stateHash",
+    "G1": "researchEffects.greenhouseMult etc set by node effect, read as researchMult every buildingYieldMultiplier call",
+    "G2": "resolveUpkeep shortage -> resolveMoraleFatigue -8 morale -> moraleMult reduces buildingYieldMultiplier next tick",
+    "G3": "resolveStorm sets b.damaged -> buildingYieldMultiplier returns 0 -> repairBuilding spends 5 parts, clears flag",
+    "G4": "tradePrice reads s.resources stockRatio and s.market.demand drifted per turn in finishTurnPart2",
+    "G5": "apFestivalYes/apRaidFight/apRaidPay mutate food/water/morale/fatigue/scrip differently, not just logMsg"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm damage is a binary flag (full output loss, no graduated HP) and the stormwall's stormMitigation field is dead code duplicated by a hardcoded 0.20 constant in resolveStorm."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `GameState` single object; `mulberry32` PRNG seeds most randomness, but `createColonist` uses `Math.random()` for id — violates "all randomness seeded"; `advanceTurn()` runs production→consumption→events→hazard→morale in fixed order. Score 1.
+
+**F2 Map**: 64-tile array (8x8 via `idx%8`); `generateMap()` uses `this.rng()`; `canBuild` checks `building.terrain.includes(tile.terrain)`; `getAdjacencyBonus` feeds into `runProduction`'s `amt` calc. Score 2.
+
+**F3 Economy**: ore→metal (mine→forge), water→food (greenhouse) chains consume/produce; `resourceCaps` enforced via `Math.min` in `runProduction`. Score 2.
+
+**F4 Population**: colonists have skill/fatigue/morale/assigned; `runProduction` reads `assigned.skill[bldg.labor]` and `assigned.fatigue>30`. Score 2.
+
+**F5 Needs**: `runConsumption` deducts food/water; `updateMorale` drops morale on shortage; but morale is never read in `runProduction` — only fatigue affects output, so "morale changes output" is missing. Score 1.
+
+**F6 Research**: 8 nodes defined; costs deducted in `doResearch`; but `massCulture`/`resilience` prereqs check `game.map.some(t=>t.building===node.prereq)` against research keys that are never building names — unreachable; `power_reduction`/`skill_growth`/`morale_boost` never read anywhere. Score 1.
+
+**F7 Events**: 10 defined in `EVENT_DEFS`; selection is uniform (`Math.floor(rng()*events.length)`), not weighted; only 3 events (`sickness`,`visitor`,`contamination`) have choices (need 4+); `getAvailableEvents()` cooldown logic ignores per-event fire turn, effectively broken. Score 1.
+
+**F8 Trade**: `doTrade` mutates resources/scrip for buy/sell; but `tradePrices` set once in constructor and never updated by stockpiles/turns, `tradeVol` unused, no caravan inventory cap. Score 1.
+
+**F9 Hazard**: `fireAshstorm` periodic every 12 turns, `stormSeverity*=1.1`; `tile.damage>=2` zeroes production in `runProduction`; `research.stormShield`/`wall` reduce dmg in `fireAshstorm`; `repairBuilding` spends parts and restores. Score 2.
+
+**F10 Save/load**: `serialize()`→clipboard copy in `doSave`; `GameState.deserialize` wrapped in try/catch, `doLoad` shows alert with error message on bad input. Score 2.
+
+**F11 End conditions**: `checkWinLose` has reachable win (turn≥60,pop≥12,food/water≥10) and lose (pop=0); score computed from pop/research/turn in `doEndTurn`; summary shown via `alert()`. Score 2.
+
+**F12 UI**: tab click handler wired; log entries show `TURN ${entry.turn}`; keyboard shortcuts (Space, Digit1-5) wired; `@media(max-width:600px)` responsive CSS; but `.tooltip`/`.tooltip-anchor` CSS classes are never used in any rendered HTML — no tooltips exist. Score 1.
+
+**F13 Dev panel**: `runTests()` has 15 real invariant checks (caps, ranges, save/load hash match); `runBenchmark()` creates isolated `GameState`, loops 200 `advanceTurn()` calls headlessly, prints `stateHash()`. Score 2.
+
+**G1**: `research.betterFarming.done`/`advancedOre.done`/`labExpansion.done` read directly in `runProduction`'s output formula each turn. Score 3.
+
+**G2**: shortage sets `foodShortest`/`waterShortest` → morale delta in `updateMorale`, but morale is never read in `runProduction`; only extreme case (morale=0 → colonist removed via `.pop()`) links to output loss. Score 2.
+
+**G3**: `fireAshstorm` sets `tile.damage`; `runProduction` skips production only at `damage>=2` (binary, not graduated); `repairBuilding` spends parts and restores production below threshold. Score 3.
+
+**G4**: `tradePrices` fixed object set once in constructor, `tradeVol` defined but never read/applied anywhere. Score 0.
+
+**G5**: `sickness`/`visitor`/`contamination` choices each call `applyEvent` which mutates `this.resources`/`this.colonists` differently per branch, not just logged. Score 4.
+
+```json
+{
+  "F": {"1": 1, "2": 2, "3": 2, "4": 2, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 2, "G3": 3, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32 seeds rng but createColonist uses Math.random() for id; advanceTurn() fixed order",
+    "F2": "generateMap() uses rng(); canBuild checks terrain; getAdjacencyBonus used in runProduction amt calc",
+    "F3": "mine ore -> forge metal chain; resourceCaps enforced via Math.min in runProduction",
+    "F4": "runProduction reads assigned.skill[bldg.labor] and assigned.fatigue>30",
+    "F5": "updateMorale drops morale on shortage but runProduction never reads c.morale, only fatigue",
+    "F6": "massCulture/resilience prereq checks building names that never exist -> unreachable; power_reduction/skill_growth/morale_boost never read",
+    "F7": "fireEvent uses uniform rng, not weighted; only 3 events have choices; getAvailableEvents cooldown logic ignores per-event fire turn",
+    "F8": "doTrade mutates resources/scrip but tradePrices never updated after constructor; tradeVol unused",
+    "F9": "fireAshstorm sets tile.damage, runProduction skips at damage>=2, stormShield/wall reduce dmg, repairBuilding spends parts",
+    "F10": "serialize() copied via doSave; GameState.deserialize try/catch shows alert error in doLoad",
+    "F11": "checkWinLose reachable win/lose; score computed in doEndTurn from colonists/research/turn; alert summary shown",
+    "F12": "tabs/keyboard/responsive CSS wired but .tooltip-anchor/.tooltip classes never rendered in any HTML string",
+    "F13": "runTests() checks 15 real invariants incl. save/load hash match; runBenchmark() runs isolated 200-turn loop, prints stateHash",
+    "G1": "research.betterFarming/advancedOre/labExpansion.done read directly in runProduction output formula",
+    "G2": "shortage sets foodShortest/waterShortest -> morale delta in updateMorale, but only morale=0 pop() removal reaches production, not scaled output",
+    "G3": "fireAshstorm sets tile.damage; runProduction zeroes output at damage>=2; repairBuilding spends parts and restores",
+    "G4": "tradePrices is a static object set once in constructor, never recomputed from resources or drift; tradeVol dead",
+    "G5": "sickness/visitor/contamination choices call applyEvent which mutates resources/colonists differently per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Trade prices are entirely static (never respond to stockpiles or drift) and colonist morale never factors into the production formula, only fatigue does."
+}
+```

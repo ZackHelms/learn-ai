@@ -1,0 +1,69 @@
+# Worksheet
+
+**F1 – Core loop**: `state` object; `rnd(s)` mulberry32 seeded via `seedToInt`, used for all randomness; `endTurn()`/`resolveTurnHeadless()` call systems in fixed documented order. Score 2.
+
+**F2 – Map**: `generateMap` builds 8x8 from seeded `rnd`; `canBuildAt` checks `def.terrain.indexOf(tile.terrain)`; `computeAdjacencyMult` multiplies into `resolveProduction`'s `mult`. Score 2.
+
+**F3 – Economy**: ore→metal (`quarry`→`forge` consumes `ore`), ash(ambient)→soil→food (`reclaimer`→`greenhouse` consumes `soil`+`water`); `getCap`/`gainRes` clamp and report `lost`, logged on overflow. Score 2.
+
+**F4 – Population**: colonist records `{skill,fatigue,morale,job,buildingId}`; `resolveProduction` reads `worker.fatigue`/`worker.morale`/`worker.skill` for mult/skill. Score 2.
+
+**F5 – Needs**: `resolveNeeds` consumes food/water, applies morale penalty on shortage; `morMult` in `resolveProduction` reads morale; `resolveFatigueMorale` drifts morale to baseline (recoverable) and morale-0 has a leave/refuse-then-recover branch. Score 2.
+
+**F6 – Research**: 10 nodes in `RESEARCH_NODES`; `isResearchAvailable` enforces `node.prereq.every(isResearchDone)`; `payCost` deducts; each id consumed somewhere (`isBuildingUnlocked`, `researchYieldMult`, `getCap`, `getStormDamageResearchMult`, `getPopCap`). Score 2.
+
+**F7 – Events**: 13 entries in `EVENTS`; `weightedPick(s,avail,e=>e.weight)` in `drawEvent`; 5 events (`merchantgambit`,`refugeeband`,`ventinstability`,`scavengeopportunity`,`colonistdispute`) have 2-3 differing-outcome choices; `eventCooldowns` set on fire, filtered in `drawEvent`, ticked in `tickEventCooldowns`. Score 2.
+
+**F8 – Trade**: `tradePrice` reads `s.resources[good]` (stockFactor) and `s.market[g]` (drift); `caravan.inventory` buyQty/sellQty decremented in `buyGood`/`sellGood`, both called from UI and `greedyPolicyTurn`. Score 2.
+
+**F9 – Hazard**: `isStormTurn`/`stormSeverity` grow with turn; `resolveStorm` damages `b.hp`; `resolveProduction`'s `hpMult` reads `b.hp<50`; `windbreak` + `stormeng`/`reinforced` research reduce damage via `getStormMitigationFlat`/`getStormDamageResearchMult`; `repairBuilding` spends `parts`, restores hp. Score 2.
+
+**F10 – Save/load**: `serializeState` = full `JSON.stringify(state)` to textarea; `loadBtn` parses, `validateLoadedState` checks required fields/types and shows specific error message. Score 2.
+
+**F11 – End conditions**: `checkEndConditions` win (turn≥60,pop≥12,needs met) and lose (pop 0 or turn 60 fail) both reachable; `computeScore` combines pop/research/turn/stockpile; `renderGameOverBanner` shows summary. Score 2.
+
+**F12 – UI**: `switchTab` wired to `#tabs button` clicks and `1-6` keys; `renderLog` prefixes `T'+l.turn`; `data-tip`/`initTooltipSystem` explain numbers; `keydown` handler for Space/tabs; `@media (max-width:600px)` layout rules. Score 2.
+
+**F13 – Dev panel**: `runTests()` asserts real invariants (PRNG determinism, cap clamping, research prereqs, storm hp bounds, save/load hash roundtrip); `runBenchmark()` runs 200 headless turns via `greedyPolicyTurn`+`resolveTurnHeadless`, prints `hashState`. Score 2.
+
+**G1**: `researchYieldMult` reads `s.research.filtration/croprotation/deepdrilling`, multiplied into `resolveProduction`'s `mult`; unlock also gates buildings via `isBuildingUnlocked`. Score 4.
+
+**G2**: `resolveNeeds` shortfall → flat morale penalty for all active colonists → `morMult` in `resolveProduction` reduces output; penalty is a flat constant per shortage type rather than scaled to severity. Score 3.
+
+**G3**: `resolveStorm` reduces `b.hp` → `hpMult` in `resolveProduction` halves output below 50hp → `repairBuilding` spends `parts` and restores `hp=100`. Score 4.
+
+**G4**: `tradePrice` combines `stockFactor` (from `s.resources[good]`/cap) and `s.market[g]` (random-walk drift in `updateTrade`). Score 4.
+
+**G5**: `refugeeband` mutates `resources.food/water` and adds colonists via `addColonist`; `ventinstability` sets `suppressGeotapThisTurn` or damages a Geo Tap's `hp`; both are real state writes, not log-only. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 3, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn()/resolveTurnHeadless() call event->production->needs->fatigue->storm->trade->end in fixed order",
+    "F2": "computeAdjacencyMult(s,b) multiplies into resolveProduction's mult",
+    "F3": "forge consumes ore+power to make metal; getCap/gainRes clamp+report overflow",
+    "F4": "resolveProduction reads worker.fatigue/morale/skill for mult and output amount",
+    "F5": "resolveNeeds penalizes morale on shortage; morMult in resolveProduction reads it; resolveFatigueMorale drifts morale back",
+    "F6": "researchYieldMult/getCap/isBuildingUnlocked read s.research flags set by purchaseResearch",
+    "F7": "weightedPick(s,avail,e=>e.weight) in drawEvent; eventCooldowns set/read/ticked",
+    "F8": "tradePrice reads s.resources[good] and s.market[g]; buyGood/sellGood decrement caravan.inventory",
+    "F9": "resolveStorm damages b.hp; hpMult in resolveProduction reads it; repairBuilding spends parts to restore hp",
+    "F10": "serializeState=JSON.stringify(state); validateLoadedState checks fields and reports specific errors",
+    "F11": "checkEndConditions sets gameOver/winner; computeScore combines pop/research/turn/stock; renderGameOverBanner shows summary",
+    "F12": "switchTab wired to #tabs clicks and keydown 1-6; renderLog prefixes T+turn; data-tip tooltips; @media narrow layout",
+    "F13": "runTests asserts prereqs/hp bounds/hash roundtrip; runBenchmark runs 200 headless turns and prints hashState",
+    "G1": "researchYieldMult(s,btype) read inside resolveProduction's mult calculation",
+    "G2": "resolveNeeds shortage -> flat morale penalty -> morMult read in resolveProduction",
+    "G3": "resolveStorm reduces b.hp -> hpMult halves output -> repairBuilding spends parts, hp=100",
+    "G4": "tradePrice = base*market[g]*stockFactor(have/cap), market drifts in updateTrade",
+    "G5": "refugeeband/ventinstability choices write resources.food/water, addColonist, or building.hp/suppressGeotapThisTurn"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Population growth toward the 12-colonist win threshold depends only on the low-frequency refugeeband event, making the win path narrow despite otherwise solid system wiring."
+}
+```

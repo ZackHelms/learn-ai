@@ -1,0 +1,67 @@
+**F1 Core loop:** state object `G`/`S`, mulberry32 PRNG (`S.rng()`) used for all randomness, `endTurn()` calls resolveStorm→resolveProduction→resolveNeeds→resolveMoraleFatigue→resolveDepartures→resolveEvent→resolveCaravan→checkEndConditions in fixed order. Score 2.
+
+**F2 Map:** 8x8 loops in `newGame`/render; terrain from `S.rng()`; `onTileClick` checks `def.terrain.includes(t)`; `adjacentTerrainBonus()` feeds `adjMult` into `resolveProduction` amounts. Score 2.
+
+**F3 Economy:** water consumed by greenhouse (`consume('water',3)`→food), power consumed by forge (→metal); `produce()` enforces `getCap`; overflow logged via `overflowLog`. Score 2.
+
+**F4 Population:** colonist records have skill/fatigue/morale/assignedTo; `worker.skill` and `worker.morale` read in `resolveProduction`, but `fatigue` is never read there directly (only indirectly via morale drift). Score 1.
+
+**F5 Needs:** `resolveNeeds` computes food/water shortage, applies `moraleHit`; `moraleOutputMult(worker.morale)` used in production; `resolveMoraleFatigue` drifts morale back toward 50 (recovery). Score 2.
+
+**F6 Research:** `RESEARCH` has 8 nodes; `researchAvailable` enforces prereqs; cost deducted in button `onclick`; effects consumed via `researchEffectAmt` in production formulas and dorm-lock gate. Score 2.
+
+**F7 Events:** `makeEvents()` has 11 entries; weighted pick loop in `resolveEvent`; 4 events (`illness`,`caravan_bandits`,`migrant`,`major_storm_warn`) have differing choice outcomes; `lastFired`/`cooldown` checked. Score 2.
+
+**F8 Trade:** `tradePrice()` uses stockpile ratio + `S.marketFactor` (drifts in `resolveCaravan`); caravan `inventory[k]` limited and decremented/incremented on buy/sell in `renderTrade` handlers. Score 2.
+
+**F9 Hazard:** `resolveStorm` severity scales with `S.turn`; `b.hp/100` factor cuts `effMult` in `resolveProduction`; `stormweathering` research and `windbreak` count reduce severity; `repairBtn` spends 5 parts to restore hp. Score 2.
+
+**F10 Save/load:** `serializeState`→JSON in textarea; `deserializeState` validates required fields, throws on bad input shown via `.msg.err`. Score 2.
+
+**F11 End conditions:** `checkEndConditions` win (turn≥60,pop≥12,needsMet) and lose (pop==0 or fallen-short at 60) both reachable; `computeScore` combines pop/research/turn/stock; `renderGameOver` shows summary. Score 2.
+
+**F12 UI:** `switchTab` wired to nav buttons; `renderLog` prefixes `T{turn}`; tooltips via `resourceTooltip`/`tileTooltip`; keydown handler for Space/1-5; `@media(max-width:480px)` responsive rule. Score 2.
+
+**F13 Dev panel:** `runTests` asserts cap/morale/skill bounds, prereq gating, save/load hash round-trip, PRNG determinism; `runBenchmark` runs 200 headless turns and prints djb2 hash. Score 2.
+
+**G1:** `irrigation` sets `effect:'greenhouseYield'`; `researchEffectAmt` read as `yieldBonus` in greenhouse production every turn. Score 4.
+
+**G2:** `resolveNeeds` shortage → `c.morale -= moraleHit` → `moraleOutputMult(worker.morale)` multiplies `effMult` in `resolveProduction` next turn. Score 4.
+
+**G3:** `resolveStorm` reduces `b.hp` → `effMult` includes `b.hp/100` (and hp≤0 halts output) → `repairBtn` spends 5 parts, `b.hp+=25`. Score 4.
+
+**G4:** `tradePrice` reads `S.res[key]/cap` (stockpile) and `S.marketFactor` (random-walk updated each caravan arrival in `resolveCaravan`). Score 4.
+
+**G5:** `illness` quarantine sets `c.quarantined=true` (excludes worker from production/needs); `migrant` choice calls `addColonist(S)`, durable roster change. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls resolveStorm/resolveProduction/... in fixed order using S.rng()",
+    "F2": "adjacentTerrainBonus() bonus feeds adjMult in resolveProduction",
+    "F3": "consume('water',3) then produce('food',...) in resolveProduction greenhouse branch",
+    "F4": "worker.skill/morale read in resolveProduction; c.fatigue never read there",
+    "F5": "resolveNeeds moraleHit applied, moraleOutputMult(worker.morale) used in production",
+    "F6": "researchEffectAmt(S,'greenhouseYield') read as yieldBonus in resolveProduction",
+    "F7": "eventDeck 11 entries; weighted loop in resolveEvent; cooldown via lastFired",
+    "F8": "tradePrice() uses S.res[key]/cap and S.marketFactor drifted in resolveCaravan",
+    "F9": "b.hp/100 factor in effMult; repairBtn spends parts to restore hp",
+    "F10": "serializeState/deserializeState with required-field validation and err message",
+    "F11": "checkEndConditions sets outcome; computeScore/renderGameOver show summary",
+    "F12": "switchTab wired to nav buttons; keydown handles Space/1-5; media query present",
+    "F13": "runTests asserts real invariants; runBenchmark runs 200 turns headless, prints djb2 hash",
+    "G1": "irrigation effect greenhouseYield read via researchEffectAmt in production formula",
+    "G2": "resolveNeeds shortage cuts morale, moraleOutputMult(worker.morale) reduces output next turn",
+    "G3": "resolveStorm cuts b.hp, effMult scales by hp/100, repairBtn restores hp for parts",
+    "G4": "tradePrice reads stockpile ratio and marketFactor which drifts in resolveCaravan",
+    "G5": "illness quarantine sets c.quarantined affecting production/needs; migrant calls addColonist"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Fatigue is tracked and displayed but never read directly by the production formula, only indirectly through its effect on morale."
+}
+```

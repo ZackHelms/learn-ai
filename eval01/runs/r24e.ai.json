@@ -1,0 +1,68 @@
+# Worksheet
+
+**F1 — Core loop**: `Game` class holds all state; `mulberry32(seed)` feeds every RNG call (terrain, colonists, storms, events, trade); `endTurn()` runs fixed 10-step sequence. Score 2.
+
+**F2 — Map**: 8x8 `this.map` loop; `generateTerrain(rng,x,y)` seeded; `canBuild` checks `building.terrain.includes(tile.terrain)`; `adjacency_bonus` (vent/water) multiplies `produce` in `produceResources()`. Score 2.
+
+**F3 — Economy**: FORGE/GREENHOUSE `conversions` chain ore→metal, ash→soil→food; storage cap enforced with overflow drop loop in `produceResources()`. Score 2.
+
+**F4 — Population**: colonists have `skills`, `fatigue`, `morale`, `job`; `skill_bonus = c.skills[building.skill]` read in production, but `fatigue` is only written (`+=1`, decayed `-1`), never read by any production/output code. Score 1.
+
+**F5 — Needs**: per-turn food/water `-=1` per colonist; shortage triggers `c.morale -= 5`; but production formula (`amount*skill_bonus*health_factor*adjacency`) never reads morale — only indirect effect via colonist departure. Recovery exists (events, production morale gain). Score 1.
+
+**F6 — Research**: 8 nodes in `RESEARCH_TREE`, prereqs/cost enforced in `canResearch`/`doResearch`, but only 4/8 nodes (`ore_refining`, `irrigation`, `power_grid`, `shelter_tech`) have any applied effect, and most are one-time resource bumps, not yield modifiers; `advanced_forge`/`soil_science`/`preservation`/`advanced_lab` have zero code effect. Score 1.
+
+**F7 — Events**: 10 entries in `EVENTS`, weighted selection in `fireEvent()`, cooldowns via `fired_events`; 4 events have 2 outcomes, but outcome is picked by `this.rng()`, not the player — no real "choice" UI exists. Score 1.
+
+**F8 — Trade**: `updateTradeState()` drifts `trade_supply` and factors `resources[res]`; `buyResource`/`sellResource` both work; but no caravan inventory cap exists — unlimited buy/sell. Score 1.
+
+**F9 — Hazard**: `triggerAshstorm()` fires on timer, `severity` scales water loss with turn but not building-damage probability; `health_factor` reduces output of damaged buildings; `storm_damage_reduction` from research lowers damage — but no repair function anywhere restores `building_health`. Score 1.
+
+**F10 — Save/load**: `serialize()`→JSON in textarea (`showSaveModal`); `Game.deserialize()` parses pasted text, try/catch throws `'Invalid save file'`, shown via `alert` in `loadGame()`. Score 2.
+
+**F11 — End conditions**: win check (`turn>=60 && colonists>=12 && food/water>=20`) and lose check (`colonists.length===0`) both reachable in `endTurn()`; `calculateScore()` combines pop/research/scrip/turn; `renderGameOverModal()` shown when `game_over`. Score 2.
+
+**F12 — UI**: `switchTab`/`current_tab` works; log entries carry `entry.turn`; `title` attributes on buildings/tiles act as tooltips; keydown listener maps Space/1-6; `@media max-width:600px` adapts layout. Score 2.
+
+**F13 — Dev panel**: `runTests()` checks real invariants (storage cap, morale range, save/load round-trip, prereqs, cooldowns); `runBenchmark()` runs 200 headless `endTurn()` calls and prints `state_hash`. Score 2.
+
+**G1 — research→production**: `produceResources()` never reads `research_done`; unlocks only apply one-time flat resource bumps (`resources.ore += 5`), not persistent yield changes. Score 0.
+
+**G2 — shortfall→morale→output**: shortage writes `c.morale -= 5`, but production formula has no morale term; only indirect path is morale-triggered colonist removal reducing headcount for job assignment. Score 2.
+
+**G3 — storm→damage→repair→recovery**: `triggerAshstorm` sets `building_health -= 0.3`, read as `health_factor` in production (real loss); but no code anywhere increases `building_health` — repair/recovery link entirely absent. Score 2.
+
+**G4 — trade prices**: `updateTradeState()` sets `trade_prices[res] = 2 + trade_supply[res] + (resources[res]>200?-0.5:0)`, read by `buyResource`/`sellResource`; minor gap: stockpile factor is a coarse binary threshold. Score 3.
+
+**G5 — event choices mutate state**: `settler_arrival` (adds colonist+food loss vs morale-only) and `equipment_malfunction` (parts-15/morale+8 vs power-5/morale-5) both call `outcome.effect(this)` with distinct state writes; gap: branch is RNG-picked, not player-picked. Score 3.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 0, "G2": 2, "G3": 2, "G4": 3, "G5": 3},
+  "evidence": {
+    "F1": "mulberry32(seed) drives all rng calls; endTurn() runs fixed 10-step order",
+    "F2": "canBuild checks building.terrain.includes(tile.terrain); adjacency_bonus multiplies produce()",
+    "F3": "FORGE/GREENHOUSE conversions chain ore->metal, ash->soil->food; overflow loop caps storage",
+    "F4": "c.skills[building.skill] read in produceResources; c.fatigue never read anywhere",
+    "F5": "colonists.morale-=5 on shortage in endTurn(), but production formula omits morale term",
+    "F6": "only 4/8 RESEARCH_TREE ids have code effects in doResearch(), rest unused",
+    "F7": "fireEvent() picks outcome via this.rng(), not player input, despite outcomes array",
+    "F8": "updateTradeState() sets trade_prices from trade_supply/resources; no caravan stock cap",
+    "F9": "triggerAshstorm() decrements building_health; no function ever increases it back",
+    "F10": "serialize()/Game.deserialize() with try/catch Invalid save file, wired to loadGame()",
+    "F11": "endTurn() sets win/game_over flags; calculateScore() and renderGameOverModal() used",
+    "F12": "switchTab(), log entry.turn, keydown Space/1-6 listener, @media 600px rules",
+    "F13": "runTests() checks save/load round-trip & prereqs; runBenchmark() 200-turn headless hash",
+    "G2": "food<0 -> colonists morale-=5 in endTurn(); output loss only via morale<=0 removeColonist",
+    "G3": "triggerAshstorm building_health-=0.3 read as health_factor in produceResources; no repair fn",
+    "G4": "trade_prices formula reads trade_supply drift and resources[res]>200, used in buy/sellResource",
+    "G5": "settler_arrival/equipment_malfunction outcome.effect(g) writes distinct resource/morale changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Damaged buildings never regain health (no repair mechanism), and research unlocks mostly grant one-time resource bumps instead of persistent production modifiers."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `Game` class holds all state; `mulberry32(seed)` assigned to `this.rng`, used in `fireEvent`, `produceResources`, `ashstorm`, `createColonist`; `endTurn()` calls systems in fixed order. Score 2.
+
+**F2 — Map**: 64-tile grid, `generateMap()` derives terrain from `(seed + i*73)%1000`; `buildBuilding()` checks `b.terrain.includes(tile.terrain)`; `getAdjacencyBonus()` read inside `produceResources()` multiplies output. Score 2.
+
+**F3 — Economy**: chains mine→forge (ore→metal), soilMaker→greenhouse (ash→soil→food); caps enforced via `Math.min(this.state.caps.X,...)` in every production branch. Score 2.
+
+**F4 — Population**: colonist objects have `skill, fatigue, morale, job, assignedBuilding`; `avgSkill`/`fatigueModifier` read directly in `produceResources()`. Score 2.
+
+**F5 — Needs**: `consumeResources()` deducts food/water per colonist, shortage cuts `c.morale`; `updateMorale()` recovers morale via `restBonus`/`medicineBonus`; BUT morale is never read anywhere inside `produceResources()`, so morale never changes output. Score 1.
+
+**F6 — Research**: exactly 8 nodes, `available` flag gates purchase, costs deducted in `research()`; most unlocks apply real effects (unlock buildings, `construction`/`shielding` reduce storm dmg, `medicine` boosts morale) but `efficiency` (+20% production) and `hydroponics` (+30% water) are never read anywhere. Score 1.
+
+**F7 — Events**: 10 entries in `EVENTS`; weighted selection via `totalWeight`/`r -= e.weight`; 4 events (`morale_crisis`, `merchant`, `sickness`, `pests`) have differentiated choice effects; cooldown via `firedEvents[id] = turn` checked against `turn-10`. Score 2.
+
+**F8 — Trade**: `caravanPrices` set once in `initPrices()` and never updated; `globalDemand` written but never read anywhere; buy/sell both function via `trade()`; caravan has no inventory cap. Score 1.
+
+**F9 — Hazard**: `ashstorm()` fires every 12 turns, severity grows with `turn/12`, reduced by `construction`/`shielding` research; but `b.health` is never read in `produceResources()` (no output loss) and no repair function exists anywhere. Score 1.
+
+**F10 — Save/load**: `serialize()` outputs JSON to readonly textarea; `deserialize()` wraps `JSON.parse` in try/catch and `doLoad()` shows error text, but only catches syntax errors, not malformed/missing-field payloads. Score 1.
+
+**F11 — End conditions**: win (`turn>=60 && pop>=12 && food/water>=100`) and lose (`colonists.length===0`) both checked in `endTurn()`; summary shown via `renderMap()`'s WIN/GAME OVER block, but no aggregate score value is computed anywhere. Score 1.
+
+**F12 — UI**: `switchTab()` wired to `.tab` click listeners; log lines show `T${e.turn}`; tile/building tooltips via `.tooltip`; keyboard shortcuts (`Space`, `1`-`6`) in `keydown` listener; `@media (max-width:600px)` layout rules. Score 2.
+
+**F13 — Dev panel**: `runTests()` has 14 real invariant assertions (caps, ranges, prereqs, hash round-trip); `runBench()` runs 200 headless `endTurn()` calls and prints `hash()`. Score 2.
+
+**G1**: research unlocks set `BUILDINGS[bld].unlocked=true`, gating `buildBuilding()`, but `produceResources()` never reads any research flag to modify a yield formula (advertised `hydroponics`/`efficiency` bonuses unused) — only special-case unlock-gating exists. Score 2.
+
+**G2**: `consumeResources()` shortfall drops `c.morale`; but `produceResources()` never reads morale for output. Only indirect link: `updateMorale()` removes colonists at `morale===0` (30% chance), reducing future production via headcount loss — a hardcoded special case, not an output multiplier. Score 2.
+
+**G3**: `ashstorm()` sets `b.health -= damage`; `produceResources()` never checks `b.health`, so damaged buildings produce at full rate; no `repair` function exists anywhere in the file. Score 1.
+
+**G4**: `caravanPrices` fixed at init, never mutated by turns or stockpiles; `globalDemand` object is written once and never read. Score 0.
+
+**G5**: `morale_crisis`/`merchant`/`sickness`/`pests` choice effects each write distinct state changes (`state.restDay`, `resources.food/scrip/parts`, `colonists[].fatigue/morale`) via `makeChoice()` calling `effect(game)`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 1, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 1, "11": 1, "12": 2, "13": 2},
+  "G": {"G1": 2, "G2": 2, "G3": 1, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32(seed) -> this.rng used in fireEvent/produceResources/ashstorm; endTurn() fixed order",
+    "F2": "generateMap() seeds terrain; getAdjacencyBonus() multiplies output in produceResources()",
+    "F3": "forge consumes ore->metal, soilMaker ash->soil->greenhouse soil->food; Math.min(caps.X,...) caps overflow",
+    "F4": "avgSkill, fatigueModifier computed from colonist skill/fatigue, read in produceResources()",
+    "F5": "consumeResources() drops c.morale on shortage, updateMorale() recovers it, but morale unread in produceResources()",
+    "F6": "research() deducts cost, sets done; unlocks gate BUILDINGS[x].unlocked but efficiency/hydroponics effects never read",
+    "F7": "10 EVENTS entries, weight-based selection loop, 4 choice events, firedEvents[id]=turn cooldown check",
+    "F8": "trade() buy/sell work; caravanPrices static after initPrices(), globalDemand never read",
+    "F9": "ashstorm() reduces via construction/shielding research; b.health never read in produceResources(), no repair fn",
+    "F10": "serialize()/deserialize() with try/catch JSON.parse shown via doLoad(), no field-level validation",
+    "F11": "win/lose checked in endTurn(); renderMap() shows WIN/GAME OVER text but no computed score value",
+    "F12": "switchTab() wired to .tab clicks; log-turn spans; keydown Space/1-6; @media 600px rules",
+    "F13": "runTests() 14 real invariant asserts incl. hash round-trip; runBench() 200-turn headless loop prints hash()",
+    "G1": "RESEARCH unlocks set BUILDINGS[k].unlocked, gating buildBuilding(); no yield-multiplier read in produceResources()",
+    "G2": "consumeResources() shortfall cuts c.morale; updateMorale() removes colonist at morale===0, indirectly cutting output",
+    "G3": "ashstorm() sets b.health; produceResources() never reads b.health, no repair() function exists",
+    "G4": "caravanPrices fixed in initPrices(), never updated per turn or by resources.X",
+    "G5": "makeChoice(i) calls evt.choices[i].effect(game) mutating resources.food/scrip/parts, colonist fatigue/morale, state.restDay"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Damage, morale, and research-yield effects are tracked as state fields but never actually read back into the production formula, so several systems are wired one-way only."
+}
+```
