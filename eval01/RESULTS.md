@@ -99,16 +99,19 @@ results nowhere on the page. Original values in git history and runall logs.
 | 2026-08-10_23:04:01_EDT | Claude Code (bare) | claude-haiku-4-5 (high)  | r23 |  3m06s | $ 0.1586 | 34 + 33.8 =  67.8 |  17 input,  21.0k output,    42.0k cache read,  23.7k cache write ($ 0.1586) |
 | 2026-08-10_23:03:41_EDT | Claude Code (bare) | claude-haiku-4-5 (xhigh) | r24 |  3m01s | $ 0.1538 | 39 + 28.8 =  67.8 |  17 input,  20.3k output,    42.0k cache read,  23.2k cache write ($ 0.1538) |
 | 2026-08-10_23:03:21_EDT | Claude Code (bare) | claude-haiku-4-5 (max)   | r25 |  6m55s | $ 0.3175 | 33 + 28.2 =  61.2 |  27 input,  47.3k output,    80.1k cache read,  35.7k cache write ($ 0.3175) |
+
 | 2026-08-10_23:24:23_EDT | Claude Code (bare) | claude-sonnet-5 (low)    | s21 |  5m13s | $ 1.5154 | 54 + 45.0 =  99.0 |  72 input,  34.4k output,  2229.0k cache read,  54.9k cache write ($ 1.5154) |
 | 2026-08-10_23:24:03_EDT | Claude Code (bare) | claude-sonnet-5 (medium) | s22 |  9m18s | $ 2.5066 | 54 + 46.0 = 100.0 |  74 input,  58.2k output,  3413.1k cache read, 101.4k cache write ($ 2.5066) |
 | 2026-08-10_23:23:43_EDT | Claude Code (bare) | claude-sonnet-5 (high)   | s23 | 14m06s | $ 3.4277 | 47 + 45.8 =  92.8 |  98 input,  84.5k output,  5092.7k cache read, 105.1k cache write ($ 3.4277) |
 | 2026-08-10_23:23:23_EDT | Claude Code (bare) | claude-sonnet-5 (xhigh)  | s24 | 36m19s | $ 9.6881 | 48 + 45.8 =  93.8 | 216 input, 223.3k output, 16586.7k cache read, 226.7k cache write ($ 9.6881) |
 | 2026-08-10_23:23:03_EDT | Claude Code (bare) | claude-sonnet-5 (max)    | s25 | 38m03s | $ 9.4786 | 45 + 45.8 =  90.8 | 198 input, 220.0k output, 16169.5k cache read, 220.8k cache write ($ 9.4786) |
+
 | 2026-08-11_09:30:25_EDT | Claude Code (bare) | claude-opus-5 (low)      | t21 | 13m27s | $ 3.3940 | 45 + 46.0 =  91.0 |  36 input,  73.6k output,  1490.8k cache read,  80.6k cache write ($ 3.3940) |
 | 2026-08-11_09:30:03_EDT | Claude Code (bare) | claude-opus-5 (medium)   | t22 | 16m36s | $ 5.3940 | 54 + 46.0 = 100.0 |  86 input,  77.9k output,  4452.1k cache read, 121.8k cache write ($ 5.3940) |
 | 2026-08-11_09:29:43_EDT | Claude Code (bare) | claude-opus-5 (high)     | t23 | 29m02s | $ 7.2858 | 52 + 46.0 =  98.0 |  83 input, 153.1k output,  4406.5k cache read, 125.3k cache write ($ 7.2858) |
 | 2026-08-11_09:29:21_EDT | Claude Code (bare) | claude-opus-5 (xhigh)    | t24 | 35m51s | $11.4945 | 54 + 46.0 = 100.0 | 133 input, 177.0k output, 10175.5k cache read, 197.9k cache write ($11.4945) |
 | 2026-08-11_09:29:01_EDT | Claude Code (bare) | claude-opus-5 (max)      | t25 | 37m06s | $ 9.8742 | 54 + 46.0 = 100.0 | 123 input, 182.0k output,  7062.9k cache read, 178.9k cache write ($ 9.8742) |
+
 | 2026-08-11_00:44:32_EDT | Claude Code (bare) | claude-fable-5 (low)     | u21 |  5m38s | $ 2.6566 | 54 + 46.0 = 100.0 |  18 input,  30.2k output,   399.9k cache read,  37.3k cache write ($ 2.6566) |
 | 2026-08-11_00:44:12_EDT | Claude Code (bare) | claude-fable-5 (medium)  | u22 | 12m10s | $ 5.6697 | 54 + 46.0 = 100.0 |  38 input,  58.5k output,  1406.6k cache read,  66.7k cache write ($ 5.6697) |
 | 2026-08-11_00:43:51_EDT | Claude Code (bare) | claude-fable-5 (high)    | u23 | 13m39s | $ 5.9850 | 32 + 46.0 =  78.0 |  29 input,  67.2k output,  1126.5k cache read,  74.8k cache write ($ 5.9850) |
