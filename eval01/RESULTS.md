@@ -42,7 +42,7 @@ These were in claude code cli where CLAUDE.md and .claude/** context files would
 | 2026-08-09_22:37:30_EDT | Claude Code        | claude-opus-5 (xhigh)    | t04 | 50m09s | $21.23   | 34 + 46.0 =  80.0 | v1.3, 731 input, 223.3k output, 25.0m cache read, 312.6k cache write ($21.23) |
 
 
-## (10Aug2026) Eval runs 
+## (10Aug2026) eval01 set1
 
 **Grader**: sonnet-5 (high)
 **Scores**: from command like `./eval01/listscore.py r0{1..5}{a..e}` that (for each rNN) is AVG of the ai grader runs.
@@ -74,4 +74,8 @@ NOTE: Looks like haiku doesnt actually use reasoning effort levels (based on sim
 | 2026-08-09_20:05:35_EDT | Claude Code (bare) | claude-fable-5 (high)    | u13 | 26m07s | $13.2028 | 29 + 46.0 =  75.0 | 50 input,  133.7k output,  3098.1k cache read, 162.1k cache write ($13.2028) |
 | 2026-08-09_20:05:40_EDT | Claude Code (bare) | claude-fable-5 (xhigh)   | u14 | 26m15s | $12.3045 | 34 + 46.0 =  80.0 | 53 input,  125.4k output,  2858.4k cache read, 147.7k cache write ($12.3045) |
 | 2026-08-09_20:05:46_EDT | Claude Code (bare) | claude-fable-5 (max)     | u15 | 50m04s | $17.7021 | 54 + 46.0 = 100.0 | 89 input,  215.8k output,  3993.4k cache read, 145.9k cache write ($17.7021) |
+
+
+## (10Aug2026) eval01 set2
+<!-- next -->
 
