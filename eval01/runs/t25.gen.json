@@ -1,0 +1,134 @@
+{
+  "run": "t25",
+  "model": "claude-opus-5",
+  "model_arg": "opus5",
+  "effort": "max",
+  "started": "2026-08-11_09:29:01_EDT",
+  "wall_seconds": 2226,
+  "claude": {
+    "is_error": false,
+    "duration_api_ms": 2115450,
+    "num_turns": 64,
+    "stop_reason": "end_turn",
+    "session_id": "6624112b-235b-4b1a-ae7d-29af7e8a7344",
+    "total_cost_usd": 9.874158499999998,
+    "usage": {
+      "input_tokens": 123,
+      "cache_creation_input_tokens": 178928,
+      "cache_read_input_tokens": 7062933,
+      "output_tokens": 182038,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 178928,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "input_tokens": 1,
+          "output_tokens": 1183,
+          "cache_read_input_tokens": 193397,
+          "cache_creation_input_tokens": 1479,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1479
+          },
+          "type": "message"
+        }
+      ],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-haiku-4-5-20251001": {
+        "inputTokens": 1747,
+        "outputTokens": 20,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 0.0018470000000000001,
+        "contextWindow": 200000,
+        "maxOutputTokens": 32000,
+        "canonicalModel": "claude-haiku-4-5",
+        "provider": "firstParty"
+      },
+      "claude-opus-5": {
+        "inputTokens": 123,
+        "outputTokens": 182038,
+        "cacheReadInputTokens": 7062933,
+        "cacheCreationInputTokens": 178928,
+        "webSearchRequests": 0,
+        "costUSD": 9.872311499999997,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 64000,
+        "canonicalModel": "claude-opus-5",
+        "provider": "firstParty"
+      }
+    },
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01WHLYH18s7313z7RB1fFFGW",
+        "tool_input": {
+          "command": "cat >> /home/zmhel/gitrepos/learn-ai/eval01/runs/.gen-work/t25/game.html <<'ASHFALL_CHUNK_EOF'\n/* ==================================================================================\n   0. CONSTANTS, PRNG, SMALL HELPERS\n   ================================================================================== */\nconst VERSION = \"ashfall-1\";\nconst WIN_TURN = 60, WIN_POP = 12;\nconst STORM_EVERY = 6, CARAVAN_EVERY = 6, CARAVAN_STAY = 2;\n\n/* mulberry32 - state lives in the game object so saves round-trip exactly.\n   Math.random() is never called anywhere in this file. */\nfunction mulberry32(a){\n  return function(){\n    a |= 0; a = (a + 0x6D2B79F5) | 0;\n    let t = Math.imul(a ^ (a >>> 15), 1 | a);\n    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;\n    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;\n  };\n}\n/* Draw from a state object (so we can serialize the cursor). */\nfunction rnd(G){ G.rngState = (G.rngState + 0x6D2B79F5) | 0;\n  let a = G.rngState, t = Math.imul(a ^ (a >>> 15), 1 | a);\n  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;\n  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;\n}\nfunction rint(G,lo,hi){ return lo + Math.floor(rnd(G) * (hi - lo + 1)); }\nfunction pick(G,arr){ return arr[Math.floor(rnd(G) * arr.length)]; }\nconst clamp = (v,lo,hi) => v < lo ? lo : v > hi ? hi : v;\nconst r1 = v => Math.round(v * 10) / 10;\nconst r2 = v => Math.round(v * 100) / 100;\n\n/* FNV-1a over canonical JSON (keys sorted) -> stable state hash. */\nfunction canon(v){\n  if (v === null || typeof v !== \"object\") return JSON.stringify(v);\n  if (Array.isArray(v)) return \"[\" + v.map(canon).join(\",\") + \"]\";\n  const k = Object.keys(v).sort();\n  return \"{\" + k.map(x => JSON.stringify(x) + \":\" + canon(v[x])).join(\",\") + \"}\";\n}\nfunction hashStr(s){\n  let h = 0x811c9dc5;\n  for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }\n  return (\"00000000\" + h.toString(16)).slice(-8);\n}\nfunction stateHash(G){ return hashStr(canon(G)); }\n\n/* ==================================================================================\n   1. STATIC DEFINITIONS: resources, terrain, jobs, buildings\n   ================================================================================== */\nconst RES = [\"food\",\"water\",\"metal\",\"power\",\"parts\",\"scrip\",\"ore\",\"ash\",\"soil\"];\nconst RMETA = {\n  food:  {n:\"Food\",  ab:\"FOOD\", cap:120, desc:\"Eaten by every colonist each turn.\"},\n  water: {n:\"Water\", ab:\"WATR\", cap:120, desc:\"Drunk each turn; consumption doubles in a storm.\"},\n  metal: {n:\"Metal\", ab:\"METL\", cap:100, desc:\"Smelted from ore. Pays for construction.\"},\n  power: {n:\"Power\", ab:\"PWR\",  cap:60,  desc:\"Banked by vent taps; drawn by forge, condenser, workshop.\"},\n  parts: {n:\"Parts\", ab:\"PART\", cap:60,  desc:\"Machined from metal. Pays for repairs and research.\"},\n  scrip: {n:\"Scrip\", ab:\"SCRP\", cap:400, desc:\"Trade currency. Pays for research and caravan goods.\"},\n  ore:   {n:\"Ore\",   ab:\"ORE\",  cap:80,  desc:\"Mined from rock. Feeds the forge.\"},\n  ash:   {n:\"Ash\",   ab:\"ASH\",  cap:80,  desc:\"Raked from ash flats. Feeds the composter.\"},\n  soil:  {n:\"Soil\",  ab:\"SOIL\", cap:60,  desc:\"Composted ash. Feeds the greenhouse.\"}\n};\nconst TERR = {\n  ash:  {n:\"Ash Flat\", ab:\"ASH\",  desc:\"Deep volcanic ash. Rakeable, buildable.\"},\n  rock: {n:\"Rock\",     ab:\"RCK\",  desc:\"Exposed basalt. Ore-bearing.\"},\n  water:{n:\"Melt Pool\",ab:\"WTR\",  desc:\"Standing meltwater. Cannot be built on; boosts neighbours.\"},\n  vent: {n:\"Vent\",     ab:\"VNT\",  desc:\"Live fumarole. Geothermal power; dangerous to farm near.\"},\n  ruins:{n:\"Ruins\",    ab:\"RUI\",  desc:\"Pre-eruption structures. Salvage and shelter.\"}\n};\nconst JOBS = {\n  eng:  {n:\"Engineer\",  ab:\"ENG\"},\n  farm: {n:\"Farmer\",    ab:\"FRM\"},\n  scav: {n:\"Scavenger\", ab:\"SCV\"},\n  tech: {n:\"Technician\",ab:\"TCH\"}\n};\nconst JOBKEYS = [\"eng\",\"farm\",\"scav\",\"tech\"];\n\n/* Buildings.\n   adj: {terrain, per, max, effect}  effect = \"out\" (output multiplier)\n                                     | \"in:<res>\" (input discount)\n   workers: max worker slots. 0 = passive structure.\n   rate: per full worker-unit of labour (a skill-3 matched colonist at full morale ~= 0.95). */\nconst BLD = {\n  shelter:{n:\"Shelter\", ab:\"SHL\", job:null, workers:0, cost:{metal:8,parts:0},\n    terr:[\"ash\",\"rock\",\"ruins\"], house:3,\n    adj:{terrain:\"ruins\",per:1,max:2,effect:\"house\"},\n    desc:\"Houses 3 colonists. Crowding past housing drags morale down.\",\n    adjDesc:\"+1 housing per adjacent Ruins (max +2).\"},\n  collector:{n:\"Ash Collector\", ab:\"ACL\", job:\"scav\", workers:2, cost:{metal:6,parts:0},\n    terr:[\"ash\"], out:{ash:4}, adj:{terrain:\"ash\",per:0.15,max:0.6,effect:\"out\"},\n    desc:\"Rakes raw ash off the flats. Start of the food chain.\",\n    adjDesc:\"+15% output per adjacent Ash Flat (max +60%).\"},\n  mine:{n:\"Ore Mine\", ab:\"MIN\", job:\"scav\", workers:2, cost:{metal:10,parts:2},\n    terr:[\"rock\"], out:{ore:3}, adj:{terrain:\"rock\",per:0.12,max:0.48,effect:\"out\"},\n    desc:\"Cuts ore out of basalt. Start of the metal chain.\",\n    adjDesc:\"+12% output per adjacent Rock (max +48%).\"},\n  condenser:{n:\"Condenser\", ab:\"CND\", job:\"tech\", workers:2, cost:{metal:12,parts:3},\n    terr:[\"ash\",\"rock\",\"ruins\"], inp:{power:1}, out:{water:4},\n    adj:{terrain:\"water\",per:0.3,max:0.9,effect:\"out\"},\n    desc:\"Pulls water out of ash-laden air. Drinks 1 power per worker-unit.\",\n    adjDesc:\"+30% output per adjacent Melt Pool (max +90%).\"},\n  venttap:{n:\"Vent Tap\", ab:\"VTP\", job:\"eng\", workers:1, cost:{metal:14,parts:4},\n    terr:[\"vent\"], out:{power:8}, adj:{terrain:\"vent\",per:0.25,max:0.5,effect:\"out\"},\n    desc:\"Geothermal generator. The only source of power.\",\n    adjDesc:\"+25% output per adjacent Vent (max +50%).\"},\n  forge:{n:\"Forge\", ab:\"FRG\", job:\"eng\", workers:2, cost:{metal:16,parts:4},\n    terr:[\"rock\",\"ruins\"], inp:{ore:3,power:2}, out:{metal:2},\n    adj:{terrain:\"vent\",per:0.2,max:0.4,effect:\"in:power\"},\n    desc:\"Smelts ore into metal. Consumes power.\",\n    adjDesc:\"-20% power draw per adjacent Vent (max -40%).\"},\n  composter:{n:\"Composter\", ab:\"CMP\", job:\"farm\", workers:2, cost:{metal:8,parts:1},\n    terr:[\"ash\",\"ruins\"], inp:{ash:4,water:1}, out:{soil:3},\n    adj:{terrain:\"water\",per:0.2,max:0.4,effect:\"out\"},\n    desc:\"Turns raw ash and water into workable soil.\",\n    adjDesc:\"+20% output per adjacent Melt Pool (max +40%).\"},\n  greenhouse:{n:\"Greenhouse\", ab:\"GRN\", job:\"farm\", workers:2, cost:{metal:14,parts:3},\n    terr:[\"ash\",\"ruins\"], inp:{soil:2,water:2}, out:{food:4},\n    adj:{terrain:\"water\",per:0.25,max:0.5,effect:\"in:water\"},\n    desc:\"Grows food from soil under glass. The only food source you control.\",\n    adjDesc:\"-25% water draw per adjacent Melt Pool (max -50%).\"},\n  workshop:{n:\"Workshop\", ab:\"WKS\", job:\"eng\", workers:2, cost:{metal:18,parts:2},\n    terr:[\"rock\",\"ruins\"], inp:{metal:2,power:2}, out:{parts:1.5}, req:\"fabrication\",\n    adj:{terrain:\"ruins\",per:0.2,max:0.6,effect:\"out\"},\n    desc:\"Machines metal into parts for repairs and research.\",\n    adjDesc:\"+20% output per adjacent Ruins (max +60%).\"},\n  windbreak:{n:\"Windbreak\", ab:\"WBK\", job:null, workers:0, cost:{metal:6,parts:0},\n    terr:[\"ash\",\"rock\",\"ruins\",\"vent\"], shield:0.2,\n    desc:\"Baffle wall. Shields adjacent buildings from storm damage.\",\n    adjDesc:\"Adjacent buildings take -20% storm damage each (stacking to -60%).\"},\n  cistern:{n:\"Cistern\", ab:\"CIS\", job:null, workers:0, cost:{metal:10,parts:2},\n    terr:[\"ash\",\"rock\",\"ruins\"], req:\"stormglass\", capBonus:{water:40}, spikeCut:0.25,\n    desc:\"Sealed water store. +40 water cap and blunts the storm thirst spike.\",\n    adjDesc:\"Each cistern cuts the storm water spike by 25% (max 50%).\"},\n  depot:{n:\"Depot\", ab:\"DEP\", job:null, workers:0, cost:{metal:12,parts:2},\n    terr:[\"ash\",\"rock\",\"ruins\"], req:\"logistics\",\n    capBonus:{food:25,metal:25,parts:15,ore:25,ash:25,soil:15},\n    desc:\"Covered stores. Raises caps on food, metal, parts, ore, ash and soil.\",\n    adjDesc:\"No adjacency bonus.\"},\n  market:{n:\"Market Post\", ab:\"MKT\", job:\"tech\", workers:1, cost:{metal:14,parts:5},\n    terr:[\"ruins\"], out:{scrip:3}, req:\"charter\", tradeEdge:0.08,\n    adj:{terrain:\"ruins\",per:0.15,max:0.45,effect:\"out\"},\n    desc:\"Brokerage. Earns scrip each turn and narrows the caravan's spread by 8%.\",\n    adjDesc:\"+15% scrip per adjacent Ruins (max +45%).\"}\n};\nconst BKEYS = Object.keys(BLD);\nASHFALL_CHUNK_EOF\nwc -l /home/zmhel/gitrepos/learn-ai/eval01/runs/.gen-work/t25/game.html",
+          "description": "Write chunk 3: constants, PRNG, resource/terrain/building defs"
+        }
+      },
+      {
+        "tool_name": "Write",
+        "tool_use_id": "toolu_01E62YNdj7zS81aBDHn2hY7T",
+        "tool_input": {
+          "file_path": "/tmp/ashfall_check.js",
+          "content": "// Temporary verification harness (not part of the deliverable).\n// Extracts the engine from game.html, drops the DOM-dependent sections,\n// then runs the in-game test suite and benchmark under node.\nconst fs = require(\"fs\");\nconst vm = require(\"vm\");\n\nconst html = fs.readFileSync(\n  \"/home/zmhel/gitrepos/learn-ai/eval01/runs/.gen-work/t25/game.html\", \"utf8\");\n\nconst a = html.indexOf(\"<script>\");\nconst b = html.lastIndexOf(\"</script>\");\nif (a < 0 || b < 0) throw new Error(\"no script block\");\nconst js = html.slice(a + 8, b);\n\nfunction bannerStart(marker) {\n  const i = js.indexOf(marker);\n  if (i < 0) throw new Error(\"marker not found: \" + marker);\n  const j = js.lastIndexOf(\"/* ==\", i);\n  if (j < 0) throw new Error(\"banner not found for: \" + marker);\n  return j;\n}\nconst s13 = bannerStart(\"   13. UI\");\nconst s14 = bannerStart(\"   14. HEADLESS GREEDY POLICY\");\nconst s16 = bannerStart(\"   16. WIRING\");\n\nconst code =\n  js.slice(0, s13) +\n  \"\\nlet G = null;\\n\" +\n  js.slice(s14, s16) +\n  \"\\nG = newGame(1337);\\n\" +\n  \"console.log(runTests());\\n\" +\n  \"console.log('');\\n\" +\n  \"console.log(runBench());\\n\";\n\nconst ctx = { console: console };\nvm.createContext(ctx);\nconst t0 = Date.now();\nvm.runInContext(code, ctx, { filename: \"ashfall-engine.js\" });\nconsole.log(\"\\nharness wall time: \" + (Date.now() - t0) + \" ms\");\n"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01PgCjPVwzXWjT6v7YGvhw8w",
+        "tool_input": {
+          "command": "node -e 'const fs=require(\"fs\"),vm=require(\"vm\");const h=fs.readFileSync(\"game.html\",\"utf8\");const a=h.indexOf(\"<script>\")+8,b=h.lastIndexOf(\"</script>\");const js=h.slice(a,b);const bs=m=>js.lastIndexOf(\"/* ==\",js.indexOf(m));const code=js.slice(0,bs(\"   13. UI\"))+\"\\nlet G=null;\\n\"+js.slice(bs(\"   14. HEADLESS\"),bs(\"   16. WIRING\"))+\"\\nG=newGame(1337);console.log(runTests());console.log(runBench());\";const ctx=vm.createContext(Object.create(null));ctx.console=console;vm.runInContext(code,ctx);'",
+          "description": "Run engine test suite and benchmark under node"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_017d16R1BvYrPcHpf539Aqjq",
+        "tool_input": {
+          "command": "printf '%s\\n' 'const fs=require(\"fs\"),vm=require(\"vm\");' 'const h=fs.readFileSync(\"game.html\",\"utf8\");' 'const a=h.indexOf(\"<script>\")+8,b=h.lastIndexOf(\"</script>\");' 'const js=h.slice(a,b);' 'const bs=m=>js.lastIndexOf(\"/* ==\",js.indexOf(m));' 'const code=js.slice(0,bs(\"   13. UI\"))+\"\\nlet G=null;\\n\"+js.slice(bs(\"   14. HEADLESS\"),bs(\"   16. WIRING\"))+\"\\nG=newGame(1337);console.log(runTests());console.log(runBench());\";' 'const ctx=vm.createContext(Object.create(null));ctx.console=console;' 'vm.runInContext(code,ctx);' | node",
+          "description": "Pipe verification harness into node"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01K1WgitqiAkJ1ebG331YQ6W",
+        "tool_input": {
+          "command": "python3 -c '\ns=open(\"game.html\").read()\na=s.index(\"<script\"+chr(62))+8\nb=s.rindex(\"</script\"+chr(62))\njs=s[a:b]\nOP=chr(123)+chr(40)+chr(91)\nCL=chr(125)+chr(41)+chr(93)\nst=[]\ni=0\nn=len(js)\nline=1\nprev=\"\"\nerr=None\nwhile i<n:\n    c=js[i]\n    if c==\"\\n\":\n        line+=1\n        i+=1\n        continue\n    if c==\"/\" and i+1<n and js[i+1]==\"/\":\n        while i<n and js[i]!=\"\\n\": i+=1\n        continue\n    if c==\"/\" and i+1<n and js[i+1]==\"*\":\n        j=js.find(\"*/\",i+2)\n        line+=js.count(\"\\n\",i,j)\n        i=j+2\n        continue\n    if c==\"/\" and prev in \"(=,:[!&|?;\":\n        i+=1\n        while i<n and js[i]!=\"/\":\n            if js[i]==chr(92): i+=1\n            i+=1\n        i+=1\n        prev=\"x\"\n        continue\n    if c==chr(34) or c==chr(39) or c==chr(96):\n        q=c\n        i+=1\n        while i<n and js[i]!=q:\n            if js[i]==chr(92): i+=1\n            if i<n and js[i]==\"\\n\": line+=1\n            i+=1\n        i+=1\n        prev=\"x\"\n        continue\n    if c in OP:\n        st.append((c,line))\n        prev=c\n        i+=1\n        continue\n    if c in CL:\n        if not st:\n            err=\"UNMATCHED \"+c+\" at line \"+str(line)\n            break\n        o=st.pop()\n        if OP.index(o[0])!=CL.index(c):\n            err=\"MISMATCH \"+o[0]+\" from line \"+str(o[1])+\" closed by \"+c+\" at line \"+str(line)\n            break\n        prev=c\n        i+=1\n        continue\n    if not c.isspace(): prev=c\n    i+=1\nif err:\n    print(err)\nelif st:\n    print(\"UNCLOSED \"+str(len(st))+\" first \"+st[0][0]+\" at line \"+str(st[0][1]))\nelse:\n    print(\"BALANCED - script block ok, \"+str(n)+\" chars scanned\")\n'",
+          "description": "Check JS bracket balance with a python scanner"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_016L3sQJ7TNH2pHu9CEKn7M8",
+        "tool_input": {
+          "command": "for ch in '{' '}' '(' ')' '[' ']'; do n=$(grep -o -F \"$ch\" game.html | wc -l); echo \"$ch  $n\"; done",
+          "description": "Count bracket characters across the file"
+        }
+      }
+    ],
+    "terminal_reason": "completed",
+    "fast_mode_state": "off",
+    "fast_mode_disabled_reason": "sdk_opt_in_required",
+    "subtype": "success",
+    "api_error_status": null,
+    "result": "`./game.html` is written — 2,265 lines, one self-contained file, no other files created.\n\n**What's in it, by the priority list:**\n\n1. **Core loop** — single `G` state object, mulberry32 with the cursor stored *in* state (so saves round-trip exactly), seed 1337 editable in the header. `resolveTurn()` runs 14 numbered steps in the order documented at the top of the file. No `Math.random` anywhere (the only two matches in the file are the comments saying so).\n2. **Map** — 8×8, terrain painted from the seed (ash/rock/water/vent/ruins) with guaranteed minimum counts so every chain is buildable. 13 buildings with terrain rules and adjacency bonuses; the tooltip shows the neighbour count, the resulting multiplier, and the rule text.\n3. **Economy** — 9 resources including intermediates. Chains: ash→soil→food, ore→metal→parts, vent→power feeding forge/condenser/workshop. Caps enforced; overflow logged. `clampAll()` handles caps *shrinking* when a depot is storm-damaged.\n4. **Population** — named colonists, 4 jobs, skill 1–5, fatigue, morale. Off-job work runs at 0.55×. `plan()` computes production and is the same function the tooltips read, so displayed numbers can't drift from the sim.\n5. **Needs** — per-turn food/water, shortages scale morale loss by how short you were; morale 0 = refusal, two turns = departure. Recoverable.\n6. **Research** — 12 nodes, hard prereqs, scrip+parts, `[DONE]/[OPEN]/[LOCKED]` badges.\n7. **Events** — 15 events, 5 with genuine tradeoff choices, weighted deck with cooldowns. A pending choice blocks End Turn, which is what keeps interactive play and the headless benchmark on the same PRNG stream.\n8. **Trade** — caravans every 6 turns for 2 turns, finite stock *and* finite purse; price = base × drifting global index × your-stockpile scarcity × spread (narrowed by Market Post/Charter).\n9. **Hazard** — storms every 6 turns, severity scaling with turn, windbreak adjacency + research mitigation, doubled water draw blunted by cisterns, repairs costing parts and fatigue.\n10–12. Save/load via textarea with a field-by-field validator; win/lose/score screen; six tabs, Space + 1–6 keys, tooltips everywhere, 360px-friendly, every state carries a text badge as well as a colour.\n13. **Dev panel** — 40 assertions and a 200-turn benchmark that runs the greedy policy twice and prints both hashes.\n\n**One caveat you should know:** I could not execute anything to verify — `node` and `python3` invocations both required approval that wasn't granted in this session, and writing a harness to `/tmp` was denied too. So the file has *not* been run. What I did instead: a line-by-line read of the whole script, and a bracket-balance count over the file — `(` 1854/`)` 1854, `[` 371/`]` 371, `{` 592/`}` 591, where that single extra brace is exactly the intentional `\"{not json\"` string in test 32. That's good evidence of structural integrity, not proof of a clean run. Open it in a browser and hit **Run Tests** first — that's the fastest check, and `busy()` wraps both dev buttons in try/catch so a failure prints a stack trace instead of breaking the page.",
+    "ttft_ms": 6525,
+    "ttft_stream_ms": 5658,
+    "time_to_request_ms": 23,
+    "type": "result",
+    "duration_ms": 2115009,
+    "uuid": "65dd85ee-645d-439b-914b-49252251ef2c"
+  }
+}

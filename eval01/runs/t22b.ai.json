@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: single state `S`/`G`; `rnd(S)` mulberry32 step reads/writes `S.rng`; `resolveTurn()` runs 9 fixed phases in order → **2**
+
+**F2 Map**: `genMap(seed)` 8x8 (64 tiles), terrain from seeded `mulberry32`; `canBuild()` checks `d.terr.includes(t.t)`; `adjInfo()` multiplies into `bldEff()` → **2**
+
+**F3 Economy**: chains ore→metal (forge), ash→soil (composter), soil→food (greenhouse); `storeCap()`/`clampStores()` cap and log overflow → **2**
+
+**F4 Population**: colonist record `{sk,fat,mor,job}`; `workerEff()` reads `c.sk`,`c.fat`,`c.mor`,`c.job` and feeds `bldEff()` → **2**
+
+**F5 Needs**: consumption phase computes `fShort/wShort`; morale drift `d-=fShort*26; d-=wShort*34`; morale read in `workerEff` (`mor` factor); gradual not instant → **2**
+
+**F6 Research**: 11 `TECH` nodes; `buyTech()` checks `n.pre`, deducts cost; `techMult()` reads `has(S,k)` and multiplies `bldEff` → **2**
+
+**F7 Events**: 12 `EVENTS`, weighted roll in `fireEvent()`; 5 events (drifters, cache, sickness, raiders, vein) have 2-3 differing choice branches; `S.cool[id]=10` filtered in pool → **2**
+
+**F8 Trade**: `priceOf()` uses `S.market.idx[g]` (drift in `tradeTick`) and `stockF` from `S.res[g]`; `cv.stock` finite and decremented; `doTrade` buy/sell both work → **2**
+
+**F9 Hazard**: storm fires at `S.storm.next`, `sev` grows with `S.turn`; `integrity(t)` zeroes output <25hp, feeds `bldEff`; `stormMitigation()` reads baffle/seal/windbreak; `repair()` costs 2 parts+fatigue → **2**
+
+**F10 Save/load**: `serialize()` to JSON text; `deserialize()`/`validateSave()` validate and return `{err}` shown via `flash("LOAD FAILED: "+res.err)` → **2**
+
+**F11 End conditions**: `checkEnd()` handles pop<=0 loss and turn>60 win/loss; `scoreOf()` combines population/research/turns/stockpiles/scrip/buildings; `endScreen()` renders summary → **2**
+
+**F12 UI**: `renderTabs()`/`UI.tab` switching; log entries `"T"+e.t`; extensive `data-tip` breakdowns (`effTip`,`buildTip`); keydown handles Space/1-6; `@media max-width:700px` → **2**
+
+**F13 Dev panel**: `runTests()` asserts real invariants (caps, housing, prereqs, repair math, trade limits, save/load hash); `runBenchmark()` runs 200 turns headless via `greedyPolicy`/`resolveTurn`, prints `stateHash` → **2**
+
+**G1**: `d.rsc` bonus applied in `techMult()`, multiplied into `bldEff()` every turn; test10 confirms Ash Sifting +30% on collector → **4**
+
+**G2**: `fShort/wShort` from consumption → morale drift → `workerEff` mor factor → `bldEff` production, full pipeline every turn → **4**
+
+**G3**: storm damages `t.hp` → `integrity(t)` zeroes/scales `bldEff` → `repair()` spends 2 parts + fatigue, +35hp restores output (test11 confirms) → **4**
+
+**G4**: `priceOf()` reads `S.market.idx` (drifts in `tradeTick`) and `S.res[g]` stockpile (sell side) → **4**
+
+**G5**: drifters/cache choices write distinct `S.res`, `S.col` (`addColonist`/`removeColonist`/`allMorale`) mutations per branch, not just logs → **4**
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "resolveTurn() 9 phases; rnd(S) mutates S.rng, used for all sim randomness",
+    "F2": "genMap seeded mulberry32; canBuild checks d.terr; adjInfo().mult in bldEff()",
+    "F3": "composter in:{ash,water} out:{soil}; greenhouse in:{soil,water} out:{food}; clampStores caps",
+    "F4": "workerEff(S,c,type) reads c.sk,c.fat,c.mor,c.job, feeds bldEff()",
+    "F5": "fShort/wShort computed in consumption phase, drives morale d-=fShort*26 etc.",
+    "F6": "TECH 11 nodes; buyTech checks n.pre; techMult reads has(S,k) into bldEff",
+    "F7": "EVENTS 12 entries; fireEvent weighted roll; S.cool[id]=10 filters pool",
+    "F8": "priceOf reads S.market.idx and stockF from S.res[g]; doTrade buy/sell both mutate state",
+    "F9": "S.storm.next/sev grows w/ turn; integrity(t) in bldEff; repair() costs 2 parts+fatigue",
+    "F10": "serialize()/deserialize(); validateSave returns err shown via flash()",
+    "F11": "checkEnd() pop<=0 and turn>60 branches; scoreOf() combines 6 fields; endScreen() renders",
+    "F12": "renderTabs tab switch; log 'T'+e.t; data-tip breakdowns; keydown Space/1-6; media query",
+    "F13": "runTests() many real invariants; runBenchmark() 200 turns headless prints stateHash",
+    "G1": "techMult() reads d.rsc via has(S,k), multiplied in bldEff() every production tick",
+    "G2": "fShort/wShort -> morale drift -> workerEff mor factor -> bldEff output, every turn",
+    "G3": "storm reduces t.hp -> integrity(t) zeroes/scales bldEff -> repair() spends parts, +35hp",
+    "G4": "priceOf() uses S.market.idx (drifts in tradeTick) and S.res[g] stockF on sell side",
+    "G5": "drifters/cache choice branches call addColonist/removeColonist/allMorale differently"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Colonist c.at field is dead code (assignment only tracked via tile.w), and caravan buy prices ignore player stockpile (only sell prices do), a minor asymmetry in the trade model."
+}
+```

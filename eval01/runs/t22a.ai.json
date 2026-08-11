@@ -1,0 +1,72 @@
+## Worksheet
+
+**F1 (Core loop):** Single `S` object; `rnd(S)` mulberry32 using `S.rng`; `resolveTurn()` runs fixed phases 1-9 (storm→production→consumption→morale→migration→storage→trade→event→advance). Score 2.
+
+**F2 (Map):** `genMap(seed)` builds 64 tiles via seeded `mulberry32`; `canBuild()` checks `d.terr.includes(t.t)`; `adjInfo()` multiplier feeds into `bldEff()` used in production math. Score 2.
+
+**F3 (Economy):** Chains ore→forge→metal, ash→composter→soil→greenhouse→food; `storeCap()`/`clampStores()` enforce caps and log overflow. Score 2.
+
+**F4 (Population):** Colonist records `sk`,`fat`,`mor`,`job`; read by `workerEff()`→`bldEff()` consumed in production loop. Score 2.
+
+**F5 (Needs):** `wantF/wantW` vs `gotF/gotW` in phase 3; `fShort/wShort` reduce morale via `d-=fShort*26`; morale drifts toward `target` (gradual, recoverable). Score 2.
+
+**F6 (Research):** 11 nodes in `TECH`; `buyTech()` enforces `n.pre`; effects applied via `techMult`, `storeCap` (capacitor), `stormMitigation` (baffle/seal), morale target (civics), forge power discount (alloy). Score 2.
+
+**F7 (Events):** 12 `EVENTS`; weighted pick in `fireEvent()` via `e.w`; 5 events (drifters, cache, sickness, raiders, vein) have 2-3 branching choices; `S.cool[id]=10` cooldown decremented each turn. Score 2.
+
+**F8 (Trade):** `priceOf()` reads `S.market.idx` (drifts in `tradeTick`) and `S.res[g]` (sell-side `stockF`); `cv.stock`/`cv.scrip` finite; `doTrade()` handles both buy/sell. Score 2.
+
+**F9 (Hazard):** Storms trigger at `S.turn>=S.storm.next`; `sev` grows with `turn`; `integrity(t)` zeroes output <25hp, used in `bldEff()`; `windbreak`/`baffle`/`seal` mitigate; `repair()` costs 2 parts+fatigue, +35hp. Score 2.
+
+**F10 (Save/load):** `serialize()`→textarea JSON; `deserialize()`+`validateSave()` gives specific error messages on bad input. Score 2.
+
+**F11 (End conditions):** `checkEnd()` handles win (turn>60, pop≥12, `needsMet`) and lose (pop 0 or failed turn 60); `scoreOf()` combines pop/research/turns/stock/scrip/buildings; `endScreen()` renders summary. Score 2.
+
+**F12 (UI):** `renderTabs()`/`UI.tab` switching; log entries show `"T"+e.t`; extensive `data-tip` breakdowns (`effTip`,`buildTip`); Space/1-6 keyboard shortcuts; `@media(max-width:700px)` responsive rules. Score 2.
+
+**F13 (Dev panel):** `runTests()` asserts real invariants (caps, roster integrity, prereqs, repair math, trade limits, save hash roundtrip); `runBenchmark()` runs 200 turns headless via `greedyPolicy()`, returns `stateHash`. Score 2.
+
+**G1:** `BUILD[type].rsc` (e.g. `ash_sift:0.30`) read by `techMult()`, multiplied into `bldEff()` used in the production write to `S.res`. Score 4.
+
+**G2:** `fShort/wShort` computed from actual consumption shortfall, drive `d-=fShort*26/wShort*34` on `c.mor`; `c.mor` feeds `workerEff().mor` used in next turn's `bldEff()`. Score 4.
+
+**G3:** Storm phase damages `t.hp`; `integrity(t)` gates `bldEff()` to 0 below 25%; `repair()` spends 2 parts + fatigue, +35hp restoring output (verified by test 11). Score 4.
+
+**G4:** `priceOf()` reads mean-reverting `S.market.idx` (drifts every `tradeTick()`) and `S.res[g]` stockpile (sell side `stockF`); visible via trade-tab tooltips. Score 4.
+
+**G5:** `drifters`/`cache` choice branches each write distinct `S.res`/`S.col`/morale mutations, not just log text. Score 4.
+
+## Single biggest weakness
+Trade buy-side pricing ignores the player's own stockpile (only sell-side uses `stockF`), a minor asymmetry in an otherwise deeply interconnected system.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "resolveTurn() runs fixed phase order over single state S using rnd(S)",
+    "F2": "genMap(seed) via mulberry32; adjInfo() multiplier used in bldEff() production math",
+    "F3": "composter consumes ash+water->soil, greenhouse soil+water->food; clampStores() caps+logs overflow",
+    "F4": "workerEff(S,c,type) reads c.sk/c.fat, used in bldEff() for production output",
+    "F5": "fShort/wShort from phase-3 shortfall reduce c.mor in phase 4; mor feeds workerEff next turn",
+    "F6": "buyTech() enforces n.pre; techMult()/storeCap()/stormMitigation() apply real effects",
+    "F7": "fireEvent() weighted by e.w; 5 events (drifters,cache,sickness,raiders,vein) branch state; S.cool cooldown",
+    "F8": "priceOf() reads S.market.idx and S.res[g]; doTrade() implements buy/sell against finite cv.stock",
+    "F9": "storm phase damages t.hp; integrity(t) zeroes bldEff() <25hp; repair() restores +35hp for 2 parts",
+    "F10": "serialize()/deserialize()+validateSave() with specific error strings",
+    "F11": "checkEnd() win/lose both reachable (test 16); scoreOf() composes total; endScreen() renders summary",
+    "F12": "renderTabs()/UI.tab switching; data-tip breakdowns; Space/1-6 keys; @media(max-width:700px)",
+    "F13": "runTests() asserts real invariants; runBenchmark() runs 200 headless turns and returns stateHash",
+    "G1": "BUILD.collector.rsc.ash_sift read by techMult(), multiplied into bldEff() production write",
+    "G2": "fShort computed in phase 3 lowers c.mor in phase 4; c.mor used in workerEff() output formula",
+    "G3": "storm damages t.hp; integrity(t) gates bldEff(); repair() spends parts+fatigue, +35hp restores output",
+    "G4": "priceOf() reads drifting S.market.idx (tradeTick each turn) and S.res[g] stockF on sell side",
+    "G5": "drifters/cache choice branches mutate S.res/S.col/morale distinctly per option, not just logs"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Trade buy-side pricing does not factor player stockpile (only sell-side does), a minor asymmetry in the price formula."
+}
+```

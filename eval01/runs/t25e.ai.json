@@ -1,0 +1,69 @@
+Looking through this submission systematically against each of the 18 items.
+
+**F1 Core loop:** `G` object, `rnd(G)` mulberry32-style PRNG seeded via `G.rngState`, `resolveTurn()` runs numbered steps in fixed order. Score 2.
+
+**F2 Map:** `genMap()` builds 64-tile 8x8 grid using `rnd(G)`; `whyNotBuild()` checks `d.terr.indexOf(t.t)`; `adjInfo()` scales `p.out`/`p.inp` in `plan()`. Score 2.
+
+**F3 Economy:** chains ore→metal (forge), ash→soil→food (composter→greenhouse); `caps()`/`give()` enforce caps; `G.spill` tracks/logs overflow. Score 2.
+
+**F4 Population:** `newColonist` sets skill/fatigue/morale/job; `eff()` reads `p.skill`, `fatigueF(p.fatigue)`, `moraleF(p.morale)`, feeding `labourAt()`. Score 2.
+
+**F5 Needs:** `needF/needW` consumption in `resolveTurn`; shortage calls `moraleAll(G,-d)`; morale feeds `moraleF()` in `eff()`; morale drifts toward target (`(set-p.morale)*0.25`), recoverable. Score 2.
+
+**F6 Research:** 12 `TECH` nodes; `techState()` enforces `req.every`; `pay(G,t.cost)`; effects read in `techOut()`, `stormMitigation()`, `unlocked()`. Score 2.
+
+**F7 Events:** 15 `EVENTS`; weighted pick via `e.w`/`rnd(G)` in `fireEvent`; 5 choice events (wanderers/tunnel/sickness/rations/mechanic) each with distinct `apply()`; `G.evCd` cooldown checked. Score 2.
+
+**F8 Trade:** `scarcity()` reads `G.res[r]`; `market.idx` drifts via `driftMarket()`; `c.inv[r]` finite, checked in `doTrade`; both buy/sell branches implemented. Score 2.
+
+**F9 Hazard:** `doStorm()` every `STORM_EVERY`, severity `1+floor(turn/15)+...`; `integF(b)` scales production in `plan()`; `stormMitigation`/`shieldOf` reduce damage; `repairBld` spends parts. Score 2.
+
+**F10 Save/load:** `serialize`=`JSON.stringify(G)` to textarea; `deserialize`/`validate()` catch bad JSON, wrong version, negative resources, unknown terrain, shown in `saveMsg`. Score 2.
+
+**F11 End conditions:** `checkEnd()` — pop==0 loss and turn>60+pop/needsMet win, both reachable; `scoreOf()` sums 5 components; `renderModal()` shows summary table. Score 2.
+
+**F12 UI:** `setTab()` switches panes; `log()` stores `t:G.turn`, shown as "T"+e.t; extensive `data-tip` tooltips; keydown handles Space/1-6; `@media(min-width:820px)` + `auto-fit` grids adapt layout. Score 2.
+
+**F13 Dev panel:** 40 `runTests()` assertions checking real invariants (cap enforcement, prereqs, save round-trip, exact +30% tech multiplier); `runBench()`/`simulate()` runs 200 turns headless, prints `stateHash`. Score 2.
+
+**G1:** `techOut(G,k)` multiplies output in `plan()`; test 15 confirms exact 1.3x collector output from `sifting`. Score 4.
+
+**G2:** shortfall → `moraleAll(-d)` → `moraleF(p)` in `eff()` → `labourAt()` → `plan()` next turn's production. Full loop. Score 4.
+
+**G3:** `doStorm` damages `b.integ` → `integF(b)` scales `plan()` output → `repairBld` spends parts, restores `integ=100`, `shieldOf`/`stormMitigation` cut damage. Score 4.
+
+**G4:** `priceOf()` = `BASEP*idx*scarcity(G,r)` where `scarcity` reads `G.res[r]/cap` and `idx` drifts every turn via `driftMarket()`. Score 4.
+
+**G5:** `wanderers` choice pushes real colonists into `G.pops`/consumes food; `tunnel` choice gives ore/metal or adds fatigue to scavengers — distinct state mutations, not just logs. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "resolveTurn() executes numbered steps in order using rnd(G) seeded by G.rngState",
+    "F2": "genMap() builds 8x8 grid; adjInfo() scales plan() output/input by adjacency",
+    "F3": "forge/composter/greenhouse chain ore->metal, ash->soil->food; give() caps, G.spill overflow",
+    "F4": "eff() reads p.skill/p.fatigue/p.morale, used in labourAt() for production",
+    "F5": "shortF/shortW call moraleAll(-d); moraleF(p) used in eff() -> labourAt()",
+    "F6": "12 TECH nodes; techState() enforces req; techOut()/stormMitigation() apply effects",
+    "F7": "15 EVENTS weighted by e.w in fireEvent; 5 choice events; G.evCd cooldown",
+    "F8": "priceOf() uses scarcity(G,r) and market.idx drifted by driftMarket() each turn",
+    "F9": "doStorm damages b.integ; integF(b) cuts plan() output; repairBld spends parts",
+    "F10": "serialize()/deserialize() with validate() producing specific error strings in saveMsg",
+    "F11": "checkEnd(): pop==0 loss, turn>60+needsMet win; scoreOf() sums 5 parts; renderModal shows summary",
+    "F12": "setTab() switches panes; log t:G.turn; data-tip tooltips; keydown 1-6/Space; @media adapts layout",
+    "F13": "40 runTests() assertions (e.g. exact 1.3x tech multiplier); runBench() prints stateHash over 200 turns",
+    "G1": "techOut(G,'collector') multiplies plan().out.ash; test 15 verifies exact 1.3x",
+    "G2": "shortF/shortW -> moraleAll(-d) -> moraleF(p) in eff() -> labourAt() -> plan() next turn",
+    "G3": "doStorm -> b.integ damaged -> integF(b) scales plan() -> repairBld spends parts, restores integ",
+    "G4": "priceOf() = BASEP*market.idx(drifted)*scarcity(G.res[r]/cap)",
+    "G5": "wanderers choice pushes newColonist into G.pops; tunnel choice adds ore/metal or fatigue"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "No wiring defects found; the greedy headless policy used for the benchmark is complex and its correctness is only checked via self-tests, not independently verified."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop** — `newState()` builds one state object; `nextRand(s)` (mulberry32-variant) is the sole RNG, state stored in `s.rngState`; `runTurn()` iterates fixed `TURN_STEPS` array called from `onEndTurn()`. Score 2.
+
+**F2 Map** — `GRID=8`, `genMap()` uses seeded `rnd(s)` for terrain; `canBuild()` checks `bt.terrain.indexOf(tile.t)`; `adjacencyOf()` multiplies output, read in `buildingIO()`. Score 2.
+
+**F3 Economy** — chains ash→soil (Soil Works)→food (Greenhouse), ore→metal→parts; `caps()` enforces storage; `stepCaps()` clamps, logs overflow, tracks `stats.overflowLost`. Score 2.
+
+**F4 Population** — colonist records have `skill,fatigue,morale,job,at`; `workerFactor()` reads `c.skill`/`c.fatigue` and feeds `runBuilding()`. Score 2.
+
+**F5 Needs** — `stepNeeds()` computes per-turn food/water consumption, sets `hungry/thirsty`; `stepMorale()` reduces morale on shortage; `workerFactor()` mf multiplier reduces output; recovery via clinic/food/drift-to-target, not instant loss (`c.zero>=3`). Score 2.
+
+**F6 Research** — 12 nodes in `TECHS`; `techState()` enforces `req`; `doResearch()` deducts cost; effects applied via `techMult`, `inputMult`, `caps()`, `isUnlocked`, `stormMitigation`. Score 2.
+
+**F7 Events** — 14 events; weighted pool selection in `stepEvent()`; 5 events (`wanderers,tunnel,failure,raiders,survey`) have 2-3 branching `run()` effects; `s.events.cd` cooldown. Score 2.
+
+**F8 Trade** — `priceOf()` uses `scarcity(s,k)` (stockpile) and `market.idx` (drift, `driftMarket()`); caravan `inv`/`purse` finite; `doBuy`/`doSell` both validate and mutate. Score 2.
+
+**F9 Hazard** — `stepStorm()` fires every 5 turns from turn 5, severity `1+floor(turn/12)+...`; damages `tile.b.integrity`; `integrityFactor()` cuts output in `buildingIO`; `stormMitigation()` reads windbreaks/tech; `repairCost`/`doRepair` spend parts and restore. Score 2.
+
+**F10 Save/load** — `serialize()` to textarea text; `loadFrom()` JSON.parse + `validateSave()` with specific field-level error strings shown in `S.ui.loadMsg`. Score 2.
+
+**F11 End conditions** — `stepEnd()` checks pop 0 loss and turn 60 `winCheck()`; `scoreOf()` combines population/research/turns/buildings/stockpile/skill; modal in `renderModal()` shows summary. Score 2.
+
+**F12 UI** — `wireAll()`/`TABS` switch views; log entries `"T"+l.turn`; `data-tip` tooltips throughout explaining formulas; keydown handler for Space/1-6; `@media(max-width:700px)` adapts layout. Score 2.
+
+**F13 Dev panel** — `runTests()` 41 assertions on real invariants (no negative resources, cap limits, save/load hash roundtrip, prereqs); `runBenchmark()` runs headless loop via `greedyPolicy`+`runTurn`, prints `stateHash()` in `#runBench` handler. Score 2.
+
+**G1** — `techMult()` reads `s.tech.sifting` etc., multiplies `out.out[k]` in `buildingIO`; test 13 explicitly verifies. Score 4.
+
+**G2** — `stepNeeds` sets `c.hungry/c.thirsty` → `stepMorale` subtracts morale (-13/-15) → `workerFactor` mf multiplier cuts production every turn. Score 4.
+
+**G3** — `stepStorm` cuts `tile.b.integrity` → `integrityFactor` scales `buildingIO` output → `repairCost`/`doRepair` spend parts and restore to 100, visible in tile tooltip/bar. Score 4.
+
+**G4** — `priceOf` reads `scarcity(s,k)` (own stockpile) and `market.idx[k]` (drifted each turn in `stepMarket`→`driftMarket`); test 33 confirms. Score 4.
+
+**G5** — `wanderers`/`tunnel`/`raiders`/`survey` opts each write distinct `s.res`, `s.colonists`, or `s.mods` changes per branch, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "TURN_STEPS array driven by runTurn(); nextRand(s) reads/writes s.rngState",
+    "F2": "genMap() uses rnd(s); canBuild() checks bt.terrain; adjacencyOf() feeds buildingIO output",
+    "F3": "soil<-ash, food<-soil+water, metal<-ore chains; caps()+stepCaps() enforce/clamp with overflow logged",
+    "F4": "workerFactor(s,c,bt) reads c.skill/c.fatigue, used by runBuilding()",
+    "F5": "stepNeeds sets hungry/thirsty; stepMorale applies morale delta; workerFactor mf multiplier",
+    "F6": "techState()/doResearch() gate+deduct; techMult/inputMult/caps/isUnlocked apply effects",
+    "F7": "stepEvent weighted pool selection; wanderers/tunnel/failure/raiders/survey have branching opts; events.cd cooldown",
+    "F8": "priceOf() reads scarcity(stockpile) and market.idx (drift); doBuy/doSell enforce caravan inv/purse",
+    "F9": "stepStorm damages integrity; integrityFactor cuts buildingIO output; doRepair spends parts, restores",
+    "F10": "serialize()/loadFrom()+validateSave() give specific error messages, shown via S.ui.loadMsg",
+    "F11": "stepEnd() checks pop0/turn60; scoreOf() combines multiple stats; renderModal() shows summary",
+    "F12": "wireAll() tab switching; log entries carry l.turn; data-tip tooltips; keydown 1-6/Space; media query layout",
+    "F13": "runTests() 41 real-invariant assertions; runBenchmark() headless loop prints stateHash()",
+    "G1": "techMult() reads s.tech.sifting etc, multiplies buildingIO out.out[k], verified by test 13",
+    "G2": "stepNeeds sets hungry/thirsty -> stepMorale subtracts morale -> workerFactor mf cuts output",
+    "G3": "stepStorm cuts integrity -> integrityFactor scales output -> doRepair spends parts, restores to 100",
+    "G4": "priceOf reads scarcity(stockpile) and market.idx drifted by driftMarket() each stepMarket, test 33",
+    "G5": "wanderers/tunnel/raiders/survey opts each mutate distinct s.res/s.colonists/s.mods fields"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Minor internal inconsistency: dev-panel documentation text says ash accrues 6/turn while ashfallAmount() actually returns 9, a cosmetic mismatch rather than a functional gap."
+}
+```

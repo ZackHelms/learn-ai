@@ -1,0 +1,55 @@
+Reading through the source now to grade each of the 13 systems and 5 interaction chains against the wiring in the code.
+
+**Worksheet**
+
+- F1: One state object `S`/`G`; `rnd(S)` (mulberry32 step) drives all in-game randomness stored in `S.rng`; `resolveTurn()` runs 9 fixed phases in order. Score 2.
+- F2: `genMap()` builds 64 tiles from seed; `canBuild()` checks `d.terr.includes(t.t)`; `adjInfo()` multiplies `bldEff()`. Score 2.
+- F3: ore→metal (forge), ash→soil (composter), soil+water→food (greenhouse); `storeCap()`/`clampStores()` enforce caps and log overflow. Score 2.
+- F4: colonist records `{sk,fat,mor,job}`; `workerEff()` reads `c.sk`/`c.fat`/`c.mor`, called from `bldEff()` in production. Score 2.
+- F5: `wantF/wantW` per pop consumed each turn; `fShort`/`wShort` feed morale drift (`d-=fShort*26`); morale feeds `workerEff().mor`; drift toward `target` allows recovery. Score 2.
+- F6: 11 `TECH` nodes; `buyTech()` enforces `n.pre`; costs deducted; every node's effect is read somewhere (`techMult`, `req`, storm mitigation, power cap, morale target). Score 2.
+- F7: 12 `EVENTS`; weighted roll in `fireEvent()`; 5 events (drifters, cache, sickness, raiders, vein) offer distinct-outcome choices; `S.cool[id]=10` cooldown ticked each turn. Score 2.
+- F8: `priceOf()` reads `S.market.idx[g]` (drifts in `tradeTick`) and player stock (`stockF`); `cv.stock` limited and decremented; `doTrade` buy/sell both work. Score 2.
+- F9: storms fire on `S.turn>=S.storm.next`, severity grows with `turn`; `integrity(t)` zeroes output <25hp, used in `bldEff`; `stormMitigation` reads windbreak/baffle/seal; `repair()` costs 2 parts + fatigue, +35hp. Score 2.
+- F10: `serialize()` to textarea JSON; `deserialize()`/`validateSave()` parse+validate with clear `LOAD FAILED:` message. Score 2.
+- F11: win (`turn>60 && pop>=12 && needsMet`) and lose (`pop<=0` or turn 60 fail) both reachable in `checkEnd()`; `scoreOf()` combines pop/research/turns/stock/scrip/buildings; `endScreen()` renders summary. Score 2.
+- F12: `renderTabs()` switches `UI.tab`; log entries show `"T"+e.t`; extensive `data-tip` breakdowns (`effTip`); keydown handler for Space/1-6; `@media max-width:700px` layout. Score 2.
+- F13: `runTests()` asserts real invariants (caps, roster/slot consistency, prereqs, repair math, save/load hash equality, end conditions); `runBenchmark()` runs 200 headless turns and prints `stateHash`. Score 2.
+
+- G1: `has(S,"ash_sift")` etc. read in `techMult()`, consumed by `bldEff()` production formula and shown in tooltip. Score 4.
+- G2: `fShort/wShort` computed in consumption phase, applied to `c.mor` in morale phase, `workerEff().mor` used in next production tick. Score 4.
+- G3: storm phase damages `t.hp`; `integrity(t)` zeroes/scales `bldEff`; `repair()` spends 2 parts + fatigue, restores hp/output. Score 4.
+- G4: `priceOf()` combines drifting `S.market.idx[g]` and player stockpile `stockF`. Score 4.
+- G5: `drifters`/`cache`/`sickness` choice `go()` functions write `S.res`, `S.col` (add/remove/fatigue), not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "resolveTurn() runs 9 fixed phases; rnd(S) mulberry32 step drives all randomness",
+    "F2": "canBuild() checks d.terr, adjInfo() multiplies bldEff()",
+    "F3": "forge ore->metal, composter ash->soil, greenhouse soil->food; clampStores() enforces caps",
+    "F4": "workerEff(S,c,type) reads c.sk/c.fat/c.mor, called from bldEff() in production loop",
+    "F5": "fShort/wShort from consumption phase reduce c.mor; mor feeds workerEff output",
+    "F6": "buyTech() enforces n.pre and deducts cost; techMult()/req/stormMitigation read each unlock",
+    "F7": "fireEvent() weighted roll over EVENTS w; S.cool[id]=10 ticked in phase 8",
+    "F8": "priceOf() reads S.market.idx (drift in tradeTick) and S.res[g]; doTrade buy/sell both wired",
+    "F9": "storm phase damages t.hp scaled by sev=1+turn/14; integrity(t) zeroes bldEff; repair() costs parts",
+    "F10": "serialize()/deserialize()+validateSave() with LOAD FAILED error shown via flash()",
+    "F11": "checkEnd() sets over='win'/'lose' both reachable; scoreOf() + endScreen() render summary",
+    "F12": "renderTabs()/UI.tab switching; data-tip effTip() breakdown; keydown Space/1-6; media query",
+    "F13": "runTests() asserts caps/roster/repair/save-hash invariants; runBenchmark() prints stateHash over 200 turns",
+    "G1": "has(S,'ash_sift') read in techMult(), consumed by bldEff() production formula",
+    "G2": "fShort/wShort write c.mor drift; c.mor read in workerEff() next production tick",
+    "G3": "storm damages t.hp; integrity(t) gates bldEff(); repair() spends parts and restores hp",
+    "G4": "priceOf() combines S.market.idx drift and S.res[g] stockpile via stockF",
+    "G5": "drifters/cache/sickness choice go() functions mutate S.res and S.col directly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Map generation uses a separate mulberry32 instance from S.rng rather than one shared PRNG stream, though both remain deterministic from the seed."
+}
+```

@@ -1,0 +1,1905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASHFALL OUTPOST</title>
+<!--
+================================================================================
+ASHFALL OUTPOST - single file survival management game
+================================================================================
+ASSUMPTIONS MADE (no clarifying questions were asked):
+
+1.  Turn resolution order is fixed and documented in the UI (Log tab header) and
+    in resolveTurn(). Order: Ashstorm -> Production chains -> Consumption ->
+    Morale/Fatigue -> Departures/Arrivals -> Storage clamp -> Trade/prices ->
+    Event deck -> Turn++/End conditions.
+2.  All randomness comes from a single 32-bit integer `rng` stored INSIDE the
+    game state, advanced by an inlined mulberry32 step. Because the counter is
+    serialized, save/load and the headless benchmark are bit-identical.
+    Map terrain uses a separate generator seeded from the same seed so the map
+    is a pure function of the seed. The built-in JS random generator is never
+    called anywhere; the last assertion in Run Tests proves it by scanning the
+    page source, which is why that identifier appears nowhere in this file as a
+    literal string (the test builds it by concatenation).
+3.  "Power" is a stored resource with a small cap (a buffer/battery), not a pure
+    flow. Capacitor Bank research raises the cap.
+4.  Intermediate goods (ore, ash, soil) are first-class stored resources so the
+    production chains are visible and interruptible.
+5.  Water tiles cannot be built on; they exist to give adjacency bonuses.
+6.  A colonist may work any building, but works at 55% effectiveness outside
+    their job specialty. Skill only grows in the job they are specialized in.
+7.  Morale reaching 0 makes a colonist LEAVE the outpost (recoverable: you can
+    still gain colonists later). Morale below 20 does not stop work but heavily
+    reduces output, which is the visible warning stage.
+8.  Repairs: 2 parts + one colonist's labour (8 fatigue), one repair per
+    colonist per turn, +35 integrity. Buildings under 25 integrity produce zero.
+9.  Events fire at most once per turn with a 40% base chance (rising slightly
+    with turn count) and each fired event goes on a 10-turn cooldown. Choice
+    events block the next End Turn until resolved; the headless benchmark picks
+    option index 0 deterministically.
+10. Win at turn 60 requires population >= 12 AND critical needs met (no
+    starvation/thirst that turn, >=30 food, >=30 water in store). Reaching turn
+    60 without that is a "survived but failed" loss. Population 0 is a loss.
+11. Save data is a JSON string in a textarea. No browser storage of any kind is
+    used, per the brief.
+12. The benchmark runs 200 turns with end conditions disabled so the hash is
+    always comparable.
+================================================================================
+-->
+<style>
+  :root{
+    --bg:#12100e; --bg2:#1b1815; --bg3:#262119; --line:#3d352a;
+    --ink:#e9e2d4; --dim:#a99e8b; --acc:#e0913a; --acc2:#7fb3a3;
+    --bad:#d4574e; --good:#7fae5a; --warn:#d9b23c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;line-height:1.4}
+  #app{max-width:1180px;margin:0 auto;padding:8px}
+  h1{font-size:18px;letter-spacing:3px;margin:4px 0 2px}
+  h2{font-size:14px;letter-spacing:1px;margin:10px 0 6px;color:var(--acc)}
+  h3{font-size:13px;margin:8px 0 4px}
+  .sub{color:var(--dim);font-size:11px;margin:0 0 8px}
+  button{font-family:inherit;font-size:12px;background:var(--bg3);color:var(--ink);
+    border:1px solid var(--line);padding:5px 8px;cursor:pointer;border-radius:3px}
+  button:hover:not(:disabled){border-color:var(--acc);color:#fff}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:#4a3312;border-color:var(--acc);color:#ffd8a8;font-weight:bold}
+  button.sel{background:#3a4a3a;border-color:var(--acc2)}
+  input,textarea,select{font-family:inherit;font-size:12px;background:#0d0b09;color:var(--ink);
+    border:1px solid var(--line);padding:4px;border-radius:3px}
+  textarea{width:100%;min-height:110px}
+  .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .panelbox{border:1px solid var(--line);background:var(--bg2);padding:8px;border-radius:4px;margin-bottom:8px}
+
+  /* --- resource bar --- */
+  #resbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:4px;margin:6px 0}
+  .res{border:1px solid var(--line);background:var(--bg2);padding:3px 5px;border-radius:3px}
+  .res .k{font-size:10px;color:var(--dim);letter-spacing:1px}
+  .res .v{font-size:13px;font-weight:bold}
+  .res .d{font-size:10px}
+  .up{color:var(--good)} .dn{color:var(--bad)} .flat{color:var(--dim)}
+
+  /* --- tabs --- */
+  #tabs{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0 6px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  #tabs button{min-width:62px}
+  #tabs button.on{background:var(--acc);color:#1a1206;border-color:var(--acc);font-weight:bold}
+
+  /* --- map --- */
+  #mapwrap{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+  #grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;flex:1 1 300px;max-width:430px}
+  .tile{aspect-ratio:1/1;border:1px solid var(--line);border-radius:2px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:10px;position:relative;overflow:hidden;padding:1px;text-align:center}
+  .tile .tn{font-size:9px;color:#000a;position:absolute;top:0;left:2px;font-weight:bold}
+  .tile .bn{font-weight:bold;font-size:11px;text-shadow:0 0 3px #000,0 0 3px #000}
+  .tile .wk{font-size:9px;text-shadow:0 0 3px #000}
+  .t-ash{background:#4a4238} .t-rock{background:#3a3f45} .t-water{background:#1d3f52}
+  .t-vent{background:#5a2f22} .t-ruins{background:#463a4a}
+  .tile.sel{outline:2px solid var(--acc);outline-offset:-2px}
+  .tile.dmg{border-color:var(--bad);border-width:2px}
+  .tile.legal{box-shadow:inset 0 0 0 2px var(--good)}
+  #side{flex:1 1 280px;min-width:250px}
+  .blist{display:grid;grid-template-columns:1fr;gap:3px;max-height:330px;overflow:auto}
+  .bitem{border:1px solid var(--line);padding:4px;border-radius:3px;background:var(--bg3);cursor:pointer}
+  .bitem.no{opacity:.45}
+  .bitem.on{border-color:var(--acc)}
+  .bitem .t{font-weight:bold;font-size:12px}
+  .bitem .c{font-size:10px;color:var(--dim)}
+
+  /* --- tables --- */
+  table{border-collapse:collapse;width:100%;font-size:11px}
+  th,td{border:1px solid var(--line);padding:3px 4px;text-align:left}
+  th{background:var(--bg3);color:var(--acc);font-size:10px;letter-spacing:1px}
+  .bar{height:7px;background:#000;border:1px solid var(--line);border-radius:2px;overflow:hidden;min-width:44px}
+  .bar>i{display:block;height:100%}
+
+  /* --- log --- */
+  #logbox{max-height:420px;overflow:auto;font-size:11px}
+  .le{border-bottom:1px solid #2a251e;padding:2px 3px;display:flex;gap:6px}
+  .le .t{color:var(--dim);min-width:34px}
+  .k-bad{color:var(--bad)} .k-good{color:var(--good)} .k-warn{color:var(--warn)} .k-info{color:var(--ink)}
+  .k-storm{color:#c98bd1} .k-event{color:var(--acc2)}
+
+  /* --- research --- */
+  .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:6px}
+  .rnode{border:1px solid var(--line);padding:6px;border-radius:3px;background:var(--bg3)}
+  .rnode.done{border-color:var(--good);background:#1d2618}
+  .rnode.avail{border-color:var(--acc)}
+  .rnode.lock{opacity:.55}
+  .tagline{font-size:10px;letter-spacing:1px;font-weight:bold}
+
+  /* --- tooltip --- */
+  #tip{position:fixed;z-index:99;max-width:290px;background:#0a0908;border:1px solid var(--acc);
+    padding:6px 8px;border-radius:3px;font-size:11px;pointer-events:none;display:none;
+    box-shadow:0 4px 14px #000c;white-space:pre-wrap;line-height:1.35}
+  [data-tip]{cursor:help}
+
+  /* --- modal --- */
+  #modal{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:200;padding:10px}
+  #modalbox{background:var(--bg2);border:2px solid var(--acc);border-radius:5px;padding:14px;max-width:520px;width:100%}
+  #modalbox .opts{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+  #modalbox .opts button{text-align:left;padding:8px}
+
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:9px;padding:0 6px;font-size:10px;margin-right:3px}
+  .mono{white-space:pre-wrap;font-size:11px}
+  .ok{color:var(--good)} .fail{color:var(--bad)}
+  @media (max-width:700px){
+    #app{padding:5px}
+    #grid{max-width:100%}
+    #tabs button{min-width:0;flex:1 1 auto;padding:6px 4px}
+    .tile .bn{font-size:10px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>ASHFALL OUTPOST</h1>
+  <p class="sub">Turn <b id="hTurn">1</b>/60 &middot; Pop <b id="hPop">0</b> &middot; Next storm: <b id="hStorm">-</b>
+     &middot; Seed <input id="seedIn" size="6" value="1337" data-tip="Seed for terrain, events, caravans and storms. Press New Game to apply.">
+     <button id="btnNew" data-tip="Start a fresh outpost from the seed above. Current progress is lost.">New Game</button>
+     <button id="btnEnd" class="primary" data-tip="Resolve one turn. Keyboard: Space.">End Turn &#9654;</button>
+  </p>
+  <div id="resbar"></div>
+  <div id="tabs"></div>
+  <div id="panel"></div>
+</div>
+<div id="tip"></div>
+<div id="modal"><div id="modalbox">
+  <h2 id="mTitle">Event</h2>
+  <div id="mBody"></div>
+  <div class="opts" id="mOpts"></div>
+</div></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   0. UTILITIES
+   ========================================================================== */
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const r3=n=>Math.round(n*1000)/1000;
+const fmt=n=>{const x=Math.round(n*10)/10;return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):x.toFixed(1);};
+const cap1=s=>s.charAt(0).toUpperCase()+s.slice(1);
+
+/* --- seeded PRNG: mulberry32, state lives in the game object --------------- */
+function rnd(S){
+  let a=S.rng|0;
+  a=(a+0x6D2B79F5)|0; S.rng=a;
+  let t=Math.imul(a^(a>>>15),1|a);
+  t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296;
+}
+const ri=(S,n)=>Math.floor(rnd(S)*n);
+const pickR=(S,arr)=>arr[ri(S,arr.length)];
+function mulberry32(a){return function(){a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);
+  t=(t+Math.imul(t^(t>>>7),61|t))^t;return ((t^(t>>>14))>>>0)/4294967296;};}
+
+/* --- canonical stringify + FNV-1a hash (order independent of key insertion) */
+function canon(v){
+  if(v===null||typeof v!=="object")return JSON.stringify(v);
+  if(Array.isArray(v))return "["+v.map(canon).join(",")+"]";
+  return "{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+canon(v[k])).join(",")+"}";
+}
+function fnv(str){
+  let h=0x811c9dc5;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}
+  return ("00000000"+h.toString(16)).slice(-8);
+}
+/* State hash intentionally ignores the log (cosmetic) */
+function stateHash(S){
+  const c={turn:S.turn,rng:S.rng,seed:S.seed,res:S.res,map:S.map,col:S.col,
+    research:S.research,market:S.market,cool:S.cool,storm:S.storm,flags:S.flags,
+    nextId:S.nextId,over:S.over};
+  return fnv(canon(c));
+}
+
+/* ============================================================================
+   1. STATIC DATA
+   ========================================================================== */
+const RES=["food","water","metal","power","parts","scrip","ore","ash","soil"];
+const RES_LABEL={food:"FOOD",water:"WATER",metal:"METAL",power:"POWER",parts:"PARTS",
+  scrip:"SCRIP",ore:"ORE",ash:"ASH",soil:"SOIL"};
+const RES_TIP={
+  food:"Eaten by every colonist each turn (1.2 each). Made in the Greenhouse from soil + water.",
+  water:"Drunk by every colonist each turn (1.5 each, more during ashstorms). Made by Condensers.",
+  metal:"Building material. Smelted from ore at the Forge (costs power).",
+  power:"Buffered energy from Geothermal Plants. Consumed by Forge and Workshop. Small cap.",
+  parts:"Precision goods. Used for advanced buildings, research and repairs. Made at the Workshop.",
+  scrip:"Trade currency. Earned by selling to caravans and from a Trade Post. Pays for research.",
+  ore:"Raw rock scavenged from ruins. Input to the Forge.",
+  ash:"Volcanic ash gathered on ash flats. Input to the Composter. Ashstorms deposit more.",
+  soil:"Composted ash. Input to the Greenhouse."
+};
+const TERR={
+  ash:  {n:"Ash Flat",c:"t-ash",g:"~"},
+  rock: {n:"Rock",c:"t-rock",g:"#"},
+  water:{n:"Meltwater",c:"t-water",g:"≈"},
+  vent: {n:"Steam Vent",c:"t-vent",g:"^"},
+  ruins:{n:"Ruins",c:"t-ruins",g:"☒"}
+};
+const JOBS=["Farmer","Engineer","Scavenger","Medic"];
+
+/* Buildings. in/out are per fully-effective worker, per turn. */
+const BUILD={
+  shelter:{n:"Shelter",ab:"SHL",cost:{metal:15},terr:["ash","rock","ruins"],slots:0,housing:3,
+    d:"Houses 3 colonists. Population cannot exceed total housing."},
+  collector:{n:"Ash Collector",ab:"COL",cost:{metal:10},terr:["ash"],job:"Scavenger",slots:1,
+    out:{ash:7},adj:{terr:["ash"],per:0.10},rsc:{ash_sift:0.30},
+    d:"Rakes ash from the flats. Ash feeds the Composter."},
+  condenser:{n:"Condenser",ab:"CND",cost:{metal:20},terr:["ash","rock","ruins"],job:"Engineer",slots:1,
+    out:{water:5},adj:{terr:["water"],per:0.40},rsc:{hydro:0.35},
+    d:"Pulls water from grit-laden air. Huge bonus beside meltwater."},
+  plant:{n:"Geothermal Plant",ab:"GEO",cost:{metal:25},terr:["vent"],job:"Engineer",slots:1,
+    out:{power:9},adj:{terr:["rock"],per:0.10},
+    d:"Taps a steam vent for power. Must be built on a vent."},
+  scrapyard:{n:"Scrapyard",ab:"SCR",cost:{metal:8},terr:["ruins"],job:"Scavenger",slots:2,
+    out:{ore:5,parts:0.35},adj:{terr:["ruins"],per:0.15},
+    d:"Strips buried structures for ore and the odd usable part."},
+  composter:{n:"Composter",ab:"CMP",cost:{metal:12},terr:["ash","ruins"],job:"Farmer",slots:1,
+    in:{ash:6,water:2},out:{soil:4},
+    d:"Neutralises ash into growing soil. Consumes water."},
+  greenhouse:{n:"Greenhouse",ab:"GRN",cost:{metal:18,parts:1},terr:["ash","rock"],job:"Farmer",slots:2,
+    in:{soil:3,water:3},out:{food:6},adj:{terr:["water"],per:0.15},rsc:{deep_root:0.40},
+    d:"Grows food under glass from soil and water."},
+  forge:{n:"Forge",ab:"FRG",cost:{metal:20,parts:2},terr:["rock","ruins"],job:"Engineer",slots:2,
+    in:{ore:4,power:3},out:{metal:3},adj:{terr:["vent"],per:0.25},rsc:{alloy:0.40},
+    d:"Smelts ore into metal. Needs power. Vents make it burn hotter."},
+  workshop:{n:"Workshop",ab:"WRK",cost:{metal:25,parts:2},terr:["rock","ruins"],job:"Engineer",slots:1,
+    in:{metal:3,power:2},out:{parts:2},req:"fab",
+    d:"Machines metal into parts. Requires Fabrication research."},
+  clinic:{n:"Clinic",ab:"CLN",cost:{metal:20,parts:3},terr:["ash","rock","ruins"],job:"Medic",slots:1,
+    req:"med",medic:true,
+    d:"Each effective medic here removes 9 fatigue and adds 3 morale to everyone."},
+  depot:{n:"Storage Depot",ab:"DEP",cost:{metal:15},terr:["ash","rock","ruins"],slots:0,capBonus:120,
+    d:"Raises the storage cap of every material by 120."},
+  windbreak:{n:"Windbreak",ab:"WND",cost:{metal:12},terr:["ash","rock"],slots:0,storm:0.08,req:"baffle",
+    d:"Deflects storm grit. -8% ashstorm damage each, up to -40% from windbreaks."},
+  market:{n:"Trade Post",ab:"TRD",cost:{metal:20,parts:2},terr:["ash","rock","ruins"],job:"Scavenger",slots:1,
+    out:{scrip:3},req:"barter",
+    d:"Local barter yields scrip and improves caravan prices by 10%."}
+};
+const PROD_ORDER=["plant","condenser","collector","scrapyard","composter","forge","workshop","greenhouse","market"];
+
+/* Research tree: 11 nodes */
+const TECH={
+  ash_sift:{n:"Ash Sifting",cost:{scrip:20,parts:2},pre:[],d:"Ash Collector output +30%."},
+  hydro:{n:"Hydrology",cost:{scrip:25,parts:1},pre:[],d:"Condenser output +35%."},
+  med:{n:"Field Medicine",cost:{scrip:30,parts:3},pre:[],d:"Unlocks the Clinic building."},
+  fab:{n:"Fabrication",cost:{scrip:30,parts:4},pre:["ash_sift"],d:"Unlocks the Workshop (metal+power -> parts)."},
+  barter:{n:"Barter Networks",cost:{scrip:35,parts:2},pre:["ash_sift"],d:"Unlocks Trade Post; caravan prices 8% friendlier."},
+  deep_root:{n:"Deep Root Cultivars",cost:{scrip:40,parts:4},pre:["hydro"],d:"Greenhouse output +40%."},
+  alloy:{n:"Alloy Smelting",cost:{scrip:45,parts:6},pre:["fab"],d:"Forge output +40% and uses 1 less power."},
+  baffle:{n:"Storm Baffles",cost:{scrip:35,parts:5},pre:["fab"],d:"Unlocks Windbreak; -15% ashstorm damage."},
+  capacitor:{n:"Capacitor Bank",cost:{scrip:40,parts:5},pre:["alloy"],d:"Power cap +80; storms no longer drain power."},
+  civics:{n:"Civic Rites",cost:{scrip:50,parts:4},pre:["med"],d:"Baseline morale target +10."},
+  seal:{n:"Sealed Habitats",cost:{scrip:60,parts:8},pre:["baffle","capacitor"],d:"-30% ashstorm damage; storm water spike halved."}
+};
+const TECH_IDS=Object.keys(TECH);
+
+/* Names */
+const FIRST=["Mira","Tovan","Iselle","Krek","Dania","Osmun","Vel","Hobbe","Nara","Pell","Sig","Runa",
+  "Cadeo","Wisp","Tarn","Elke","Jorun","Bex","Ama","Fenn","Sora","Dov","Lira","Mott"];
+const LAST=["Ashby","Vane","Corrin","Slate","Grale","Duun","Perrick","Mowe","Halt","Fossick","Rill","Kade"];
+
+/* Trade base prices */
+const BASEP={food:3,water:2,metal:5,parts:12,ore:2,soil:2};
+const TRADE_GOODS=["food","water","metal","parts","ore","soil"];
+
+/* ============================================================================
+   2. EVENT DECK (12 events, 5 with real choices)
+   ========================================================================== */
+const EVENTS=[
+  {id:"drifters",w:10,t:"Drifters at the Gate",
+   txt:"Three ragged drifters ask for shelter. They look able but hungry.",
+   choices:[
+    {t:"Take all three in (need 3 housing)",d:"+3 colonists, -25 food",
+     ok:S=>housing(S)-S.col.length>=3&&S.res.food>=25,
+     go:(S)=>{S.res.food-=25;for(let i=0;i<3;i++)addColonist(S,1);return "Three drifters join the outpost. 25 food spent feeding them.";}},
+    {t:"Take one, turn away the rest",d:"+1 colonist, -8 food, -4 morale (guilt)",
+     ok:S=>housing(S)-S.col.length>=1&&S.res.food>=8,
+     go:(S)=>{S.res.food-=8;addColonist(S,1);allMorale(S,-4);return "One drifter joins. The others walk back into the ash. Morale -4.";}},
+    {t:"Refuse them",d:"-8 morale, +6 scrip (they trade their kit for passage)",
+     go:(S)=>{allMorale(S,-8);S.res.scrip+=6;return "The gate stays shut. They sell you their kit for 6 scrip. Morale -8.";}}
+   ]},
+  {id:"cache",w:9,t:"Buried Cache",
+   txt:"A scavenger's probe strikes a sealed pre-eruption locker under the ruins.",
+   choices:[
+    {t:"Crack it open now",d:"+18 parts, +10 metal, but 1 colonist takes 20 fatigue",
+     go:(S)=>{S.res.parts+=18;S.res.metal+=10;const c=leastFatigued(S);if(c)c.fat=clamp(c.fat+20,0,100);
+       return "Locker opened: +18 parts, +10 metal."+(c?" "+c.name+" is exhausted.":"");}},
+    {t:"Excavate carefully over the week",d:"+28 parts, +20 metal, but -14 food (labour)",
+     ok:S=>S.res.food>=14,
+     go:(S)=>{S.res.parts+=28;S.res.metal+=20;S.res.food-=14;return "Careful dig: +28 parts, +20 metal, -14 food.";}},
+    {t:"Sell the location to the caravan network",d:"+45 scrip now",
+     go:(S)=>{S.res.scrip+=45;return "The coordinates fetch 45 scrip. Someone else will dig it.";}}
+   ]},
+  {id:"sickness",w:9,t:"Grey Lung",
+   txt:"Ash cough spreads through the bunks. Everyone is coughing black.",
+   choices:[
+    {t:"Quarantine the sick (halt work)",d:"All fatigue +18, morale -3, illness passes",
+     go:(S)=>{S.col.forEach(c=>c.fat=clamp(c.fat+18,0,100));allMorale(S,-3);
+       return "Quarantine holds. Everyone is worn out but nobody dies.";}},
+    {t:"Burn parts for filtered air",d:"-10 parts, morale +4",
+     ok:S=>S.res.parts>=10,
+     go:(S)=>{S.res.parts-=10;allMorale(S,4);return "Filters scrubbed the bunks clean. -10 parts, morale +4.";}},
+    {t:"Work through it",d:"Morale -12, and the weakest colonist may leave",
+     go:(S)=>{allMorale(S,-12);const c=lowestMorale(S);let m="Coughing crews keep working. Morale -12.";
+       if(c&&c.mor<25){removeColonist(S,c.id);m+=" "+c.name+" collapses and is carried out of the outpost.";}
+       return m;}}
+   ]},
+  {id:"raiders",w:8,t:"Ash Raiders",
+   txt:"Masked raiders on scrap bikes circle the perimeter, counting your stores.",
+   choices:[
+    {t:"Pay them off",d:"-30 scrip (or all you have)",
+     go:(S)=>{const p=Math.min(30,S.res.scrip);S.res.scrip-=p;return "Paid "+fmt(p)+" scrip. They ride off, for now.";}},
+    {t:"Bar the doors and wait",d:"-25 food, -15 metal stolen, morale -5",
+     go:(S)=>{S.res.food=Math.max(0,S.res.food-25);S.res.metal=Math.max(0,S.res.metal-15);allMorale(S,-5);
+       return "They took 25 food and 15 metal from the outer stores. Morale -5.";}},
+    {t:"Drive them off with the crew",d:"Morale +8, but 2 colonists take heavy fatigue and a building is damaged",
+     go:(S)=>{allMorale(S,8);const cs=S.col.slice().sort((a,b)=>a.id-b.id).slice(0,2);
+       cs.forEach(c=>c.fat=clamp(c.fat+30,0,100));
+       const b=firstBuilding(S);let m="The crew drives them into the ashfall. Morale +8.";
+       if(b){b.hp=clamp(b.hp-30,0,100);m+=" The "+BUILD[b.b].n+" was damaged in the fight.";}
+       return m;}}
+   ]},
+  {id:"vein",w:7,t:"Steam Vein Surge",
+   txt:"Pressure builds under the vents. Engineers say it can be tapped or bled off.",
+   choices:[
+    {t:"Tap it hard",d:"+40 power now, but every plant takes 20 damage",
+     go:(S)=>{S.res.power+=40;let n=0;S.map.forEach(t=>{if(t.b==="plant"){t.hp=clamp(t.hp-20,0,100);n++;}});
+       return "+40 power surged into the buffer. "+n+" plant(s) took 20 damage.";}},
+    {t:"Bleed it off safely",d:"+12 power, +15 ash",
+     go:(S)=>{S.res.power+=12;S.res.ash+=15;return "Vented safely: +12 power, +15 ash fallout collected.";}}
+   ]},
+  {id:"meltpool",w:7,t:"Meltwater Pool",kind:"good",
+   txt:"A crevasse opens and floods a shallow basin with clean meltwater.",
+   go:(S)=>{S.res.water+=45;return "+45 water collected from the new pool.";}},
+  {id:"scavluck",w:8,t:"Good Picking",kind:"good",
+   txt:"A collapsed overpass exposes a whole seam of rebar and machinery.",
+   go:(S)=>{S.res.ore+=30;S.res.metal+=8;return "+30 ore, +8 metal hauled home.";}},
+  {id:"morale_up",w:7,t:"Ash Festival",kind:"good",
+   txt:"Someone finds a working speaker. The outpost dances in the grey.",
+   go:(S)=>{allMorale(S,10);S.col.forEach(c=>c.fat=clamp(c.fat-6,0,100));
+     return "Morale +10 across the outpost, and everyone sleeps better.";}},
+  {id:"spoil",w:8,t:"Spoilage",kind:"bad",
+   txt:"Damp got into the food store and half a rack has turned.",
+   go:(S)=>{const l=Math.min(S.res.food,Math.round(S.res.food*0.18)+4);S.res.food-=l;
+     return "Lost "+fmt(l)+" food to rot.";}},
+  {id:"cavein",w:8,t:"Cave-In",kind:"bad",
+   txt:"Ash-loaded roofing gives way over one of your structures.",
+   go:(S)=>{const b=weakestBuilding(S);if(!b)return "A cave-in swallows empty ground. No structures lost.";
+     b.hp=clamp(b.hp-45,0,100);return "The "+BUILD[b.b].n+" is badly damaged (integrity "+Math.round(b.hp)+"%). Repair it with parts.";}},
+  {id:"defector",w:6,t:"A Better Offer",kind:"bad",
+   txt:"A radio call from a richer outpost downwind offers work and clean air.",
+   go:(S)=>{if(S.col.length<=2)return "Two colonists listen to the offer, then look at each other and stay.";
+     const c=lowestMorale(S);if(c.mor<55){removeColonist(S,c.id);return c.name+" packs up and leaves for the downwind outpost.";}
+     return "The crew listens to the offer and turns it down. Morale holds.";}},
+  {id:"engineer",w:6,t:"Wandering Engineer",kind:"good",
+   txt:"A lone engineer with a working multitool asks to stay the season.",
+   go:(S)=>{if(housing(S)-S.col.length<1)return "A wandering engineer arrives, finds no bunk free, and moves on.";
+     const c=addColonist(S,3,"Engineer");return c.name+" (Engineer, skill 3) joins the outpost.";}}
+];
+
+/* ============================================================================
+   3. STATE CREATION
+   ========================================================================== */
+function genMap(seed){
+  const r=mulberry32(seed^0x9E3779B9);
+  const raw=[];
+  for(let i=0;i<64;i++)raw.push(r());
+  const map=[];
+  for(let i=0;i<64;i++){
+    const x=i%8,y=(i/8)|0;
+    // neighbour smoothing so terrain clusters instead of speckling
+    let s=raw[i]*0.6;
+    let cnt=0.6;
+    for(const j of nbrIdx(i)){s+=raw[j]*0.2;cnt+=0.2;}
+    s/=cnt;
+    let t;
+    if(s<0.17)t="water";
+    else if(s<0.30)t="ruins";
+    else if(s<0.42)t="rock";
+    else if(s>0.90)t="vent";
+    else t="ash";
+    map.push({i:i,x:x,y:y,t:t,b:null,hp:100,w:[]});
+  }
+  // Guarantee playability: at least 2 vents, 3 water, 4 ruins, 6 rock
+  ensure(map,"vent",2,r);ensure(map,"water",3,r);ensure(map,"ruins",4,r);ensure(map,"rock",6,r);
+  return map;
+}
+function ensure(map,t,n,r){
+  let have=map.filter(m=>m.t===t).length;
+  let guard=0;
+  while(have<n&&guard++<400){
+    const i=Math.floor(r()*64);
+    if(map[i].t==="ash"){map[i].t=t;have++;}
+  }
+}
+function nbrIdx(i){
+  const x=i%8,y=(i/8)|0,o=[];
+  if(x>0)o.push(i-1); if(x<7)o.push(i+1);
+  if(y>0)o.push(i-8); if(y<7)o.push(i+8);
+  return o;
+}
+
+function newGame(seed){
+  const S={
+    v:3, seed:seed, rng:seed|0, turn:1,
+    res:{food:60,water:60,metal:60,power:20,parts:12,scrip:40,ore:20,ash:10,soil:8},
+    map:genMap(seed),
+    col:[], nextId:1,
+    research:[],
+    cool:{},
+    market:{idx:{food:1,water:1,metal:1,parts:1,ore:1,soil:1},caravan:null,next:4},
+    storm:{last:0,next:7,count:0},
+    flags:{starved:0,thirsted:0,lastStormSev:0},
+    over:null, score:null, pending:null,
+    log:[], noEnd:false
+  };
+  // starting crew: 5 colonists. No Medic to begin with — medics arrive later,
+  // which is why the Clinic is a mid-game building.
+  const startJobs=["Farmer","Farmer","Engineer","Scavenger","Scavenger"];
+  startJobs.forEach(j=>addColonist(S,2,j));
+  // free starting shelter + collector on legal tiles so turn 1 is not dead
+  placeFree(S,"shelter"); placeFree(S,"shelter"); placeFree(S,"collector");
+  logs(S,"Ashfall year 1. Five survivors dig in. Seed "+seed+".","info");
+  logs(S,"Resolution order each turn: storm, production, consumption, morale, migration, storage, trade, event.","info");
+  return S;
+}
+function placeFree(S,type){
+  const d=BUILD[type];
+  for(const t of S.map){ if(!t.b&&d.terr.includes(t.t)){t.b=type;t.hp=100;t.w=[];return t;} }
+  return null;
+}
+function addColonist(S,skill,job){
+  const name=pickR(S,FIRST)+" "+pickR(S,LAST);
+  const c={id:S.nextId++,name:name,job:job||pickR(S,JOBS),sk:clamp(skill||1,1,5),
+    xp:0,fat:ri(S,15),mor:65,at:null};
+  S.col.push(c);
+  return c;
+}
+function removeColonist(S,id){
+  const i=S.col.findIndex(c=>c.id===id);
+  if(i<0)return;
+  S.col.splice(i,1);
+  S.map.forEach(t=>{t.w=t.w.filter(w=>w!==id);});
+}
+function colById(S,id){return S.col.find(c=>c.id===id)||null;}
+function allMorale(S,d){S.col.forEach(c=>c.mor=clamp(c.mor+d,0,100));}
+function lowestMorale(S){return S.col.slice().sort((a,b)=>a.mor-b.mor||a.id-b.id)[0]||null;}
+function leastFatigued(S){return S.col.slice().sort((a,b)=>a.fat-b.fat||a.id-b.id)[0]||null;}
+function firstBuilding(S){return S.map.find(t=>t.b&&t.hp>10)||null;}
+function weakestBuilding(S){
+  const bs=S.map.filter(t=>t.b);
+  if(!bs.length)return null;
+  return bs.slice().sort((a,b)=>a.hp-b.hp||a.i-b.i)[0];
+}
+function logs(S,txt,kind){
+  S.log.push({t:S.turn,x:txt,k:kind||"info"});
+  if(S.log.length>500)S.log.splice(0,S.log.length-500);
+}
+
+/* ============================================================================
+   4. DERIVED VALUES
+   ========================================================================== */
+function has(S,tech){return S.research.indexOf(tech)>=0;}
+function housing(S){return S.map.reduce((a,t)=>a+(t.b&&BUILD[t.b].housing?BUILD[t.b].housing:0),0);}
+function storeCap(S,r){
+  if(r==="scrip")return 99999;
+  if(r==="power")return 60+(has(S,"capacitor")?80:0);
+  const depots=S.map.filter(t=>t.b==="depot"&&t.hp>=25).length;
+  return 250+depots*BUILD.depot.capBonus;
+}
+function adjInfo(S,i,type){
+  const d=BUILD[type];
+  if(!d.adj)return{mult:1,n:0,txt:"no adjacency bonus"};
+  let n=0;
+  for(const j of nbrIdx(i)) if(d.adj.terr.includes(S.map[j].t))n++;
+  return {mult:1+n*d.adj.per,n:n,
+    txt:n+" adjacent "+d.adj.terr.map(t=>TERR[t].n).join("/")+" → +"+Math.round(n*d.adj.per*100)+"%"};
+}
+function techMult(S,type){
+  const d=BUILD[type];let m=1;const src=[];
+  if(d.rsc)for(const k in d.rsc)if(has(S,k)){m+=d.rsc[k];src.push(TECH[k].n+" +"+Math.round(d.rsc[k]*100)+"%");}
+  return {mult:m,txt:src.length?src.join(", "):"no research bonus"};
+}
+function integrity(t){return t.hp>=25?t.hp/100:0;}
+function workerEff(S,c,type){
+  const d=BUILD[type];
+  const match=(d.job&&c.job===d.job)?1:0.55;
+  const skill=0.6+0.2*c.sk;                         // sk1=0.8 ... sk5=1.6
+  const fat=1-Math.max(0,c.fat-50)/100;             // fatigue over 50 bites
+  const mor=0.5+c.mor/200;                          // mor0=0.5 ... mor100=1.0
+  return {e:Math.max(0,match*skill*fat*mor),match:match,skill:skill,fat:fat,mor:mor};
+}
+function bldEff(S,t){
+  const d=BUILD[t.b];
+  let sum=0;
+  t.w.forEach(id=>{const c=colById(S,id);if(c)sum+=workerEff(S,c,t.b).e;});
+  return sum*adjInfo(S,t.i,t.b).mult*techMult(S,t.b).mult*integrity(t);
+}
+function stormMitigation(S){
+  const wb=S.map.filter(t=>t.b==="windbreak"&&t.hp>=25).length;
+  const w=Math.min(0.40,wb*BUILD.windbreak.storm);
+  const r=(has(S,"baffle")?0.15:0)+(has(S,"seal")?0.30:0);
+  return {total:clamp(w+r,0,0.85),wb:w,res:r,count:wb};
+}
+function assignedIds(S){const s=[];S.map.forEach(t=>t.w.forEach(i=>s.push(i)));return s;}
+function isIdle(S,c){return assignedIds(S).indexOf(c.id)<0;}
+
+/* Projected per-turn net for the resource bar (approximation shown as a tooltip). */
+function projection(S){
+  const p={};RES.forEach(r=>p[r]=0);
+  for(const type of PROD_ORDER){
+    for(const t of S.map){
+      if(t.b!==type)continue;
+      const d=BUILD[type];if(!d.out)continue;
+      const e=bldEff(S,t);if(e<=0)continue;
+      if(d.in)for(const k in d.in)p[k]-=d.in[k]*e;
+      for(const k in d.out)p[k]+=d.out[k]*e;
+    }
+  }
+  p.food-=S.col.length*1.2;
+  p.water-=S.col.length*1.5;
+  return p;
+}
+
+/* ============================================================================
+   5. TURN RESOLUTION  (fixed documented order)
+   ========================================================================== */
+function resolveTurn(S){
+  if(S.over)return;
+  if(S.pending){logs(S,"Resolve the pending decision first.","warn");return;}
+
+  /* --- PHASE 1: ASHSTORM ------------------------------------------------- */
+  let waterMult=1;
+  if(S.turn>=S.storm.next){
+    const sev=1+Math.floor(S.turn/14)+rnd(S)*1.5;
+    S.storm.count++;S.storm.last=S.turn;
+    S.storm.next=S.turn+Math.max(5,7-Math.floor(S.turn/25));
+    const mit=stormMitigation(S);
+    S.flags.lastStormSev=r3(sev);
+    let dmgTot=0,hit=0;
+    S.map.forEach(t=>{
+      if(!t.b)return;
+      const roll=rnd(S);
+      if(roll<0.75){
+        const dmg=(8+sev*9*roll*1.4)*(1-mit.total);
+        t.hp=clamp(t.hp-dmg,0,100);dmgTot+=dmg;hit++;
+      }
+    });
+    waterMult=has(S,"seal")?1.4:1.8;
+    allMorale(S,-6);
+    if(!has(S,"capacitor"))S.res.power=r3(S.res.power*0.5);
+    S.res.ash=r3(S.res.ash+15+sev*5);
+    logs(S,"ASHSTORM #"+S.storm.count+" (severity "+sev.toFixed(1)+"). "+hit+" structures hit for "+
+      Math.round(dmgTot)+" integrity total. Mitigation "+Math.round(mit.total*100)+"%. Water use x"+
+      waterMult+" this turn. Morale -6. +"+Math.round(15+sev*5)+" ash blown in.","storm");
+  }
+
+  /* --- PHASE 2: PRODUCTION CHAINS ---------------------------------------- */
+  const made={},used={};
+  for(const type of PROD_ORDER){
+    const d=BUILD[type];
+    if(!d.out)continue;
+    for(const t of S.map){
+      if(t.b!==type)continue;
+      let e=bldEff(S,t);
+      if(e<=0)continue;
+      let ratio=1;
+      if(d.in){
+        for(const k in d.in){
+          let need=d.in[k]*e;
+          if(type==="forge"&&k==="power"&&has(S,"alloy"))need=Math.max(0,(d.in[k]-1)*e);
+          if(need>0)ratio=Math.min(ratio,S.res[k]/need);
+        }
+        ratio=clamp(ratio,0,1);
+      }
+      const f=e*ratio;
+      if(f<=0.0001)continue;
+      if(d.in)for(const k in d.in){
+        let per=d.in[k];
+        if(type==="forge"&&k==="power"&&has(S,"alloy"))per=Math.max(0,per-1);
+        const amt=per*f;
+        S.res[k]=r3(Math.max(0,S.res[k]-amt));
+        used[k]=r3((used[k]||0)+amt);
+      }
+      for(const k in d.out){
+        const amt=d.out[k]*f;
+        S.res[k]=r3(S.res[k]+amt);
+        made[k]=r3((made[k]||0)+amt);
+      }
+      // skill growth: only in the matching specialty, slow
+      t.w.forEach(id=>{
+        const c=colById(S,id);
+        if(c&&c.job===d.job&&c.sk<5){c.xp+=1;if(c.xp>=6+c.sk*4){c.xp=0;c.sk++;logs(S,c.name+" reaches "+c.job+" skill "+c.sk+".","good");}}
+      });
+    }
+  }
+  const mparts=Object.keys(made).sort().map(k=>"+"+fmt(made[k])+" "+k);
+  const uparts=Object.keys(used).sort().map(k=>"-"+fmt(used[k])+" "+k);
+  if(mparts.length||uparts.length)
+    logs(S,"Production: "+(mparts.join(", ")||"nothing")+(uparts.length?" | consumed "+uparts.join(", "):""),"info");
+  else logs(S,"Production: nothing produced (no staffed, working buildings).","warn");
+
+  clampStores(S,true);
+
+  /* --- PHASE 3: CONSUMPTION ---------------------------------------------- */
+  const pop=S.col.length;
+  const wantF=r3(pop*1.2), wantW=r3(pop*1.5*waterMult);
+  const gotF=Math.min(S.res.food,wantF), gotW=Math.min(S.res.water,wantW);
+  S.res.food=r3(S.res.food-gotF); S.res.water=r3(S.res.water-gotW);
+  const fShort=wantF>0?1-gotF/wantF:0, wShort=wantW>0?1-gotW/wantW:0;
+  S.flags.starved=fShort>0.001?1:0;
+  S.flags.thirsted=wShort>0.001?1:0;
+  logs(S,"Consumption: "+fmt(gotF)+"/"+fmt(wantF)+" food, "+fmt(gotW)+"/"+fmt(wantW)+" water for "+pop+" colonists.",
+    (fShort>0||wShort>0)?"bad":"info");
+  if(fShort>0)logs(S,"FOOD SHORTFALL "+Math.round(fShort*100)+"% — morale falling.","bad");
+  if(wShort>0)logs(S,"WATER SHORTFALL "+Math.round(wShort*100)+"% — morale falling fast.","bad");
+
+  /* --- PHASE 4: MORALE & FATIGUE ----------------------------------------- */
+  let medic=0;
+  S.map.forEach(t=>{
+    if(t.b!=="clinic"||integrity(t)<=0)return;
+    medic+=bldEff(S,t);
+    t.w.forEach(id=>{                            // medics gain skill the same way
+      const c=colById(S,id);
+      if(c&&c.job==="Medic"&&c.sk<5){c.xp+=1;if(c.xp>=6+c.sk*4){c.xp=0;c.sk++;logs(S,c.name+" reaches Medic skill "+c.sk+".","good");}}
+    });
+  });
+  const target=(has(S,"civics")?70:60);
+  const surplusF=S.res.food>pop*4, surplusW=S.res.water>pop*4;
+  S.col.forEach(c=>{
+    const working=assignedIds(S).indexOf(c.id)>=0;
+    c.fat=clamp(c.fat+(working?12:-22)-medic*9,0,100);
+    let d=(target-c.mor)*0.18;                 // drift toward target
+    d-=fShort*26; d-=wShort*34;
+    if(surplusF)d+=2; if(surplusW)d+=1;
+    if(c.fat>80)d-=6; else if(c.fat<25)d+=2;
+    d+=medic*3;
+    c.mor=clamp(c.mor+d,0,100);
+  });
+
+  /* --- PHASE 5: DEPARTURES & ARRIVALS ------------------------------------ */
+  const leaving=S.col.filter(c=>c.mor<=0);
+  leaving.forEach(c=>{
+    logs(S,c.name+" has lost all hope and walked into the ashfall. Population -1.","bad");
+    removeColonist(S,c.id);
+  });
+  S.col.forEach(c=>{if(c.mor>0&&c.mor<20)logs(S,"WARNING: "+c.name+" is at morale "+Math.round(c.mor)+" and will leave if it hits 0.","warn");});
+  if(S.col.length>0){
+    const avg=S.col.reduce((a,c)=>a+c.mor,0)/S.col.length;
+    if(avg>70&&S.res.food>pop*5&&housing(S)-S.col.length>=1&&rnd(S)<0.14){
+      const c=addColonist(S,1);
+      logs(S,"Word of a working outpost spreads: "+c.name+" ("+c.job+") arrives. Population +1.","good");
+    }
+  }
+
+  /* --- PHASE 6: STORAGE CLAMP -------------------------------------------- */
+  clampStores(S,true);
+
+  /* --- PHASE 7: TRADE / PRICE DRIFT -------------------------------------- */
+  tradeTick(S);
+
+  /* --- PHASE 8: EVENT DECK ----------------------------------------------- */
+  for(const k in S.cool){S.cool[k]--;if(S.cool[k]<=0)delete S.cool[k];}
+  const chance=0.40+Math.min(0.18,S.turn*0.003);
+  if(rnd(S)<chance)fireEvent(S);
+
+  /* --- PHASE 9: TURN ADVANCE + END CONDITIONS ---------------------------- */
+  S.turn++;
+  if(!S.noEnd)checkEnd(S);
+}
+
+function clampStores(S,doLog){
+  RES.forEach(r=>{
+    if(S.res[r]<0)S.res[r]=0;
+    const cap=storeCap(S,r);
+    if(S.res[r]>cap){
+      const lost=r3(S.res[r]-cap);
+      S.res[r]=cap;
+      if(doLog&&lost>0.05)logs(S,"OVERFLOW: "+fmt(lost)+" "+r+" lost (cap "+cap+"). Build a Storage Depot.","warn");
+    }
+    S.res[r]=r3(S.res[r]);
+  });
+}
+
+/* ---- events ---- */
+function fireEvent(S){
+  const pool=EVENTS.filter(e=>!S.cool[e.id]);
+  if(!pool.length)return;
+  let tot=0;pool.forEach(e=>tot+=e.w);
+  let roll=rnd(S)*tot,ev=pool[0];
+  for(const e of pool){roll-=e.w;if(roll<=0){ev=e;break;}}
+  S.cool[ev.id]=10;
+  if(ev.choices){
+    const usable=ev.choices.map((c,i)=>({c:c,i:i})).filter(o=>!o.c.ok||o.c.ok(S));
+    if(!usable.length){logs(S,"EVENT "+ev.t+": no response was possible. The moment passes badly.","event");allMorale(S,-3);return;}
+    S.pending={id:ev.id,opts:usable.map(o=>o.i)};
+    logs(S,"EVENT: "+ev.t+" — a decision is required.","event");
+  }else{
+    const msg=ev.go(S);
+    logs(S,"EVENT: "+ev.t+" — "+msg,"event");
+    clampStores(S,false);
+  }
+}
+function resolveChoice(S,optIndex){
+  if(!S.pending)return;
+  const ev=EVENTS.find(e=>e.id===S.pending.id);
+  const ch=ev.choices[optIndex];
+  const msg=ch.go(S);
+  logs(S,"CHOICE ["+ch.t+"] — "+msg,"event");
+  S.pending=null;
+  clampStores(S,false);
+  if(!S.noEnd)checkEnd(S);
+}
+
+/* ---- trade ---- */
+function tradeTick(S){
+  // global supply/demand drift (random walk with mean reversion)
+  for(const g of TRADE_GOODS){
+    let v=S.market.idx[g];
+    v+= (rnd(S)-0.5)*0.14 + (1-v)*0.06;
+    S.market.idx[g]=r3(clamp(v,0.55,1.85));
+  }
+  if(S.market.caravan){
+    S.market.caravan.turns--;
+    if(S.market.caravan.turns<=0){
+      S.market.caravan=null;
+      S.market.next=S.turn+5+ri(S,3);
+      logs(S,"The caravan packs up and rolls out into the ash.","info");
+    }
+  }else if(S.turn>=S.market.next){
+    const stock={};
+    for(const g of TRADE_GOODS)stock[g]=(rnd(S)<0.7)?(8+ri(S,34)):0;
+    S.market.caravan={turns:2+ri(S,2),stock:stock,scrip:80+ri(S,90)};
+    logs(S,"A caravan arrives with "+Object.keys(stock).filter(k=>stock[k]>0).length+
+      " goods and "+S.market.caravan.scrip+" scrip. Open the Trade tab.","good");
+  }
+}
+function priceOf(S,g,side){ // side "buy" = player buys from caravan
+  const base=BASEP[g]*S.market.idx[g];
+  const stockF=clamp(1.25-S.res[g]/480,0.6,1.25);   // your surplus depresses what you get
+  const post=S.map.some(t=>t.b==="market"&&t.hp>=25);
+  let p= side==="buy" ? base*1.3 : base*0.78*stockF;
+  if(has(S,"barter"))p*= side==="buy"?0.92:1.08;
+  if(post)p*= side==="buy"?0.90:1.10;
+  return Math.max(0.2,r3(p));
+}
+function doTrade(S,g,qty,side){
+  const cv=S.market.caravan;
+  if(!cv)return "No caravan is here.";
+  if(qty<=0)return "Quantity must be positive.";
+  const p=priceOf(S,g,side);
+  if(side==="buy"){
+    if(cv.stock[g]<qty)return "The caravan only has "+fmt(cv.stock[g])+" "+g+".";
+    const cost=r3(p*qty);
+    if(S.res.scrip<cost)return "Not enough scrip ("+fmt(cost)+" needed).";
+    if(S.res[g]+qty>storeCap(S,g))return "Storage cap reached for "+g+".";
+    S.res.scrip=r3(S.res.scrip-cost);S.res[g]=r3(S.res[g]+qty);
+    cv.stock[g]-=qty;cv.scrip=r3(cv.scrip+cost);
+    logs(S,"Bought "+qty+" "+g+" for "+fmt(cost)+" scrip.","info");
+    return null;
+  }else{
+    if(S.res[g]<qty)return "You only have "+fmt(S.res[g])+" "+g+".";
+    const gain=r3(p*qty);
+    if(cv.scrip<gain)return "The caravan only has "+fmt(cv.scrip)+" scrip left.";
+    S.res[g]=r3(S.res[g]-qty);S.res.scrip=r3(S.res.scrip+gain);
+    cv.scrip=r3(cv.scrip-gain);cv.stock[g]+=qty;
+    logs(S,"Sold "+qty+" "+g+" for "+fmt(gain)+" scrip.","info");
+    return null;
+  }
+}
+
+/* ---- actions ---- */
+function canBuild(S,tileIdx,type){
+  const d=BUILD[type],t=S.map[tileIdx];
+  if(!d)return "Unknown building.";
+  if(t.b)return "Tile already has a "+BUILD[t.b].n+".";
+  if(!d.terr.includes(t.t))return "Needs "+d.terr.map(x=>TERR[x].n).join(" or ")+".";
+  if(d.req&&!has(S,d.req))return "Requires research: "+TECH[d.req].n+".";
+  for(const k in d.cost)if(S.res[k]<d.cost[k])return "Needs "+d.cost[k]+" "+k+".";
+  return null;
+}
+function build(S,tileIdx,type){
+  const err=canBuild(S,tileIdx,type);
+  if(err)return err;
+  const d=BUILD[type];
+  for(const k in d.cost)S.res[k]=r3(S.res[k]-d.cost[k]);
+  S.map[tileIdx].b=type;S.map[tileIdx].hp=100;S.map[tileIdx].w=[];
+  logs(S,"Built "+d.n+" at "+coord(tileIdx)+".","good");
+  return null;
+}
+function demolish(S,tileIdx){
+  const t=S.map[tileIdx];
+  if(!t.b)return "Nothing there.";
+  const d=BUILD[t.b];
+  S.res.metal=r3(Math.min(storeCap(S,"metal"),S.res.metal+(d.cost.metal||0)*0.4));
+  logs(S,"Demolished "+d.n+" at "+coord(tileIdx)+" (40% metal recovered).","warn");
+  t.b=null;t.hp=100;t.w=[];
+  return null;
+}
+function repair(S,tileIdx){
+  const t=S.map[tileIdx];
+  if(!t.b)return "Nothing there.";
+  if(t.hp>=100)return "Already at full integrity.";
+  if(S.res.parts<2)return "Repairs cost 2 parts.";
+  const worker=S.col.filter(c=>c.act!==S.turn).sort((a,b)=>a.fat-b.fat||a.id-b.id)[0];
+  if(!worker)return "No colonist is free to work a repair this turn.";
+  S.res.parts=r3(S.res.parts-2);
+  worker.act=S.turn;worker.fat=clamp(worker.fat+8,0,100);
+  t.hp=clamp(t.hp+35,0,100);
+  logs(S,worker.name+" repairs the "+BUILD[t.b].n+" to "+Math.round(t.hp)+"% (-2 parts, +8 fatigue).","good");
+  return null;
+}
+function assign(S,colId,tileIdx){
+  const c=colById(S,colId);
+  if(!c)return "No such colonist.";
+  S.map.forEach(t=>{t.w=t.w.filter(w=>w!==colId);});
+  if(tileIdx===null||tileIdx===undefined||tileIdx<0)return null; // unassign / rest
+  const t=S.map[tileIdx];
+  if(!t.b)return "No building there.";
+  const d=BUILD[t.b];
+  if(!d.slots)return BUILD[t.b].n+" has no work slots.";
+  if(t.w.length>=d.slots)return BUILD[t.b].n+" is full ("+d.slots+" slots).";
+  t.w.push(colId);
+  return null;
+}
+function buyTech(S,id){
+  if(has(S,id))return "Already researched.";
+  const n=TECH[id];
+  for(const p of n.pre)if(!has(S,p))return "Requires "+TECH[p].n+" first.";
+  for(const k in n.cost)if(S.res[k]<n.cost[k])return "Needs "+n.cost[k]+" "+k+".";
+  for(const k in n.cost)S.res[k]=r3(S.res[k]-n.cost[k]);
+  S.research.push(id);S.research.sort();
+  logs(S,"RESEARCH COMPLETE: "+n.n+" — "+n.d,"good");
+  return null;
+}
+function coord(i){return String.fromCharCode(65+(i%8))+(1+((i/8)|0));}
+
+/* ---- end conditions & score ---- */
+function needsMet(S){
+  return S.flags.starved===0&&S.flags.thirsted===0&&S.res.food>=30&&S.res.water>=30;
+}
+function scoreOf(S){
+  const pop=S.col.length;
+  const stock=Math.floor((S.res.food+S.res.water+S.res.metal+S.res.parts*3)/10);
+  const parts={
+    population:pop*40,
+    research:S.research.length*60,
+    turns:Math.min(S.turn-1,60)*5,
+    stockpiles:stock,
+    scrip:Math.floor(S.res.scrip/5),
+    buildings:S.map.filter(t=>t.b).length*4
+  };
+  parts.total=Object.keys(parts).reduce((a,k)=>a+parts[k],0);
+  return parts;
+}
+function checkEnd(S){
+  if(S.over)return;
+  if(S.col.length<=0){
+    S.over="lose";S.score=scoreOf(S);
+    logs(S,"THE OUTPOST IS DEAD. No colonists remain.","bad");
+  }else if(S.turn>60){
+    const met=needsMet(S),pop=S.col.length;
+    if(pop>=12&&met){S.over="win";logs(S,"RELIEF CONVOY REACHES THE OUTPOST. You survived 60 turns with "+pop+" colonists.","good");}
+    else{S.over="lose";logs(S,"Turn 60 passed. Population "+pop+"/12 and critical needs "+(met?"met":"NOT met")+". The outpost is written off.","bad");}
+    S.score=scoreOf(S);
+  }
+}
+
+/* ============================================================================
+   6. SAVE / LOAD
+   ========================================================================== */
+function serialize(S){
+  const o={};["v","seed","rng","turn","res","map","col","nextId","research","cool",
+    "market","storm","flags","over","score","pending","log"].forEach(k=>o[k]=S[k]);
+  return JSON.stringify(o);
+}
+function validateSave(o){
+  if(!o||typeof o!=="object")return "Not a JSON object.";
+  if(o.v!==3)return "Wrong save version (expected 3, got "+o.v+").";
+  if(typeof o.turn!=="number"||o.turn<1)return "Bad turn value.";
+  if(typeof o.rng!=="number")return "Bad PRNG state.";
+  if(!o.res||typeof o.res!=="object")return "Missing resources.";
+  for(const r of RES)if(typeof o.res[r]!=="number"||!isFinite(o.res[r]))return "Bad resource: "+r;
+  if(!Array.isArray(o.map)||o.map.length!==64)return "Map must have 64 tiles.";
+  for(const t of o.map){
+    if(!TERR[t.t])return "Unknown terrain '"+t.t+"'.";
+    if(t.b!==null&&!BUILD[t.b])return "Unknown building '"+t.b+"'.";
+    if(!Array.isArray(t.w))return "Bad worker list on a tile.";
+  }
+  if(!Array.isArray(o.col))return "Missing colonist roster.";
+  for(const c of o.col){
+    if(typeof c.id!=="number"||typeof c.name!=="string")return "Bad colonist record.";
+    if(JOBS.indexOf(c.job)<0)return "Unknown job '"+c.job+"'.";
+  }
+  if(!Array.isArray(o.research))return "Missing research list.";
+  for(const t of o.research)if(!TECH[t])return "Unknown tech '"+t+"'.";
+  if(!o.market||!o.market.idx)return "Missing market data.";
+  if(!o.storm)return "Missing storm data.";
+  return null;
+}
+function deserialize(txt){
+  let o;
+  try{o=JSON.parse(txt);}catch(e){return {err:"Not valid JSON: "+e.message};}
+  const err=validateSave(o);
+  if(err)return {err:err};
+  const S=newGame(o.seed||1337);
+  ["v","seed","rng","turn","res","map","col","nextId","research","cool",
+   "market","storm","flags","over","score","pending","log"].forEach(k=>{if(o[k]!==undefined)S[k]=o[k];});
+  S.noEnd=false;
+  // integrity fix-ups: drop worker ids that no longer exist
+  const ids=S.col.map(c=>c.id);
+  S.map.forEach(t=>{t.w=(t.w||[]).filter(w=>ids.indexOf(w)>=0);});
+  return {S:S};
+}
+
+/* ============================================================================
+   7. GREEDY POLICY (used by the benchmark)
+   ========================================================================== */
+const BUILD_PRIORITY=["shelter","plant","condenser","collector","composter","greenhouse",
+  "scrapyard","forge","depot","workshop","clinic","windbreak","market"];
+const TECH_PRIORITY=["ash_sift","hydro","fab","deep_root","med","alloy","barter","baffle","capacitor","civics","seal"];
+
+function greedyPolicy(S){
+  if(S.pending)resolveChoice(S,S.pending.opts[0]);
+  // 1. repairs first (cheap, restores output)
+  for(const t of S.map){
+    if(t.b&&t.hp<60&&S.res.parts>=6)repair(S,t.i);
+  }
+  // 2. research
+  for(const id of TECH_PRIORITY){
+    if(!has(S,id)){ if(!buyTech(S,id))break; }
+  }
+  // 3. build, following the priority list; keep housing ahead of population
+  for(let pass=0;pass<3;pass++){
+    for(const type of BUILD_PRIORITY){
+      if(type==="shelter"&&housing(S)>=S.col.length+3)continue;
+      const cnt=S.map.filter(t=>t.b===type).length;
+      const limit={shelter:6,plant:3,condenser:5,collector:4,composter:3,greenhouse:5,
+        scrapyard:4,forge:3,depot:3,workshop:2,clinic:1,windbreak:4,market:1}[type]||2;
+      if(cnt>=limit)continue;
+      for(const t of S.map){ if(!canBuild(S,t.i,type)){build(S,t.i,type);break;} }
+    }
+  }
+  // 4. assignment: rest the heavily fatigued, fill slots by priority
+  const rested=[];
+  S.col.forEach(c=>{assign(S,c.id,null);});
+  const workers=S.col.slice().sort((a,b)=>a.fat-b.fat||a.id-b.id);
+  for(const c of workers){
+    if(c.fat>72||c.mor<15){rested.push(c);continue;}
+    let best=null,bestScore=-1;
+    for(const t of S.map){
+      if(!t.b)continue;
+      const d=BUILD[t.b];
+      if(!d.slots||t.w.length>=d.slots||t.hp<25)continue;
+      let sc=(d.job===c.job?10:2)+bldEff(S,t)*0.1;
+      if(t.b==="greenhouse"&&S.res.food<40)sc+=8;
+      if(t.b==="condenser"&&S.res.water<40)sc+=8;
+      if(t.b==="plant"&&S.res.power<15)sc+=6;
+      if(t.b==="composter"&&S.res.soil<10)sc+=4;
+      if(t.b==="collector"&&S.res.ash<10)sc+=3;
+      if(sc>bestScore){bestScore=sc;best=t;}
+    }
+    if(best)assign(S,c.id,best.i);
+  }
+  // 5. trade: sell obvious surplus, buy critical shortfall
+  const cv=S.market.caravan;
+  if(cv){
+    for(const g of ["ore","soil","metal","ash"]){
+      if(!BASEP[g])continue;
+      const keep={ore:30,soil:20,metal:60,ash:0}[g]||0;
+      const q=Math.floor(S.res[g]-keep);
+      if(q>=5)doTrade(S,g,Math.min(q,40),"sell");
+    }
+    if(S.res.food<25&&cv.stock.food>0){
+      const q=Math.min(cv.stock.food,20,Math.floor(S.res.scrip/Math.max(0.2,priceOf(S,"food","buy"))));
+      if(q>0)doTrade(S,"food",q,"buy");
+    }
+    if(S.res.water<25&&cv.stock.water>0){
+      const q=Math.min(cv.stock.water,20,Math.floor(S.res.scrip/Math.max(0.2,priceOf(S,"water","buy"))));
+      if(q>0)doTrade(S,"water",q,"buy");
+    }
+    if(S.res.parts<6&&cv.stock.parts>0){
+      const q=Math.min(cv.stock.parts,5,Math.floor(S.res.scrip/Math.max(0.2,priceOf(S,"parts","buy"))));
+      if(q>0)doTrade(S,"parts",q,"buy");
+    }
+  }
+  return rested;
+}
+
+function runBenchmark(seedState,turns){
+  const S=JSON.parse(JSON.stringify(seedState));
+  S.noEnd=true;S.over=null;S.log=[];
+  let starved=0,storms=0,peakPop=S.col.length,leftCount=0;
+  for(let i=0;i<turns;i++){
+    greedyPolicy(S);
+    const before=S.col.length,st=S.storm.count;
+    resolveTurn(S);
+    if(S.pending)resolveChoice(S,S.pending.opts[0]);
+    if(S.flags.starved)starved++;
+    if(S.storm.count>st)storms++;
+    if(S.col.length>peakPop)peakPop=S.col.length;
+    if(S.col.length<before)leftCount+=before-S.col.length;
+  }
+  return {hash:stateHash(S),turns:turns,pop:S.col.length,peakPop:peakPop,left:leftCount,
+    research:S.research.length,storms:storms,starvedTurns:starved,
+    buildings:S.map.filter(t=>t.b).length,
+    res:Object.keys(S.res).sort().map(k=>k+":"+fmt(S.res[k])).join(" ")};
+}
+
+/* ============================================================================
+   8. TEST SUITE
+   ========================================================================== */
+function runTests(){
+  const out=[];
+  const A=(name,cond,extra)=>out.push({n:name,p:!!cond,x:extra||""});
+
+  // 1 PRNG determinism
+  (function(){
+    const a={rng:1337},b={rng:1337};
+    const sa=[],sb=[];
+    for(let i=0;i<50;i++){sa.push(rnd(a));sb.push(rnd(b));}
+    A("PRNG is deterministic for the same seed",sa.join()===sb.join());
+    const c={rng:9001};const sc=[];for(let i=0;i<50;i++)sc.push(rnd(c));
+    A("PRNG differs for a different seed",sa.join()!==sc.join());
+  })();
+
+  // 2 map is a pure function of the seed
+  (function(){
+    const m1=genMap(1337).map(t=>t.t).join(),m2=genMap(1337).map(t=>t.t).join();
+    A("Map generation is seed-pure",m1===m2);
+    A("Map has 64 tiles and >=2 vents",genMap(1337).length===64&&genMap(1337).filter(t=>t.t==="vent").length>=2);
+  })();
+
+  // 3 simulate 12 turns with the greedy policy, then check invariants
+  const S=newGame(1337);S.noEnd=true;
+  for(let i=0;i<12;i++){greedyPolicy(S);resolveTurn(S);if(S.pending)resolveChoice(S,S.pending.opts[0]);}
+  A("No negative resources after 12 simulated turns",RES.every(r=>S.res[r]>=0),
+    RES.map(r=>r+"="+fmt(S.res[r])).join(" "));
+  A("Storage caps respected after 12 turns",RES.every(r=>S.res[r]<=storeCap(S,r)+1e-6));
+  A("All resource values are finite numbers",RES.every(r=>isFinite(S.res[r])));
+  A("Fatigue stays within 0..100",S.col.every(c=>c.fat>=0&&c.fat<=100));
+  A("Morale stays within 0..100",S.col.every(c=>c.mor>=0&&c.mor<=100));
+  A("Skill stays within 1..5",S.col.every(c=>c.sk>=1&&c.sk<=5));
+  (function(){
+    const ids=S.col.map(c=>c.id);
+    const assigned=assignedIds(S);
+    A("Every assigned worker id exists in the roster",assigned.every(i=>ids.indexOf(i)>=0));
+    A("No colonist is assigned to two buildings",new Set(assigned).size===assigned.length);
+    A("Population never exceeds housing",S.col.length<=housing(S),S.col.length+"/"+housing(S));
+    A("Worker counts never exceed building slots",
+      S.map.every(t=>!t.b||t.w.length<=(BUILD[t.b].slots||0)));
+  })();
+
+  // 4 research prerequisites
+  (function(){
+    const T=newGame(1337);
+    T.res.scrip=9999;T.res.parts=9999;
+    const e=buyTech(T,"seal");
+    A("Research prerequisites are enforced",e!==null&&/Requires/.test(e),String(e));
+    const e2=buyTech(T,"ash_sift");
+    A("Research with met prereqs and funds succeeds",e2===null&&has(T,"ash_sift"));
+    const before=T.res.scrip;
+    buyTech(T,"ash_sift");
+    A("Researching a done node is refused and costs nothing",T.res.scrip===before);
+    const P=newGame(1337);P.res.scrip=0;P.res.parts=0;
+    A("Research is refused without resources",buyTech(P,"hydro")!==null);
+  })();
+
+  // 5 build legality
+  (function(){
+    const T=newGame(1337);T.res.metal=999;T.res.parts=999;
+    const wat=T.map.find(t=>t.t==="water");
+    A("Cannot build a Condenser on a water tile",canBuild(T,wat.i,"condenser")!==null);
+    const nonVent=T.map.find(t=>t.t==="ash"&&!t.b);
+    A("Cannot build a Geothermal Plant off a vent",canBuild(T,nonVent.i,"plant")!==null);
+    const ws=T.map.find(t=>(t.t==="rock"||t.t==="ruins")&&!t.b);
+    A("Locked building is refused before its research",
+      /Requires research/.test(String(canBuild(T,ws.i,"workshop"))));
+    buyTech(T,"ash_sift");T.res.scrip=999;T.res.parts=999;buyTech(T,"fab");
+    A("Unlocked building becomes buildable after research",canBuild(T,ws.i,"workshop")===null,
+      String(canBuild(T,ws.i,"workshop")));
+  })();
+
+  // 6 adjacency maths
+  (function(){
+    const T=newGame(1337);
+    const wat=T.map.find(t=>t.t==="water");
+    const nb=nbrIdx(wat.i).filter(j=>BUILD.condenser.terr.includes(T.map[j].t));
+    if(nb.length){
+      const info=adjInfo(T,nb[0],"condenser");
+      let manual=0;for(const j of nbrIdx(nb[0]))if(T.map[j].t==="water")manual++;
+      A("Adjacency bonus matches a manual neighbour count",
+        Math.abs(info.mult-(1+manual*0.40))<1e-9&&manual>=1,"n="+manual);
+    }else A("Adjacency bonus matches a manual neighbour count",true,"skipped: no buildable neighbour");
+  })();
+
+  // 7 storage cap grows with depots, overflow is clamped and logged
+  (function(){
+    const T=newGame(1337);
+    const base=storeCap(T,"metal");
+    T.res.metal=999;placeFree(T,"depot");
+    const withDepot=storeCap(T,"metal");
+    A("Storage Depot raises the material cap by 120",withDepot===base+120,base+" -> "+withDepot);
+    const nLog=T.log.length;
+    clampStores(T,true);
+    A("Overflow is clamped to the cap",T.res.metal===withDepot);
+    A("Overflow is written to the log",T.log.length>nLog&&/OVERFLOW/.test(T.log[T.log.length-1].x));
+  })();
+
+  // 8 morale zero removes a colonist
+  (function(){
+    const T=newGame(1337);T.noEnd=true;
+    T.res.food=0;T.res.water=0;               // shortage keeps the drift negative
+    const victim=T.col[0];const id=victim.id;victim.mor=0;
+    assign(T,id,T.map.find(t=>t.b==="collector").i);
+    const n=T.col.length;
+    resolveTurn(T);
+    A("A colonist at zero morale leaves the outpost",T.col.length<n&&!colById(T,id));
+    A("Departed colonist is removed from all work slots",
+      T.map.every(t=>t.w.indexOf(id)<0));
+  })();
+
+  // 9 shortages hurt morale (systems interact)
+  (function(){
+    const T=newGame(1337);T.noEnd=true;T.res.food=0;T.res.water=0;
+    const before=T.col.reduce((a,c)=>a+c.mor,0)/T.col.length;
+    resolveTurn(T);
+    const after=T.col.reduce((a,c)=>a+c.mor,0)/T.col.length;
+    A("Food and water shortage drives morale down",after<before,fmt(before)+" -> "+fmt(after));
+    A("Shortage is flagged in state",T.flags.starved===1&&T.flags.thirsted===1);
+  })();
+
+  // 10 research measurably changes production
+  (function(){
+    const T=newGame(1337);
+    const tile=T.map.find(t=>t.b==="collector");
+    tile.w=[T.col.find(c=>c.job==="Scavenger").id];
+    const before=bldEff(T,tile);
+    T.research.push("ash_sift");
+    const after=bldEff(T,tile);
+    A("Ash Sifting research measurably raises Collector output",
+      Math.abs(after-before*1.30)<1e-6&&after>before,fmt(before)+" -> "+fmt(after));
+  })();
+
+  // 11 damage disables output, repair restores it
+  (function(){
+    const T=newGame(1337);T.res.parts=10;
+    const tile=T.map.find(t=>t.b==="collector");
+    tile.w=[T.col.find(c=>c.job==="Scavenger").id];
+    tile.hp=10;
+    A("A building under 25% integrity produces nothing",bldEff(T,tile)===0);
+    const e=repair(T,tile.i);
+    A("Repair consumes 2 parts and restores integrity",e===null&&tile.hp===45&&T.res.parts===8);
+    A("Repaired building produces again",bldEff(T,tile)>0);
+    const who=T.col.filter(c=>c.act===T.turn);
+    A("Exactly one colonist is marked as having worked the repair",who.length===1);
+    T.col.forEach(c=>{if(c.act!==T.turn){c.act=T.turn;}});   // everyone has now acted
+    A("Repair is refused when no colonist is free this turn",
+      /No colonist/.test(String(repair(T,tile.i))));
+    T.res.parts=0;T.col.forEach(c=>c.act=null);
+    A("Repair is refused without 2 parts",/2 parts/.test(String(repair(T,tile.i))));
+  })();
+
+  // 12 trade limits
+  (function(){
+    const T=newGame(1337);
+    T.market.caravan={turns:2,stock:{food:5,water:0,metal:0,parts:0,ore:0,soil:0},scrip:10};
+    A("Cannot buy more than the caravan stocks",typeof doTrade(T,"food",9,"buy")==="string");
+    T.res.scrip=0;
+    A("Cannot buy without scrip",typeof doTrade(T,"food",5,"buy")==="string");
+    T.res.ore=100;
+    const before=T.res.scrip;
+    doTrade(T,"ore",5,"sell");
+    A("Selling adds scrip and removes goods",T.res.scrip>before&&T.res.ore===95);
+    A("Cannot sell beyond the caravan's scrip",typeof doTrade(T,"ore",90,"sell")==="string");
+  })();
+
+  // 13 event cooldowns
+  (function(){
+    const T=newGame(1337);T.noEnd=true;
+    T.cool={drifters:3};
+    const pool=EVENTS.filter(e=>!T.cool[e.id]);
+    A("Events on cooldown are excluded from the deck",!pool.some(e=>e.id==="drifters"));
+    resolveTurn(T);
+    A("Cooldowns tick down each turn",T.cool.drifters===2||T.cool.drifters===undefined);
+  })();
+
+  // 14 save/load round trip
+  (function(){
+    const T=newGame(4242);T.noEnd=true;
+    for(let i=0;i<6;i++){greedyPolicy(T);resolveTurn(T);if(T.pending)resolveChoice(T,T.pending.opts[0]);}
+    const h1=stateHash(T);
+    const txt=serialize(T);
+    const r=deserialize(txt);
+    A("Save/load parses without error",!r.err,r.err||"");
+    A("Save/load round-trips to an identical state hash",!!r.S&&stateHash(r.S)===h1,
+      h1+" vs "+(r.S?stateHash(r.S):"n/a"));
+    if(r.S){
+      r.S.noEnd=true;const T2=r.S;
+      greedyPolicy(T);resolveTurn(T);
+      greedyPolicy(T2);resolveTurn(T2);
+      A("A loaded game continues identically to the original",stateHash(T)===stateHash(T2));
+    }else A("A loaded game continues identically to the original",false);
+    A("Corrupt save text is rejected with a message",!!deserialize("{not json").err);
+    A("Structurally wrong save is rejected",!!deserialize('{"v":3,"turn":1}').err);
+  })();
+
+  // 15 benchmark determinism
+  (function(){
+    const base=newGame(1337);
+    const b1=runBenchmark(base,20),b2=runBenchmark(base,20);
+    A("Benchmark is reproducible from the same seed state",b1.hash===b2.hash,b1.hash+" / "+b2.hash);
+    const other=runBenchmark(newGame(777),20);
+    A("Benchmark differs for a different seed",other.hash!==b1.hash);
+  })();
+
+  // 16 end conditions
+  (function(){
+    const T=newGame(1337);T.col=[];checkEnd(T);
+    A("Population 0 is a loss",T.over==="lose"&&T.score&&T.score.total>=0);
+    const W=newGame(1337);W.turn=61;
+    while(W.col.length<12)addColonist(W,2);
+    W.res.food=100;W.res.water=100;W.flags.starved=0;W.flags.thirsted=0;
+    checkEnd(W);
+    A("Turn 60 with pop>=12 and needs met is a win",W.over==="win");
+    const L=newGame(1337);L.turn=61;L.res.food=0;L.flags.starved=1;checkEnd(L);
+    A("Turn 60 without the requirements is a loss",L.over==="lose");
+    A("Score is composed from population, research, turns and stockpiles",
+      scoreOf(W).population>0&&scoreOf(W).turns>0&&typeof scoreOf(W).total==="number");
+  })();
+
+  // 17 the built-in random generator is never used anywhere in the page source
+  (function(){
+    const src=document.documentElement.innerHTML;
+    const forbidden="Math"+"."+"random";
+    A("Page source never calls the built-in JS random generator",src.indexOf(forbidden)<0);
+  })();
+
+  return out;
+}
+
+/* ============================================================================
+   9. UI
+   ========================================================================== */
+let G=newGame(1337);
+let UI={tab:"map",sel:null,pick:null,tradeQty:5,tests:null,bench:null,peopleSel:null};
+const $=id=>document.getElementById(id);
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;};
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+const TABS=[["map","Map"],["people","People"],["research","Research"],["trade","Trade"],["log","Log"],["dev","Dev"]];
+
+function render(){
+  renderHeader();renderRes();renderTabs();
+  const p=$("panel");p.innerHTML="";
+  if(G.over){p.appendChild(endScreen());}
+  ({map:tabMap,people:tabPeople,research:tabResearch,trade:tabTrade,log:tabLog,dev:tabDev}[UI.tab])(p);
+  renderModal();
+}
+function renderHeader(){
+  $("hTurn").textContent=G.turn;
+  $("hPop").textContent=G.col.length+"/"+housing(G);
+  const away=G.storm.next-G.turn;
+  $("hStorm").textContent=away<=0?"IMMINENT":("turn "+G.storm.next+" ("+away+")");
+  $("btnEnd").disabled=!!G.over;
+  $("btnEnd").textContent=G.pending?"Decide first!":"End Turn ▶";
+}
+function renderRes(){
+  const bar=$("resbar");bar.innerHTML="";
+  const proj=projection(G);
+  RES.forEach(r=>{
+    const d=el("div","res");
+    const cap=storeCap(G,r);
+    const dv=proj[r];
+    const arrow=dv>0.05?"▲":(dv<-0.05?"▼":"─");
+    const cls=dv>0.05?"up":(dv<-0.05?"dn":"flat");
+    d.innerHTML='<div class="k">'+RES_LABEL[r]+'</div><div class="v">'+fmt(G.res[r])+
+      '<span style="font-size:10px;color:var(--dim)"> /'+(r==="scrip"?"∞":cap)+'</span></div>'+
+      '<div class="d '+cls+'">'+arrow+" "+fmt(dv)+"/turn</div>";
+    d.setAttribute("data-tip",RES_LABEL[r]+"\n"+RES_TIP[r]+
+      "\n\nStored: "+fmt(G.res[r])+" / cap "+(r==="scrip"?"unlimited":cap)+
+      (r==="power"?"\n(cap = 60 base"+(has(G,"capacitor")?" +80 Capacitor Bank":"")+")":
+       (r==="scrip"?"":"\n(cap = 250 base + 120 per Storage Depot)"))+
+      "\nProjected next turn: "+(dv>=0?"+":"")+fmt(dv)+" (production minus inputs and colonist needs at current assignments)");
+    bar.appendChild(d);
+  });
+}
+function renderTabs(){
+  const t=$("tabs");t.innerHTML="";
+  TABS.forEach(([k,label],i)=>{
+    const b=el("button",UI.tab===k?"on":"",label+(i<5?" ["+(i+1)+"]":""));
+    b.onclick=()=>{UI.tab=k;render();};
+    b.setAttribute("data-tip","Switch to the "+label+" panel"+(i<5?" (keyboard "+(i+1)+")":""));
+    t.appendChild(b);
+  });
+}
+
+/* ---------- MAP TAB ---------- */
+function tabMap(p){
+  const wrap=el("div");wrap.id="mapwrap";
+  const grid=el("div");grid.id="grid";
+  G.map.forEach(t=>{
+    const d=el("div","tile t-"+t.t);
+    if(UI.sel===t.i)d.classList.add("sel");
+    if(t.b&&t.hp<70)d.classList.add("dmg");
+    if(UI.pick&&!canBuild(G,t.i,UI.pick))d.classList.add("legal");
+    d.appendChild(el("span","tn",coord(t.i)));
+    if(t.b){
+      d.appendChild(el("span","bn",BUILD[t.b].ab));
+      const slots=BUILD[t.b].slots||0;
+      if(slots)d.appendChild(el("span","wk",t.w.length+"/"+slots+"♟"));
+      if(t.hp<100)d.appendChild(el("span","wk",(t.hp<25?"OFF ":"DMG ")+Math.round(t.hp)+"%"));
+    }else{
+      d.appendChild(el("span","bn",TERR[t.t].g));
+    }
+    d.setAttribute("data-tip",tileTip(t));
+    d.onclick=()=>{
+      if(UI.pick){
+        const err=build(G,t.i,UI.pick);
+        if(err)flash(err);else UI.pick=null;
+      }
+      UI.sel=t.i;render();
+    };
+    grid.appendChild(d);
+  });
+  wrap.appendChild(grid);
+
+  const side=el("div");side.id="side";
+  // selected tile detail
+  const box=el("div","panelbox");
+  if(UI.sel===null){box.appendChild(el("div",null,"Select a tile to inspect or build."));}
+  else{
+    const t=G.map[UI.sel];
+    box.appendChild(el("h3",null,coord(t.i)+" — "+TERR[t.t].n+(t.b?" — "+BUILD[t.b].n:" — empty")));
+    if(t.b){
+      const d=BUILD[t.b];
+      const st=el("div",null,"Integrity "+Math.round(t.hp)+"% "+(t.hp>=25?"(working)":"(OFFLINE — under 25%)"));
+      st.setAttribute("data-tip","Ashstorms reduce integrity. Output scales linearly with integrity; below 25% the building produces nothing.");
+      box.appendChild(st);
+      box.appendChild(el("div",null,d.d));
+      if(d.slots){
+        box.appendChild(el("div",null,"Workers "+t.w.length+"/"+d.slots+" ("+d.job+" preferred): "+
+          (t.w.map(i=>{const c=colById(G,i);return c?c.name:"?";}).join(", ")||"none")));
+        const eff=bldEff(G,t);
+        const e=el("div",null,"Effective output multiplier: "+fmt(eff));
+        e.setAttribute("data-tip",effTip(t));
+        box.appendChild(e);
+        if(d.out)box.appendChild(el("div",null,"Per turn now: "+
+          Object.keys(d.out).map(k=>"+"+fmt(d.out[k]*eff)+" "+k).join(", ")+
+          (d.in?"  |  consumes "+Object.keys(d.in).map(k=>fmt(d.in[k]*eff)+" "+k).join(", "):"")));
+      }
+      const r=el("div","row");r.style.marginTop="6px";
+      const rb=el("button",null,"Repair (+35%, 2 parts)");
+      rb.disabled=t.hp>=100;
+      rb.setAttribute("data-tip","Costs 2 parts and 8 fatigue on the least tired colonist who has not worked a repair this turn.");
+      rb.onclick=()=>{const e=repair(G,t.i);if(e)flash(e);render();};
+      const db=el("button",null,"Demolish");
+      db.setAttribute("data-tip","Removes the building and recovers 40% of its metal cost.");
+      db.onclick=()=>{const e=demolish(G,t.i);if(e)flash(e);UI.sel=t.i;render();};
+      r.appendChild(rb);r.appendChild(db);box.appendChild(r);
+    }else if(t.t==="water"){
+      box.appendChild(el("div",null,"Meltwater cannot be built on. It gives +40% to adjacent Condensers and +15% to adjacent Greenhouses."));
+    }
+  }
+  side.appendChild(box);
+
+  // build menu
+  const bm=el("div","panelbox");
+  bm.appendChild(el("h2",null,"BUILD"+(UI.pick?" — placing "+BUILD[UI.pick].n+" (click a tile)":"")));
+  const list=el("div","blist");
+  Object.keys(BUILD).forEach(k=>{
+    const d=BUILD[k];
+    const legal=UI.sel!==null?canBuild(G,UI.sel,k):null;
+    const affordable=Object.keys(d.cost).every(c=>G.res[c]>=d.cost[c]);
+    const unlocked=!d.req||has(G,d.req);
+    const item=el("div","bitem"+((affordable&&unlocked)?"":" no")+(UI.pick===k?" on":""));
+    item.innerHTML='<div class="t">'+esc(d.n)+' <span class="pill">'+d.ab+'</span></div>'+
+      '<div class="c">'+Object.keys(d.cost).map(c=>d.cost[c]+" "+c).join(", ")+
+      " · "+d.terr.map(x=>TERR[x].n).join("/")+
+      (d.slots?" · "+d.slots+" slot"+(d.slots>1?"s":"")+" ("+d.job+")":" · no workers")+
+      (unlocked?"":" · LOCKED: "+TECH[d.req].n)+'</div>';
+    item.setAttribute("data-tip",buildTip(k,legal));
+    item.onclick=()=>{UI.pick=(UI.pick===k?null:k);
+      if(UI.pick&&UI.sel!==null){const e=build(G,UI.sel,UI.pick);if(!e)UI.pick=null;else flash(e);}
+      render();};
+    list.appendChild(item);
+  });
+  bm.appendChild(list);
+  side.appendChild(bm);
+  wrap.appendChild(side);
+  p.appendChild(wrap);
+
+  const legend=el("div","panelbox");
+  legend.innerHTML="<h3>Legend</h3><div style='font-size:11px'>"+
+    Object.keys(TERR).map(k=>'<span class="pill">'+TERR[k].g+" "+TERR[k].n+"</span>").join(" ")+
+    " &nbsp; <span class='pill'>♟ workers/slots</span><span class='pill'>DMG = damaged</span>"+
+    "<span class='pill'>OFF = below 25% integrity, produces nothing</span></div>";
+  p.appendChild(legend);
+}
+function tileTip(t){
+  let s=coord(t.i)+"  "+TERR[t.t].n;
+  if(t.b){
+    const d=BUILD[t.b];
+    s+="\nBuilding: "+d.n+"\n"+d.d;
+    s+="\nIntegrity: "+Math.round(t.hp)+"% → output x"+fmt(integrity(t));
+    const a=adjInfo(G,t.i,t.b);
+    s+="\nAdjacency: "+a.txt;
+    const tm=techMult(G,t.b);
+    s+="\nResearch: "+tm.txt;
+    if(d.slots)s+="\nWorkers: "+t.w.length+"/"+d.slots+" → total multiplier "+fmt(bldEff(G,t));
+  }else{
+    s+="\nEmpty. Buildable here: "+Object.keys(BUILD).filter(k=>BUILD[k].terr.includes(t.t)).map(k=>BUILD[k].n).join(", ");
+  }
+  let nb=nbrIdx(t.i).map(j=>TERR[G.map[j].t].n);
+  s+="\nNeighbours: "+nb.join(", ");
+  return s;
+}
+function effTip(t){
+  const d=BUILD[t.b];
+  let s="Output multiplier breakdown for "+d.n+":";
+  t.w.forEach(id=>{
+    const c=colById(G,id);if(!c)return;
+    const w=workerEff(G,c,t.b);
+    s+="\n • "+c.name+": skill "+c.sk+" (x"+fmt(w.skill)+") × job match x"+fmt(w.match)+
+       " × fatigue "+Math.round(c.fat)+" (x"+fmt(w.fat)+") × morale "+Math.round(c.mor)+" (x"+fmt(w.mor)+") = "+fmt(w.e);
+  });
+  if(!t.w.length)s+="\n • no workers assigned → 0";
+  const a=adjInfo(G,t.i,t.b),tm=techMult(G,t.b);
+  s+="\n × adjacency x"+fmt(a.mult)+" ("+a.txt+")";
+  s+="\n × research x"+fmt(tm.mult)+" ("+tm.txt+")";
+  s+="\n × integrity x"+fmt(integrity(t))+" ("+Math.round(t.hp)+"%)";
+  s+="\n = "+fmt(bldEff(G,t));
+  return s;
+}
+function buildTip(k,legalErr){
+  const d=BUILD[k];
+  let s=d.n+"\n"+d.d;
+  s+="\nCost: "+Object.keys(d.cost).map(c=>d.cost[c]+" "+c).join(", ");
+  s+="\nTerrain: "+d.terr.map(x=>TERR[x].n).join(" / ");
+  if(d.in)s+="\nConsumes per worker/turn: "+Object.keys(d.in).map(x=>d.in[x]+" "+x).join(", ");
+  if(d.out)s+="\nProduces per worker/turn: "+Object.keys(d.out).map(x=>d.out[x]+" "+x).join(", ");
+  if(d.adj)s+="\nAdjacency: +"+Math.round(d.adj.per*100)+"% per adjacent "+d.adj.terr.map(x=>TERR[x].n).join("/");
+  if(d.rsc)s+="\nResearch bonuses: "+Object.keys(d.rsc).map(x=>TECH[x].n+" +"+Math.round(d.rsc[x]*100)+"%").join(", ");
+  if(d.housing)s+="\nHousing: +"+d.housing;
+  if(d.capBonus)s+="\nStorage: +"+d.capBonus+" cap on every material";
+  if(d.storm)s+="\nStorm mitigation: -"+Math.round(d.storm*100)+"% damage (windbreaks cap at -40%)";
+  if(d.req)s+="\nRequires research: "+TECH[d.req].n+(has(G,d.req)?" (done)":" (NOT researched)");
+  if(UI.sel!==null)s+="\n\nOn selected tile "+coord(UI.sel)+": "+(legalErr?("CANNOT — "+legalErr):"CAN BUILD");
+  else s+="\n\nSelect a tile first, or click this then click a tile.";
+  return s;
+}
+
+/* ---------- PEOPLE TAB ---------- */
+function tabPeople(p){
+  const box=el("div","panelbox");
+  box.appendChild(el("h2",null,"ROSTER — "+G.col.length+" colonists, housing "+housing(G)));
+  if(!G.col.length)box.appendChild(el("div",null,"Nobody is left."));
+  const tbl=el("table");
+  tbl.innerHTML="<tr><th>Name</th><th>Job</th><th>Skill</th><th>Fatigue</th><th>Morale</th><th>Assignment</th></tr>";
+  G.col.slice().sort((a,b)=>a.id-b.id).forEach(c=>{
+    const tr=el("tr");
+    const at=G.map.find(t=>t.w.indexOf(c.id)>=0);
+    const nameTd=el("td");nameTd.textContent=c.name;
+    nameTd.setAttribute("data-tip",c.name+"\nJob: "+c.job+" (skill "+c.sk+"/5, xp "+c.xp+")"+
+      "\nSkill multiplier: x"+fmt(0.6+0.2*c.sk)+
+      "\nWorking outside the "+c.job+" role costs 45% effectiveness."+
+      "\nFatigue "+Math.round(c.fat)+" → output x"+fmt(1-Math.max(0,c.fat-50)/100)+
+      " (rises 12/turn when working, falls 22/turn when resting)"+
+      "\nMorale "+Math.round(c.mor)+" → output x"+fmt(0.5+c.mor/200)+
+      " (drifts toward "+(has(G,"civics")?70:60)+"; shortages, storms and exhaustion push it down)"+
+      "\nAt morale 0 this colonist leaves the outpost.");
+    tr.appendChild(nameTd);
+    tr.appendChild(el("td",null,c.job));
+    const sk=el("td",null,"★".repeat(c.sk)+"·".repeat(5-c.sk)+" "+c.sk);
+    sk.setAttribute("data-tip","Skill "+c.sk+"/5. Grows only by working a building matching the "+c.job+" role. xp "+c.xp+"/"+(6+c.sk*4)+".");
+    tr.appendChild(sk);
+    tr.appendChild(barTd(c.fat,100,c.fat>75?"var(--bad)":(c.fat>50?"var(--warn)":"var(--good)"),
+      Math.round(c.fat)+(c.fat>75?" TIRED":""),"Fatigue "+Math.round(c.fat)+"/100. Over 50 it cuts output; over 80 it also drains morale."));
+    tr.appendChild(barTd(c.mor,100,c.mor<20?"var(--bad)":(c.mor<45?"var(--warn)":"var(--good)"),
+      Math.round(c.mor)+(c.mor<20?" CRITICAL":""),"Morale "+Math.round(c.mor)+"/100. Reaches 0 → the colonist leaves."));
+    const td=el("td");
+    const sel=el("select");
+    const optRest=el("option",null,"— resting —");optRest.value="-1";sel.appendChild(optRest);
+    G.map.forEach(t=>{
+      if(!t.b||!BUILD[t.b].slots)return;
+      const full=t.w.length>=BUILD[t.b].slots&&t.w.indexOf(c.id)<0;
+      const o=el("option",null,BUILD[t.b].n+" "+coord(t.i)+(full?" (full)":"")+(t.hp<25?" (offline)":"")+
+        (BUILD[t.b].job===c.job?" ✓":""));
+      o.value=String(t.i);o.disabled=full;
+      sel.appendChild(o);
+    });
+    sel.value=at?String(at.i):"-1";
+    sel.setAttribute("data-tip","Assign "+c.name+" to a building, or leave resting to shed fatigue. ✓ marks a job match (full effectiveness).");
+    sel.onchange=()=>{const e=assign(G,c.id,parseInt(sel.value,10));if(e)flash(e);render();};
+    td.appendChild(sel);tr.appendChild(td);
+    tbl.appendChild(tr);
+  });
+  box.appendChild(tbl);
+  p.appendChild(box);
+
+  const info=el("div","panelbox");
+  const pop=G.col.length;
+  const avgM=pop?G.col.reduce((a,c)=>a+c.mor,0)/pop:0;
+  const avgF=pop?G.col.reduce((a,c)=>a+c.fat,0)/pop:0;
+  info.innerHTML="<h3>Outpost condition</h3>";
+  const l=el("div");
+  l.innerHTML="Average morale <b>"+fmt(avgM)+"</b> &middot; average fatigue <b>"+fmt(avgF)+"</b><br>"+
+    "Needs next turn: <b>"+fmt(pop*1.2)+"</b> food, <b>"+fmt(pop*1.5)+"</b> water (x1.8 during an ashstorm"+
+    (has(G,"seal")?", x1.4 with Sealed Habitats":"")+")<br>"+
+    "Free housing: <b>"+(housing(G)-pop)+"</b> &middot; New colonists arrive only with average morale &gt;70, spare food and a free bunk.";
+  l.setAttribute("data-tip","New arrivals: 14% chance per turn when average morale > 70, food > 5x population, and a bunk is free.");
+  info.appendChild(l);
+  const btn=el("button",null,"Rest everyone");
+  btn.setAttribute("data-tip","Unassign every colonist. They shed 22 fatigue next turn but produce nothing.");
+  btn.onclick=()=>{G.col.forEach(c=>assign(G,c.id,null));render();};
+  const btn2=el("button",null,"Auto-assign (greedy)");
+  btn2.setAttribute("data-tip","Runs the same assignment heuristic the benchmark uses: rests the exhausted, then fills slots by job match and current shortages.");
+  btn2.onclick=()=>{autoAssignOnly(G);render();};
+  const r=el("div","row");r.style.marginTop="6px";r.appendChild(btn);r.appendChild(btn2);
+  info.appendChild(r);
+  p.appendChild(info);
+}
+function barTd(v,max,color,label,tip){
+  const td=el("td");
+  const b=el("div","bar");
+  const i=el("i");i.style.width=clamp(v/max*100,0,100)+"%";i.style.background=color;
+  b.appendChild(i);
+  td.appendChild(b);
+  const s=el("div",null,label);s.style.fontSize="10px";
+  td.appendChild(s);
+  td.setAttribute("data-tip",tip);
+  return td;
+}
+function autoAssignOnly(S){
+  S.col.forEach(c=>assign(S,c.id,null));
+  const workers=S.col.slice().sort((a,b)=>a.fat-b.fat||a.id-b.id);
+  for(const c of workers){
+    if(c.fat>72||c.mor<15)continue;
+    let best=null,bs=-1;
+    for(const t of S.map){
+      if(!t.b)continue;const d=BUILD[t.b];
+      if(!d.slots||t.w.length>=d.slots||t.hp<25)continue;
+      let sc=(d.job===c.job?10:2)+bldEff(S,t)*0.1;
+      if(t.b==="greenhouse"&&S.res.food<40)sc+=8;
+      if(t.b==="condenser"&&S.res.water<40)sc+=8;
+      if(t.b==="plant"&&S.res.power<15)sc+=6;
+      if(sc>bs){bs=sc;best=t;}
+    }
+    if(best)assign(S,c.id,best.i);
+  }
+}
+
+/* ---------- RESEARCH TAB ---------- */
+function tabResearch(p){
+  const box=el("div","panelbox");
+  box.appendChild(el("h2",null,"RESEARCH — "+G.research.length+"/"+TECH_IDS.length+" complete"));
+  box.appendChild(el("div","sub","Costs are paid immediately from scrip and parts. Prerequisites are enforced."));
+  const g=el("div","rgrid");
+  TECH_IDS.forEach(id=>{
+    const n=TECH[id];
+    const done=has(G,id);
+    const preOk=n.pre.every(x=>has(G,x));
+    const afford=Object.keys(n.cost).every(k=>G.res[k]>=n.cost[k]);
+    const d=el("div","rnode "+(done?"done":(preOk?"avail":"lock")));
+    d.innerHTML='<div class="tagline">'+(done?"✔ DONE":(preOk?(afford?"▶ AVAILABLE":"▶ AVAILABLE (cannot afford)"):"✖ LOCKED"))+'</div>'+
+      '<div style="font-weight:bold">'+esc(n.n)+'</div>'+
+      '<div style="font-size:11px;color:var(--dim)">'+esc(n.d)+'</div>'+
+      '<div style="font-size:11px;margin-top:3px">Cost: '+Object.keys(n.cost).map(k=>n.cost[k]+" "+k).join(", ")+'</div>'+
+      '<div style="font-size:10px;color:var(--dim)">Requires: '+(n.pre.length?n.pre.map(x=>TECH[x].n+(has(G,x)?" ✔":" ✖")).join(", "):"nothing")+'</div>';
+    d.setAttribute("data-tip",n.n+"\n"+n.d+"\nCost: "+Object.keys(n.cost).map(k=>n.cost[k]+" "+k+" (you have "+fmt(G.res[k])+")").join(", ")+
+      "\nPrerequisites: "+(n.pre.length?n.pre.map(x=>TECH[x].n+(has(G,x)?" [done]":" [missing]")).join(", "):"none")+
+      (done?"\nStatus: researched — the bonus is already applied.":(preOk?(afford?"\nStatus: ready to buy.":"\nStatus: cannot afford yet."):"\nStatus: locked by prerequisites.")));
+    if(!done){
+      const b=el("button",null,"Research");
+      b.disabled=!preOk||!afford;
+      b.onclick=()=>{const e=buyTech(G,id);if(e)flash(e);render();};
+      b.style.marginTop="5px";
+      d.appendChild(b);
+    }
+    g.appendChild(d);
+  });
+  box.appendChild(g);
+  p.appendChild(box);
+}
+
+/* ---------- TRADE TAB ---------- */
+function tabTrade(p){
+  const box=el("div","panelbox");
+  const cv=G.market.caravan;
+  box.appendChild(el("h2",null,cv?("CARAVAN IN CAMP — leaves in "+cv.turns+" turn(s)"):"NO CARAVAN"));
+  if(!cv){
+    box.appendChild(el("div",null,"The next caravan is expected around turn "+G.market.next+
+      ". Prices below are the current market indices; they drift every turn."));
+  }else{
+    box.appendChild(el("div",null,"Caravan purse: "+fmt(cv.scrip)+" scrip. It will not buy beyond that."));
+  }
+  const qrow=el("div","row");qrow.style.margin="6px 0";
+  qrow.appendChild(el("span",null,"Quantity per click:"));
+  [1,5,10,25].forEach(q=>{
+    const b=el("button",UI.tradeQty===q?"sel":"",String(q));
+    b.onclick=()=>{UI.tradeQty=q;render();};
+    b.setAttribute("data-tip","Set the trade batch size to "+q+" units.");
+    qrow.appendChild(b);
+  });
+  box.appendChild(qrow);
+
+  const tbl=el("table");
+  tbl.innerHTML="<tr><th>Good</th><th>You have</th><th>Index</th><th>Buy @</th><th>Sell @</th><th>Caravan has</th><th>Actions</th></tr>";
+  TRADE_GOODS.forEach(g=>{
+    const tr=el("tr");
+    const bp=priceOf(G,g,"buy"),sp=priceOf(G,g,"sell");
+    tr.appendChild(el("td",null,cap1(g)));
+    tr.appendChild(el("td",null,fmt(G.res[g])));
+    const idx=el("td",null,fmt(G.market.idx[g])+"×");
+    idx.setAttribute("data-tip","Global supply/demand index for "+g+". It random-walks each turn and pulls back toward 1.00. Base price "+BASEP[g]+" scrip.");
+    tr.appendChild(idx);
+    const b1=el("td",null,fmt(bp));
+    b1.setAttribute("data-tip","Buy price = base "+BASEP[g]+" × index "+fmt(G.market.idx[g])+" × 1.30 caravan markup"+
+      (has(G,"barter")?" × 0.92 Barter Networks":"")+(G.map.some(t=>t.b==="market"&&t.hp>=25)?" × 0.90 Trade Post":"")+" = "+fmt(bp));
+    tr.appendChild(b1);
+    const stockF=clamp(1.25-G.res[g]/480,0.6,1.25);
+    const b2=el("td",null,fmt(sp));
+    b2.setAttribute("data-tip","Sell price = base "+BASEP[g]+" × index "+fmt(G.market.idx[g])+" × 0.78 spread × "+
+      fmt(stockF)+" (your stockpile of "+fmt(G.res[g])+" depresses the price)"+
+      (has(G,"barter")?" × 1.08 Barter Networks":"")+(G.map.some(t=>t.b==="market"&&t.hp>=25)?" × 1.10 Trade Post":"")+" = "+fmt(sp));
+    tr.appendChild(b2);
+    tr.appendChild(el("td",null,cv?fmt(cv.stock[g]):"—"));
+    const td=el("td");
+    const bb=el("button",null,"Buy "+UI.tradeQty);
+    bb.disabled=!cv;
+    bb.setAttribute("data-tip",cv?("Buy "+UI.tradeQty+" "+g+" for "+fmt(bp*UI.tradeQty)+" scrip."):"No caravan present.");
+    bb.onclick=()=>{const e=doTrade(G,g,UI.tradeQty,"buy");if(e)flash(e);render();};
+    const sb=el("button",null,"Sell "+UI.tradeQty);
+    sb.disabled=!cv;
+    sb.setAttribute("data-tip",cv?("Sell "+UI.tradeQty+" "+g+" for "+fmt(sp*UI.tradeQty)+" scrip."):"No caravan present.");
+    sb.onclick=()=>{const e=doTrade(G,g,UI.tradeQty,"sell");if(e)flash(e);render();};
+    td.appendChild(bb);td.appendChild(sb);
+    tr.appendChild(td);
+    tbl.appendChild(tr);
+  });
+  box.appendChild(tbl);
+  p.appendChild(box);
+
+  const s=el("div","panelbox");
+  s.innerHTML="<h3>Save / Load</h3><div class='sub'>Full state as JSON. Nothing is stored by the browser — copy it somewhere yourself.</div>";
+  const ta=el("textarea");ta.id="savebox";ta.value="";
+  s.appendChild(ta);
+  const r=el("div","row");r.style.marginTop="6px";
+  const bs=el("button",null,"Serialize to box");
+  bs.setAttribute("data-tip","Write the complete current game state into the text box.");
+  bs.onclick=()=>{$("savebox").value=serialize(G);flash("State written to the box — select and copy it.");};
+  const bc=el("button",null,"Select all");
+  bc.setAttribute("data-tip","Select the text so you can copy it with Ctrl+C.");
+  bc.onclick=()=>{const t=$("savebox");t.focus();t.select();};
+  const bl=el("button","primary","Load from box");
+  bl.setAttribute("data-tip","Parse and validate the pasted JSON, then replace the current game.");
+  bl.onclick=()=>{
+    const res=deserialize($("savebox").value);
+    if(res.err){flash("LOAD FAILED: "+res.err);return;}
+    G=res.S;UI.sel=null;UI.pick=null;flash("Game loaded (turn "+G.turn+").");render();
+  };
+  r.appendChild(bs);r.appendChild(bc);r.appendChild(bl);
+  s.appendChild(r);
+  p.appendChild(s);
+}
+
+/* ---------- LOG TAB ---------- */
+function tabLog(p){
+  const box=el("div","panelbox");
+  box.appendChild(el("h2",null,"EVENT LOG"));
+  box.appendChild(el("div","sub",
+    "Turn resolution order: 1 ashstorm → 2 production chains → 3 consumption → 4 morale/fatigue → "+
+    "5 departures/arrivals → 6 storage clamp → 7 trade &amp; price drift → 8 event deck → 9 turn advance and end check."));
+  const lb=el("div");lb.id="logbox";
+  G.log.slice().reverse().forEach(e=>{
+    const d=el("div","le");
+    d.appendChild(el("span","t","T"+e.t));
+    const s=el("span","k-"+e.k,e.x);
+    d.appendChild(s);
+    lb.appendChild(d);
+  });
+  box.appendChild(lb);
+  p.appendChild(box);
+}
+
+/* ---------- DEV TAB ---------- */
+function tabDev(p){
+  const box=el("div","panelbox");
+  box.appendChild(el("h2",null,"DEV / VERIFICATION"));
+  const r=el("div","row");
+  const bt=el("button","primary","Run Tests");
+  bt.setAttribute("data-tip","Runs 55 assertions over real invariants (resources, caps, roster, research prereqs, repairs, trade limits, cooldowns, save/load hash, end conditions) on throwaway game states. Your current game is not modified.");
+  bt.onclick=()=>{UI.tests=runTests();render();};
+  const bb=el("button","primary","Run Benchmark (200 turns)");
+  bb.setAttribute("data-tip","Deep-copies the CURRENT state and simulates 200 turns headless with the built-in greedy policy, then prints a state hash. Two runs from the same state print the same hash.");
+  bb.onclick=()=>{
+    const t0=performance.now();
+    const res=runBenchmark(G,200);
+    res.ms=Math.round(performance.now()-t0);
+    UI.bench=UI.bench?{cur:res,prev:UI.bench.cur}:{cur:res,prev:null};
+    render();
+  };
+  const bh=el("button",null,"Show state hash");
+  bh.setAttribute("data-tip","FNV-1a hash of the canonical serialization of the live state (log excluded).");
+  bh.onclick=()=>{flash("Live state hash: "+stateHash(G));};
+  r.appendChild(bt);r.appendChild(bb);r.appendChild(bh);
+  box.appendChild(r);
+
+  if(UI.tests){
+    const pass=UI.tests.filter(t=>t.p).length;
+    const h=el("h3",null,"Tests: "+pass+"/"+UI.tests.length+" passed");
+    h.className=pass===UI.tests.length?"ok":"fail";
+    box.appendChild(h);
+    const tbl=el("table");
+    tbl.innerHTML="<tr><th>#</th><th>Result</th><th>Assertion</th><th>Detail</th></tr>";
+    UI.tests.forEach((t,i)=>{
+      const tr=el("tr");
+      tr.appendChild(el("td",null,String(i+1)));
+      const c=el("td",t.p?"ok":"fail",t.p?"PASS":"FAIL");
+      tr.appendChild(c);
+      tr.appendChild(el("td",null,t.n));
+      tr.appendChild(el("td",null,t.x));
+      tbl.appendChild(tr);
+    });
+    box.appendChild(tbl);
+  }
+  if(UI.bench){
+    const b=UI.bench.cur;
+    const h=el("h3",null,"Benchmark result");
+    box.appendChild(h);
+    const pre=el("div","mono");
+    let txt="hash            "+b.hash+"\n"+
+      "turns simulated "+b.turns+"\n"+
+      "final pop       "+b.pop+" (peak "+b.peakPop+", departures "+b.left+")\n"+
+      "research done   "+b.research+"/"+TECH_IDS.length+"\n"+
+      "buildings       "+b.buildings+"\n"+
+      "storms weathered "+b.storms+"\n"+
+      "turns starving  "+b.starvedTurns+"\n"+
+      "final resources "+b.res+"\n"+
+      "wall clock      "+b.ms+" ms";
+    if(UI.bench.prev){
+      txt+="\n\nprevious hash   "+UI.bench.prev.hash+"\n"+
+        "determinism     "+(UI.bench.prev.hash===b.hash?"MATCH — identical hash":"MISMATCH");
+    }else txt+="\n\nRun it again to compare hashes (must be identical from the same state).";
+    pre.textContent=txt;
+    box.appendChild(pre);
+  }
+  p.appendChild(box);
+
+  const inf=el("div","panelbox");
+  inf.innerHTML="<h3>Live state</h3><div class='mono'>hash "+stateHash(G)+"\nrng "+G.rng+
+    "\nturn "+G.turn+"  seed "+G.seed+"\ncolonists "+G.col.length+"  buildings "+
+    G.map.filter(t=>t.b).length+"  research "+G.research.length+
+    "\nscore if it ended now: "+scoreOf(G).total+"</div>";
+  p.appendChild(inf);
+}
+
+/* ---------- END SCREEN ---------- */
+function endScreen(){
+  const s=G.score||scoreOf(G);
+  const box=el("div","panelbox");
+  box.style.borderColor=G.over==="win"?"var(--good)":"var(--bad)";
+  box.appendChild(el("h2",null,G.over==="win"?"✔ OUTPOST HELD — VICTORY":"✖ OUTPOST LOST"));
+  box.appendChild(el("div",null,G.over==="win"
+    ?"You reached turn 60 with "+G.col.length+" colonists and every critical need met. The relief convoy finds a working town."
+    :(G.col.length<=0?"Every colonist is dead or gone. The ash covers what is left."
+      :"Turn 60 arrived without 12 colonists and secure food and water. The region is abandoned.")));
+  const tbl=el("table");
+  tbl.innerHTML="<tr><th>Score component</th><th>Points</th></tr>";
+  ["population","research","turns","stockpiles","scrip","buildings"].forEach(k=>{
+    const tr=el("tr");
+    tr.appendChild(el("td",null,cap1(k)));
+    tr.appendChild(el("td",null,String(s[k])));
+    tbl.appendChild(tr);
+  });
+  const tr=el("tr");
+  tr.innerHTML="<th>TOTAL</th><th>"+s.total+"</th>";
+  tbl.appendChild(tr);
+  box.appendChild(tbl);
+  const b=el("button","primary","New Game (uses the seed box above)");
+  b.onclick=()=>{G=newGame(parseInt($("seedIn").value,10)||1337);UI.sel=null;UI.pick=null;render();};
+  b.style.marginTop="8px";
+  box.appendChild(b);
+  return box;
+}
+
+/* ---------- MODAL / EVENT CHOICES ---------- */
+function renderModal(){
+  const m=$("modal");
+  if(!G.pending){m.style.display="none";return;}
+  const ev=EVENTS.find(e=>e.id===G.pending.id);
+  $("mTitle").textContent=ev.t;
+  $("mBody").textContent=ev.txt;
+  const o=$("mOpts");o.innerHTML="";
+  G.pending.opts.forEach(i=>{
+    const c=ev.choices[i];
+    const b=el("button");
+    b.innerHTML="<b>"+esc(c.t)+"</b><br><span style='color:var(--dim);font-size:11px'>"+esc(c.d)+"</span>";
+    b.onclick=()=>{resolveChoice(G,i);render();};
+    o.appendChild(b);
+  });
+  m.style.display="flex";
+}
+
+/* ---------- misc UI plumbing ---------- */
+let flashTimer=null;
+function flash(msg){
+  let f=$("flashbar");
+  if(!f){f=el("div");f.id="flashbar";
+    f.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:300;"+
+      "background:#1b1815;border:1px solid var(--acc);color:var(--ink);padding:7px 12px;border-radius:4px;"+
+      "font-size:12px;max-width:92vw;box-shadow:0 4px 16px #000c";
+    document.body.appendChild(f);}
+  f.textContent=msg;f.style.display="block";
+  if(flashTimer)clearTimeout(flashTimer);
+  flashTimer=setTimeout(()=>{f.style.display="none";},3600);
+}
+/* tooltips: hover, focus and tap all work */
+(function(){
+  const tip=$("tip");
+  let cur=null;
+  function show(t,x,y){
+    tip.textContent=t;tip.style.display="block";
+    const w=tip.offsetWidth,h=tip.offsetHeight;
+    let nx=x+14,ny=y+16;
+    if(nx+w>innerWidth-6)nx=Math.max(4,innerWidth-w-6);
+    if(ny+h>innerHeight-6)ny=Math.max(4,y-h-12);
+    tip.style.left=nx+"px";tip.style.top=ny+"px";
+  }
+  document.addEventListener("mousemove",e=>{
+    const t=e.target.closest?e.target.closest("[data-tip]"):null;
+    if(t){cur=t;show(t.getAttribute("data-tip"),e.clientX,e.clientY);}
+    else{cur=null;tip.style.display="none";}
+  });
+  document.addEventListener("touchstart",e=>{
+    const t=e.target.closest?e.target.closest("[data-tip]"):null;
+    if(t){const r=t.getBoundingClientRect();show(t.getAttribute("data-tip"),r.left,r.bottom);
+      setTimeout(()=>{tip.style.display="none";},4200);}
+  },{passive:true});
+  document.addEventListener("scroll",()=>{tip.style.display="none";},true);
+})();
+
+$("btnEnd").onclick=()=>{
+  if(G.pending){flash("Resolve the pending decision first.");render();return;}
+  resolveTurn(G);render();
+};
+$("btnNew").onclick=()=>{
+  const s=parseInt($("seedIn").value,10);
+  G=newGame(isFinite(s)?s:1337);UI.sel=null;UI.pick=null;UI.tests=null;UI.bench=null;
+  flash("New outpost seeded with "+G.seed+".");render();
+};
+document.addEventListener("keydown",e=>{
+  const tag=(e.target.tagName||"").toLowerCase();
+  if(tag==="input"||tag==="textarea"||tag==="select")return;
+  if(e.code==="Space"){e.preventDefault();$("btnEnd").click();return;}
+  const n=parseInt(e.key,10);
+  if(n>=1&&n<=6){UI.tab=TABS[n-1][0];render();}
+});
+render();
+</script>
+</body>
+</html>

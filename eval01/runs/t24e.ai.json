@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: Single `G` state object; `rnd(G)` mulberry32 PRNG (state serialized) used everywhere including `genMap`; `stepTurn()` resolves systems 1–14 in fixed documented order. Score 2.
+
+**F2 – Map**: `MAPW/MAPH=8`, `genMap(seed)` grows terrain from seeded RNG; `canBuild()` checks `b.terr.indexOf(t.t)`; `adjInfo().mult` multiplies `scale` in `productionPlan()`. Score 2.
+
+**F3 – Economy**: Chains ash→soil→food (`compost`,`green`), ore→metal→parts (`forge`,`workshop`); `capOf()`/`gain()` clamp & log overflow, also clamped in `stepTurn` stage 8. Score 2.
+
+**F4 – Population**: `col` records `{skill,fat,mor,job,at}`; `colEff()` reads `c.skill`,`c.fat`,`c.mor`,`c.job` for production scale. Score 2.
+
+**F5 – Needs**: `doNeeds()` consumes food/water by pop, applies morale hit on shortage; `colEff().morM` feeds output; `doWellbeing()` allows drift back up (surplus/clinics). Score 2.
+
+**F6 – Research**: 12 nodes in `RESEARCH`; `researchState()` enforces `req` + tier2 Lab requirement; `doResearch()` deducts cost; effects read via `has(G,key)` in `mods()`/`canBuild()`. Score 2.
+
+**F7 – Events**: 15 entries in `EVENTS`; weighted roll in `doEvents()`; 6 events (`refugees,surge,sickness,crack,debt,festival`) have 2–3 choices; `G.deck[key]` cooldown decremented each turn. Score 2.
+
+**F8 – Trade**: `priceOf()` uses stockpile `fill` + drifting `G.market`; `G.caravan.stock` finite; `tradeBuy`/`tradeSell` both implemented and wired to buttons. Score 2.
+
+**F9 – Hazard**: `doWeather()` fires on interval, `sev` grows with `G.turn`; `integrityFactor()` scales production; `mitigation()`/research (`shelter`,`forecast`) reduce damage; `repair()` costs parts+labor. Score 2.
+
+**F10 – Save/load**: `saveText()`=`JSON.stringify(G)` in textarea; `loadText()` validates fields/types and returns descriptive `err`, wired to `loadbtn`. Score 2.
+
+**F11 – End conditions**: `finishTurn()` checks `pop(G)<=0` (defeat) and `turn>=WIN_TURN` (win/survived); `scoreOf()` combines pop/research/stock/turns/winBonus; `renderModal()` shows summary table. Score 2.
+
+**F12 – UI**: Tab click handler toggles panels; `logg()` stores `t:G.turn`; extensive `data-tip` tooltips explain formulas; keydown handles Space/1-6; media queries at 820px/700px adapt layout. Score 2.
+
+**F13 – Dev panel**: `runTests()` has 25 non-trivial invariant checks (caps, prereqs, determinism, adjacency effect, PRNG-only-source); `runBenchmark()` runs `simulate(seed,200)` headlessly twice and prints `stateHash`. Score 2.
+
+**G1**: `mods(G)` reads `has(G,"hydro")` etc. into `m.bld.condenser+=.25`; `productionPlan()` multiplies `scale` by `resM=M.bld[t.b]` every turn. Score 4.
+
+**G2**: `doNeeds()` shortage → `c.mor -= hit`; `colEff().morM` derived from `c.mor` feeds `tileEffort`→`productionPlan` every turn. Score 4.
+
+**G3**: `doWeather()` damages `t.hp`; `integrityFactor(t)` scales `productionPlan` output; `repair()` spends 2 parts+1 labor, restores `+35 hp`, restoring output next turn. Score 4.
+
+**G4**: `priceOf()` reads `G.res[res]/capOf` (fill) and `G.market[res]` (random-walked every turn in `doTrade`). Score 4.
+
+**G5**: `refugees`/`debt`/`sickness` choices each call distinct `apply(G)` mutating `G.col`, `G.res`, or `G.flags` differently, not just logging. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "stepTurn() calls doWeather->runStage(0..3)->doNeeds->doWellbeing->doAttrition->doTrade->doEvents in fixed order; rnd(G) used throughout",
+    "F2": "canBuild() checks b.terr.indexOf(t.t); adjInfo().mult multiplies scale in productionPlan()",
+    "F3": "compost: ash+water->soil; green: soil+water->food; gain() clamps to capOf() and logs Overflow",
+    "F4": "colEff(G,c,bkey) reads c.skill/c.fat/c.mor/c.job, called from tileEffort() inside productionPlan()",
+    "F5": "doNeeds() applies morale hit on shortFood/shortWater; colEff().morM consumes c.mor for output; doWellbeing() allows morale drift up",
+    "F6": "RESKEYS has 12 nodes; researchState() enforces req[] + Lab for tier>=2; mods() reads has(G,key) into production multipliers",
+    "F7": "EVENTS has 15 entries with weight w; doEvents() weighted roll; G.deck[key] cooldown decremented each turn",
+    "F8": "priceOf() uses fill=G.res/capOf and drifting G.market; tradeBuy/tradeSell check G.caravan.stock and both work",
+    "F9": "doWeather() severity scales with G.turn; integrityFactor(t) scales productionPlan output; repair() spends 2 parts+1 labor",
+    "F10": "saveText()=JSON.stringify(G); loadText() validates fields and returns err, shown via UI.saveMsg on loadbtn",
+    "F11": "finishTurn() checks pop(G)<=0 and turn>=WIN_TURN; scoreOf() aggregates state; renderModal() renders summary on G.over",
+    "F12": "tabs click handler toggles panel hidden; logg() stores t:G.turn; data-tip tooltips; keydown Space/1-6; @media 820px/700px",
+    "F13": "runTests() has 25 invariant checks (caps, prereqs, adjacency, determinism); runBenchmark() runs simulate(seed,200) headless, prints stateHash",
+    "G1": "has(G,'hydro') sets m.bld.condenser+=.25 in mods(); productionPlan() reads M.bld[t.b] as resM every turn",
+    "G2": "doNeeds() shortage subtracts c.mor; colEff().morM derived from c.mor used in tileEffort->productionPlan",
+    "G3": "doWeather() reduces t.hp; integrityFactor(t) scales productionPlan output; repair() spends parts+labor and restores hp",
+    "G4": "priceOf() reads G.res[res]/capOf(fill) and G.market[res] which random-walks every turn in doTrade()",
+    "G5": "refugees/debt/sickness choice apply(G) functions mutate G.col/G.res/G.flags differently per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Extremely dense, deeply interlocking single-file implementation with no execution testing possible here, so subtle runtime edge cases in the many interdependent formulas cannot be fully ruled out by static reading alone."
+}
+```
