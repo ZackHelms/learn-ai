@@ -9,16 +9,30 @@ function zrunall {
     local NOWDTTM=$(date +"%Y%m%d_%H%M%S_%Z")
     local LOGFILE="$THISDIR/runall.${NOWDTTM}.log"
     {
+        echo
         echo "INFO: `date +"%Y-%m-%d_%H:%M:%S_%Z"` QQQ($QQQ) PPP($PPP) MODEL($MODEL) LOGFILE($LOGFILE) - BEGIN"
         echo "INFO: THISSCRIPT($THISSCRIPT)"
         echo "INFO:    THISDIR($THISDIR)"
         echo "INFO:    LOGFILE($LOGFILE)"
-        $THISDIR/generate.sh $MODEL ${PPP}${QQQ}                # ask bare bones model+effort(5 levels) sessions to generate output html
-        $THISDIR/eval_ashfall.py    ${PPP}${QQQ}{1..5}          # deterministic eval for each of the 5 model+effort output html (1..5)
-        $THISDIR/grade.sh           ${PPP}${QQQ}{1..5}{a..e}    # does ai grading 5x (a..e) for each of the 5 model+effort output html
-        $THISDIR/listscore.py       ${PPP}${QQQ}{1..5}{a..e}    # list all scores and AVG (of ai grades) per model+effort group
+        echo
+        # ask bare bones model+effort(5 levels) sessions to generate output html
+        echo "INFO: $THISDIR/generate.sh $MODEL ${PPP}${QQQ}"
+                    $THISDIR/generate.sh $MODEL ${PPP}${QQQ}
+        echo
+        # deterministic eval for each of the 5 model+effort output html (1..5)
+        echo "INFO: $THISDIR/eval_ashfall.py    ${PPP}${QQQ}{1..5}"
+                    $THISDIR/eval_ashfall.py    ${PPP}${QQQ}{1..5}
+        echo
+        # ai grade 5x (a..e) for each of the 5 model+effort output html
+        echo "INFO: $THISDIR/grade.sh           ${PPP}${QQQ}{1..5}{a..e}"
+                    $THISDIR/grade.sh           ${PPP}${QQQ}{1..5}{a..e}
+        echo
+        # list all scores and AVG (of ai grades) per model+effort group
+        echo "INFO: $THISDIR/listscore.py       ${PPP}${QQQ}{1..5}{a..e}"
+                    $THISDIR/listscore.py       ${PPP}${QQQ}{1..5}{a..e}
+        echo
         echo "INFO: `date +"%Y-%m-%d_%H:%M:%S_%Z"` QQQ($QQQ) PPP($PPP) MODEL($MODEL) LOGFILE($LOGFILE) - END"
-    } | tee $LOGFILE
+    } |& tee $LOGFILE
 
     echo
     echo "INFO: Full output in $(realpath $LOGFILE)"
@@ -29,7 +43,7 @@ export -f zrunall
 # QQQ=1 # DONE 10Aug2026 eval01 set1
 
 QQQ=2
-zrunall $QQQ r haiku45
-zrunall $QQQ s sonnet5
-zrunall $QQQ t opus5
-zrunall $QQQ u fable5  # ~1h
+# zrunall $QQQ r haiku45    # 20m
+# zrunall $QQQ s sonnet5    # 47m
+zrunall $QQQ t opus5      # 
+# zrunall $QQQ u fable5     # 60m
