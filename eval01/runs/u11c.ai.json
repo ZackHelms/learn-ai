@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `newGame()` builds one state object; `rnd(S)` mulberry32 used for all randomness (terrain, colonists, events); `endTurn()` resolves 9 fixed steps in order. Score 2.
+
+**F2 — Map**: 8x8 loop (`for y<8,x<8`) generates terrain from `rnd(S)`; `canBuild()` checks `b.terr.includes(tile.terr)`; `adj()` changes condenser water and forge/generator power output. Score 2.
+
+**F3 — Economy**: chains water→soil→food (greenhouse case) and ore+power→metal (forge case); `cap()` caps enforced and overflow logged/clamped in step 8. Score 2.
+
+**F4 — Population**: colonist objects `{skill,fatigue,morale,job,at}`; `workerMult()` reads `c.skill`, `c.fatigue`, `c.morale` for production. Score 2.
+
+**F5 — Needs**: `fNeed`/`wNeed` consumed per turn; shortage sets `-12 morale`; `workerMult()` reads morale to cut output; morale recovers `+4` when needs met. Score 2.
+
+**F6 — Research**: 10 `RES_NODES`; `buyResearch()` checks `n.pre`, deducts cost; each flag (`drills`,`hydro`,`turbines`,`smelt`,`fab`,`forecast`,`logistics`,`barter`,`medicine`,`scrub`) read in production/build/price code. Score 2.
+
+**F7 — Events**: 12 `EVENTS`; weighted roll via `tot`/`roll` loop; 4 events (`refugees`,`sickness`,`mutiny`,`merchant`) have 2-3 choices with distinct state writes; `S.evcd[id]` cooldown filters eligible events. Score 2.
+
+**F8 — Trade**: `price()` reads `S.r[g]/cap` and `S.market.drift[g]` (random-walked each turn); `market.stock/demand` limited; buy/sell both wired in `renderTrade` and `policy()`. Score 2.
+
+**F9 — Hazard**: storm every 7th turn, `sev` scales with `S.turn`; damaged tiles excluded from production loop (`!t.dmg`); `walls`/`research.forecast` reduce `mit`; repair costs 2 parts and clears `dmg`. Score 2.
+
+**F10 — Save/load**: `saveStr()`→textarea; `loadStr()` parses JSON, validates required fields/map length, returns `{err}` shown in UI. Score 2.
+
+**F11 — End conditions**: `checkEnd()` sets `over='lose'` (pop 0) or `'win'` (turn>60,pop≥12,no shortage), both reachable; `score()` combines pop/research/stock/turns; summary table rendered when `G.over`. Score 2.
+
+**F12 — UI**: `TABS` array with click handlers switch `tab`; `logi()` stores `t:S.turn` shown as `T#`; extensive `title=` tooltips; keydown handler for Space and 1-6; flex-wrap/minmax grid gives some narrow-screen adaptation. Score 2.
+
+**F13 — Dev panel**: `runTests()` 18 real-invariant assertions (caps, prereqs, determinism, save/load, cooldowns, win/lose); `runHeadless()`+`policy()` run 200-turn headless sim printing `stateHash()`. Score 2.
+
+**G1**: `S.research.drills` read in mine production, `S.research.hydro` in greenhouse, etc. — unlock directly changes yield formula each turn. Score 4.
+
+**G2**: `S.shortF/S.shortW` set from consumption, applies `-12 morale`, then `workerMult()` zeroes/reduces output by `c.morale`. Score 4.
+
+**G3**: storm sets `t.dmg=true`; production filters `!t.dmg` (zero output); repair button spends 2 parts, clears `dmg`, restoring output next turn. Score 4.
+
+**G4**: `price()` formula reads `S.r[g]/cap(S,g)` (stockpile) and `S.market.drift[g]` (per-turn random walk in `endTurn` step 1). Score 4.
+
+**G5**: `refugees` choice calls `addColonist`/mutates `S.col` morale/`S.r.food`; `sickness` choice mutates `S.r.parts` or colonist fatigue/morale — real state writes, not log-only. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "newGame() builds state; rnd(S) mulberry32 used everywhere; endTurn() runs 9 fixed steps",
+    "F2": "8x8 loop generates terrain; canBuild() checks terr; adj() changes condenser/forge yield",
+    "F3": "greenhouse: water->soil->food; forge: ore+power->metal; cap()+overflow logged in step 8",
+    "F4": "colonist {skill,fatigue,morale}; workerMult() reads them for output",
+    "F5": "fNeed/wNeed consumed, shortage -12 morale, workerMult() reads morale, +4 recovery",
+    "F6": "10 RES_NODES; buyResearch() checks pre[]; e.g. S.research.hydro read in greenhouse case",
+    "F7": "12 EVENTS; weighted roll via tot/roll; evcd[id] cooldown; 4 events w/ branching opts.apply",
+    "F8": "price() reads S.r[g]/cap and market.drift[g]; stock/demand limited; buy&sell wired",
+    "F9": "storm every 7 turns, sev scales w/ turn; !t.dmg filter zeroes output; repair spends 2 parts",
+    "F10": "saveStr()->textarea; loadStr() validates fields, returns {err} shown in UI",
+    "F11": "checkEnd() sets over='win'/'lose'; score() combines state; summary table on G.over",
+    "F12": "TABS click handlers switch tab; logi() stores turn; title tooltips; keydown 1-6/Space",
+    "F13": "runTests() 18 invariant asserts; runHeadless()/policy() 200-turn sim prints stateHash()",
+    "G1": "S.research.drills/hydro/turbines/smelt/fab read directly in per-tile production switch",
+    "G2": "S.shortF/W -> c.morale -=12 -> workerMult() reads c.morale to scale/zero output",
+    "G3": "storm sets t.dmg=true -> production filters !t.dmg -> repair spends 2 parts clears dmg",
+    "G4": "price() = base*drift[g]*(1.6-stock/cap); drift[g] random-walked every endTurn call",
+    "G5": "refugees/sickness opts.apply mutate S.col, S.r.food/parts/scrip directly, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "F12's 'adapts to narrow screens' relies only on flex-wrap/minmax, no explicit media queries, otherwise systems are unusually deeply interconnected."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop:** `st` object from `newGame()`; `R(st)` mulberry32 stream used everywhere (genMap, addColonist, events); `endTurn()` calls stepStorm→stepPower→stepProduction→stepNeeds→stepMorale→stepPopulation→stepCaravan→stepEvents→stepEndCheck in fixed order. Score 2.
+
+**F2 — Map:** 8x8 (`W=8`,`NT=64`); `genMap` uses seeded `R(st)`; `canBuildAt` checks `b.ter.includes(t.tr)`; `adjMult` multiplies `m` in `prodBreakdown`, changing `out.outs`. Score 2.
+
+**F3 — Economy:** water→soil→food and ore→metal chains (`soilworks`,`greenhouse`,`mine`,`forge`); `caps()` enforced in `addRes`, overflow logged and tracked in `stats.overflow`. Score 2.
+
+**F4 — Population:** colonist records with `skill,fatigue,morale,job,assigned`; `skillMult`/fatigue thresholds read inside `prodBreakdown`. Score 2.
+
+**F5 — Needs:** `stepNeeds` consumes food/water, sets `shortNow`; `stepMorale` applies `dm-=12` per shortage; `moraleMult` feeds back into production; +3/turn recovery when fed. Score 2.
+
+**F6 — Research:** 10 nodes in `RESEARCH`; `researchStatus` enforces `r.req`; `payCost` deducts; every id (filtration/hydroponics/smelting/geotaps/masonry/shelters/logistics/radio/messhall/machining) has a real read site (`resMult`, `damageBld`, `unlockedBld`, `caps`). Score 2.
+
+**F7 — Events:** 12 entries in `EVENTS`; weighted pick via `tw`/`roll` in `stepEvents`; 6 events (refugees,bloom,pedlar,sickness,vault,strike) have 2-3 differing choices; `evCd[ev.id]=8` cooldown decremented each turn. Score 2.
+
+**F8 — Trade:** `priceOf` reads `st.res[r]`/cap scarcity and `cv.drift[r]` (random-walked every turn); `cv.inv` limits `tradeBuy`; both `tradeBuy`/`tradeSell` wired to `ui.buy`/`ui.sell`. Score 2.
+
+**F9 — Hazard:** `stormDue` every 8 turns; `stormSeverity` grows with `turn`; `prodBreakdown` cuts output ×0.6 at hp<70, disables at hp<30; `shelters` research and `stormwall` building reduce `damageBld` amount; `repair` costs parts + colonist fatigue. Score 2.
+
+**F10 — Save/load:** `serialize(st)` → textarea for manual copy; `loadState`→`validateState` throws descriptive errors shown via `UI.saveErr`. Score 2.
+
+**F11 — End conditions:** win (`turn===60 && cols.length>=12 && needsMet`) and lose (`cols.length<=0`) both in `stepEndCheck`; `scoreOf` combines pop/research/stock/turns; modal summary in `maybeModals`. Score 2.
+
+**F12 — UI:** `ui.tab` switches panels; `log()` stores `t:st.turn`, rendered `T${l.t}`; extensive `data-tip` tooltips explaining formulas; keydown handles Space/Digit1-6; `@media(max-width:520px)` layout. Score 2.
+
+**F13 — Dev panel:** `runTests()` asserts real invariants (cap respect, prereq enforcement, save/load hash roundtrip, storm/repair economics); `runBenchmark` runs `simulate()` 200 turns headlessly via `policyTurn`, prints `stateHash`. Score 2.
+
+**G1:** `resMult` reads `st.done` (filtration/hydroponics/smelting), multiplied into `m` in `prodBreakdown`, applied to `out.outs`; geotaps is a hardcoded +2 add in `stepProduction` (minor special case). Score 4.
+
+**G2:** `stepNeeds` sets `shortNow`→`stepMorale` applies `dm-=12`→`c.morale`→`moraleMult(w)` read in `prodBreakdown` next turn's output. Score 4.
+
+**G3:** `stepStorm`→`damageBld` reduces `t.b.hp`→`prodBreakdown` cuts/disables output by hp→`repair` spends parts+labor→hp restored to 100, output resumes. Score 4.
+
+**G4:** `priceOf` = `BASEP*drift[r]*scarcity(st.res[r]/cap)`; `drift` random-walked every turn in `stepCaravan`; feeds `buyPrice`/`sellPrice`. Score 4.
+
+**G5:** refugees choices: `addColonist`+`subRes` vs `bumpMorale`; sickness choices: `c.fatigue=100` set directly vs `subRes` food/water — both durable state writes beyond log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls stepStorm..stepEndCheck in fixed order; R(st) mulberry32 used throughout",
+    "F2": "genMap uses seeded R(st); canBuildAt checks terrain; adjMult multiplies prodBreakdown outs",
+    "F3": "soilworks->greenhouse and mine->forge chains; caps() enforced in addRes with overflow log",
+    "F4": "colonist skill/fatigue read by skillMult and fatigue-threshold checks in prodBreakdown",
+    "F5": "stepNeeds sets shortNow, stepMorale applies -12 dm, moraleMult feeds prodBreakdown",
+    "F6": "10 RESEARCH nodes; researchStatus enforces req; each id read by resMult/damageBld/unlockedBld/caps",
+    "F7": "12 EVENTS, weighted pick in stepEvents, evCd[id]=8 cooldown, 6 events with differing choices",
+    "F8": "priceOf reads st.res scarcity and cv.drift (random walk); tradeBuy/tradeSell both wired",
+    "F9": "stormSeverity grows with turn; prodBreakdown cuts/disables by hp; repair costs parts+fatigue",
+    "F10": "serialize()->textarea; loadState/validateState throw messages shown in UI.saveErr",
+    "F11": "stepEndCheck win/lose both reachable; scoreOf combines 4 values; maybeModals renders summary",
+    "F12": "ui.tab switching, log t:st.turn, data-tip tooltips, keydown Digit1-6/Space, media query",
+    "F13": "runTests() checks real invariants; runBenchmark runs simulate() headless, prints stateHash",
+    "G1": "resMult(st,key) reads st.done, multiplied into m, applied to prodBreakdown outs",
+    "G2": "shortNow set in stepNeeds -> dm-=12 in stepMorale -> moraleMult read in prodBreakdown",
+    "G3": "damageBld reduces hp -> prodBreakdown cuts/disables by hp -> repair restores hp+cost",
+    "G4": "priceOf uses st.res scarcity and cv.drift random-walked every turn in stepCaravan",
+    "G5": "refugees/sickness choice.apply() directly mutate res/colonist fields, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Nearly every required rubric link is genuinely wired end-to-end; the only softness is geotaps' production bonus being a hardcoded +2 add outside the normal multiplier pipeline."
+}
+```

@@ -1,0 +1,69 @@
+Reading through this submission's core loop, systems, and cross-system wiring now.
+
+**F1 Core loop**: single `S` object; `R()` reads/writes `S.rngState` for all main-stream randomness; `runTurn()` resolves storm→production→needs→events→caravan→checkEnd in fixed order. Score 2.
+
+**F2 Map**: `genMap(seed)` builds 64-tile grid from seeded `mkRng`; `tryBuild` checks `d.terr.includes(s.map[i])`; `adjCount` feeds condenser/greenhouse/forge output formulas. Score 2.
+
+**F3 Economy**: chains ash→soil (sifter), soil+water→food (greenhouse), ore+power→metal (forge), metal+power→parts (workshop); `addRes` clamps to `caps()` and logs overflow loss. Score 2.
+
+**F4 Population**: colonist records with skill/xp/fatigue/morale/job; `workerMult()` reads `c.skill` and `c.fatigue` directly in production. Score 2.
+
+**F5 Needs**: `needsPhase` subtracts food/water, shortage drops morale (`dm-=12/-10`), morale feeds `workerMult`, and morale recovers gradually (`dm=2+...`) absent shortage. Score 2.
+
+**F6 Research**: 10 nodes; `req.every(has)` enforced in `tryResearch`; costs deducted via `spend`; every node's effect is read somewhere (`has(s,"filters")` etc. in production, `has(s,"barter")` in `priceOf`, `has(s,"shield")` in `stormPhase`). Score 2.
+
+**F7 Events**: 13 events, weighted roll in `eventsPhase`; 6 events (refugees, wreck, sickness, thieves, trainer, festival) offer distinct-outcome choices; `s.cds[id]=EVENT_COOLDOWN` filters the pool. Score 2.
+
+**F8 Trade**: `priceOf` uses stockpile scarcity and `s.drift[g]` (random-walk each turn); `cv.inv[g]` limits caravan stock; both buy/sell paths mutate state via `tradeDeal`. Score 2.
+
+**F9 Hazard**: `stormPhase` fires every 8 turns, `sev=1+floor(turn/20)` scales severity; production halves output at `hp<50`, disables at `hp<=0`; `shield` research and `wall` count both reduce `mit`; `tryRepair` spends 2 parts+1 metal+idle labor. Score 2.
+
+**F10 Save/load**: `exportSave` serializes `stripUi(S)` to text; `importSave` parses JSON, validates required fields/types, returns clear error strings, wired to buttons. Score 2.
+
+**F11 End conditions**: `checkEnd` win path (turn≥60, pop≥12, no shortage) and lose path (`colonists.length===0`) both reachable; `score()` combines pop/research/turns/stockpile; `renderModal` shows summary table. Score 2.
+
+**F12 UI**: `switchTab` wired to tab buttons; log lines show `T${e.t}`; extensive `title=` tooltips explain formulas; keydown handler for Space/1-5; `@media(max-width:420px)` adjusts layout. Score 2.
+
+**F13 Dev panel**: ~20 `runTests` assertions on real invariants (cap enforcement, prereqs, overflow, storm scheduling, starvation departures, save round-trip hash); `runBench` runs 200 headless `greedyTurn` iterations and prints `stateHash`. Score 2.
+
+**G1**: `has(s,"filters")` etc. read directly inside `production()`'s per-building formulas, applied every relevant turn. Score 4.
+
+**G2**: `needsPhase` shortfall → `c.morale` write → `workerMult` reads `c.morale` for `×0.7`/refuse-work every production pass. Score 4.
+
+**G3**: `stormPhase` damages `b.hp` → production checks `b.hp<50`/`<=0` → `tryRepair` spends parts/metal + idle colonist fatigue → `b.hp=100` restores full output. Score 4.
+
+**G4**: `priceOf` reads `s.res[g]/cap` (scarcity) and `s.drift[g]` (updated via random walk each `caravanPhase`). Score 4.
+
+**G5**: refugees/wreck/sickness/thieves choices each call `addColonist`, `spend`, or `.morale=` mutations on real state, not just `logMsg`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "runTurn() calls stormPhase/production/needsPhase/eventsPhase/caravanPhase/checkEnd in fixed order",
+    "F2": "genMap(seed) via mkRng; tryBuild checks d.terr.includes; adjCount used in condenser/greenhouse/forge formulas",
+    "F3": "sifter ash->soil, greenhouse soil+water->food; addRes clamps to caps() and logs overflow",
+    "F4": "workerMult(s,c,d) reads c.skill and c.fatigue to modify output",
+    "F5": "needsPhase computes foodShort/waterShort, writes c.morale, recovers via dm=2+ when unshort",
+    "F6": "tryResearch enforces node.req.every(has), deducts cost; has(s,'filters') read in production()",
+    "F7": "EVENTS array of 13, weighted roll in eventsPhase; 6 events with 2-3 choices; s.cds cooldown",
+    "F8": "priceOf() uses s.res[g]/cap scarcity and s.drift[g]; tradeDeal buy/sell both mutate cv.inv and s.res",
+    "F9": "stormPhase damages b.hp on schedule; production halves/disables output; tryRepair spends parts/metal",
+    "F10": "exportSave/importSave with field validation and error strings, wired to btnexport/btnimport",
+    "F11": "checkEnd sets s.over win/lose; score() combines state; renderModal shows summary table",
+    "F12": "switchTab wired to #tabs buttons; log shows T${e.t}; keydown handles Space/1-5; media query at 420px",
+    "F13": "runTests ~20 real invariant checks; runBench runs 200 headless greedyTurn turns and prints stateHash",
+    "G1": "has(s,'filters')/'bore'/'turbine' read inside production() formulas every turn",
+    "G2": "needsPhase shortfall writes c.morale; workerMult reads c.morale for output multiplier",
+    "G3": "stormPhase damages b.hp; production checks hp<50/<=0; tryRepair spends resources and restores hp=100",
+    "G4": "priceOf reads s.res[g]/caps(s)[g] scarcity and s.drift[g] updated via random walk in caravanPhase",
+    "G5": "refugees/wreck/sickness choices call addColonist/spend/c.morale= mutating real state"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "tradeDeal's buy-path affordability check uses cost computed before qty is capped by remaining storage space, causing occasional false 'Need X scrip' rejections."
+}
+```

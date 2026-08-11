@@ -1,0 +1,73 @@
+## Worksheet
+
+**F1 — Core loop**: single `g` state object; `rnd(g)` mulberry32 with state in `g.rng`; `advanceTurn()` calls stormStep→production→needsStep→moraleStep→arrivalStep→marketStep→eventStep→checkEnd in fixed order. Score 2.
+
+**F2 — Map**: `genMap` builds 64-tile grid seeded via `rnd(g)`; `canBuild` checks `d.terr.includes(t.t)`; `nbrCount` adjacency read in `runB` (e.g. condenser `+nbrCount(...,'water')`) changes output. Score 2.
+
+**F3 — Economy**: greenhouse chain `2 ash+water→soil→3 food`; forge `ore→metal`; `capOf`/`addRes` enforce caps and log overflow loss. Score 2.
+
+**F4 — Population**: colonist record `{lvl,fat,mor,job,at}`; `wm(g,c,job)` reads `lvl`/`fat`/`mor`, consumed by `runB`. Score 2.
+
+**F5 — Needs**: `needsStep` consumes food/water, calls `moraleHit`; `wm()` reads `mor` for output; `moraleStep` recovers morale via rest/housing/clinic. Score 2.
+
+**F6 — Research**: 10 nodes in `RESEARCH`; `canResearch` enforces `n.pre`; `buyResearch` deducts scrip/parts; every `g.done.X` flag read somewhere (filtration/smelting/shutters/etc). Score 2.
+
+**F7 — Events**: 13 entries in `EVENTS`; weighted roll in `eventStep`; 7 events with 2-3 differing-effect `opts`; `g.cool[ev.id]=g.turn+10` filtered by `eligibleEvents`. Score 2.
+
+**F8 — Trade**: `priceOf` reads `g.res[r]/capOf` and `market.drift[r]` (random-walked in `marketStep`); `tradeBuy`/`tradeSell` cap by `car.stock`/`car.buyCap`. Score 2.
+
+**F9 — Hazard**: `stormStep` fires on interval, `sev=1+floor(turn/12)`; `hpMult(t)` halves/zeroes `runB` output; `shutters`/`forecast`/`wall` reduce dmg; `doRepair` spends parts. Score 2.
+
+**F10 — Save/load**: `saveText`=`JSON.stringify(g)` in textarea; `loadObj` validates fields/map/roster and sets `UI.loadMsg` error on failure. Score 2.
+
+**F11 — End conditions**: `checkEnd` has win (turn60+pop≥12+no shortage) and loss (pop 0 / turn60 fail) branches; `scoreOf` combines pop/research/stock/turns; `renderOverlay` shows summary. Score 2.
+
+**F12 — UI**: `renderTabs`/`data-act=tab`; log entries show `'T'+e.t`; extensive `data-tip` (chipTip, workerLine, priceOf breakdown); `keydown` handles Space + Digit1-6; flex-wrap layout + one `@media` rule. Score 2.
+
+**F13 — Dev panel**: `runTests()` 22 real invariant assertions (cap clamp, prereq gating, save round-trip hash); `runBenchmark`→`simRun`/`policyTurn` runs 200 headless turns, prints `hashState`. Score 2.
+
+**G1**: `g.done.filtration` etc. set by `buyResearch`, read directly in `runB` production formulas (condenser/forge/etc). Score 4.
+
+**G2**: `needsStep` shortage → `moraleHit` → `wm()` reads `c.mor` to cut output every turn. Score 4.
+
+**G3**: `stormStep` damages `t.hp` → `hpMult` halves/zeroes `runB` output → `doRepair` spends parts, restores hp=100. Score 4.
+
+**G4**: `priceOf` reads `g.res[r]/capOf(g,r)` (stockpile) and `market.drift[r]` (turn-drifting supply). Score 4.
+
+**G5**: refugees/sickness/trader/etc choices call `fx(g)` mutating `g.cols`, `g.res`, `g.mor` durably, not just `log`. Score 4.
+
+## Summary
+
+Minor defect noted: `addRes` overflow branch calls `flow(g,r,-0,src)` instead of `-lost`, so the flow-tracking tooltip undercounts overflow loss (log message itself is still correct) — cosmetic, doesn't affect scored mechanics.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "advanceTurn() calls fixed pipeline; rnd(g) mulberry32 state in g.rng",
+    "F2": "canBuild checks d.terr.includes(t.t); nbrCount() adjacency read in runB",
+    "F3": "greenhouse: 2 ash+water->soil->3 food; capOf/addRes clamp with overflow log",
+    "F4": "wm(g,c,job) reads c.lvl/c.fat/c.mor, called in runB for output",
+    "F5": "needsStep->moraleHit; wm() reads mor for output; moraleStep recovers morale",
+    "F6": "10 RESEARCH nodes; canResearch enforces pre[]; g.done.X read in runB/stormStep",
+    "F7": "13 EVENTS, weighted roll in eventStep; 7 choice events; g.cool cooldown filter",
+    "F8": "priceOf reads g.res[r]/capOf and market.drift[r]; tradeBuy/tradeSell both wired",
+    "F9": "stormStep damages t.hp scaled by turn; hpMult cuts runB output; doRepair spends parts",
+    "F10": "saveText=JSON.stringify(g); loadObj validates fields, sets UI.loadMsg error",
+    "F11": "checkEnd win/loss branches; scoreOf combines state; renderOverlay shows summary",
+    "F12": "renderTabs switching; log 'T'+e.t; data-tip tooltips; keydown Space/Digit1-6",
+    "F13": "runTests() 22 real assertions; runBenchmark->simRun 200 turns prints hashState",
+    "G1": "g.done.filtration/smelting etc read directly inside runB production formulas",
+    "G2": "needsStep shortage->moraleHit->wm() reads c.mor to reduce runB output",
+    "G3": "stormStep damages t.hp->hpMult cuts runB output->doRepair spends parts, restores hp",
+    "G4": "priceOf reads g.res[r]/capOf(g,r) stockpile ratio and market.drift[r] turn-drift",
+    "G5": "event fx(g) mutates g.cols/g.res/g.mor directly (refugees, sickness, trader, etc)"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "addRes overflow-loss flow tracking uses flow(g,r,-0,src) instead of -lost, a minor cosmetic bug in the tooltip breakdown."
+}
+```

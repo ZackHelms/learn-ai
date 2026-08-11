@@ -1,0 +1,73 @@
+## Worksheet
+
+**F1 Core loop**: state `st` object; `R(st)` mulberry32-style PRNG used for all randomness (no Math.random found); `endTurn()` calls stepStorm→stepPower→stepProduction→stepNeeds→stepMorale→stepPopulation→stepCaravan→stepEvents→stepEndCheck in fixed order. Score 2.
+
+**F2 Map**: `W=8`,`NT=64` grid; `genMap(st)` uses `R(st)` seeded RNG; `canBuildAt` checks `b.ter.includes(t.tr)`; `adjMult()` multiplies production in `prodBreakdown`. Score 2.
+
+**F3 Economy**: chains water→soil→food, ore→metal→parts via `inn`/`out` fields consumed in `stepProduction`; `caps(st)` enforced in `addRes`, overflow logged to `stats.overflow`. Score 2.
+
+**F4 Population**: `addColonist` creates records with skill/fatigue/morale/job/assigned; `skillMult`/`prodBreakdown` read `c.skill`,`c.fatigue`. Score 2.
+
+**F5 Needs**: `stepNeeds` consumes food/water, sets `shortNow`; `stepMorale` applies `dm-=12` on shortage; `moraleMult(c)` read in `prodBreakdown`; `+3` recovery when unmet needs absent. Score 2.
+
+**F6 Research**: 10 nodes in `RESEARCH`; `researchStatus` enforces `r.req.every`; `payCost` deducts; effects read via `resMult`, geotaps bonus in `stepProduction`, `unlockedBld` gating stormwall/workshop/canteen/beacon. Score 2.
+
+**F7 Events**: 11 entries in `EVENTS`; weighted pick in `stepEvents` (`tw`,`roll`); 6 events (refugees, bloom, pedlar, sickness, vault, strike) have 2-3 choices with distinct `apply()` state effects; `evCd[ev.id]=8` cooldown decremented each turn. Score 2.
+
+**F8 Trade**: `priceOf()` reads `st.res[r]`/cap scarcity and `cv.drift[r]`; `cv.inv` limits caravan stock; `tradeBuy`/`tradeSell` both wired to UI buttons. Score 2.
+
+**F9 Hazard**: `stormDue`/`stormSeverity` grow with turn; `damageBld` sets `t.b.hp`; `prodBreakdown` reduces/disables output by hp; `stormwall`/`shelters` research reduce damage; `repair()` costs parts+colonist fatigue. Score 2.
+
+**F10 Save/load**: `serialize()`→textarea; `loadState`→`validateState` throws descriptive errors shown in `#saveErr`. Score 2.
+
+**F11 End conditions**: `stepEndCheck` checks win (`turn===60`,`pop>=12`,`needsMet`) and loss (`cols.length<=0`); `scoreOf()` combines pop/research/stock/turns; modal via `maybeModals()`. Score 2.
+
+**F12 UI**: `ui.tab()` switches tabs; `log()` stores `st.turn` rendered `T${l.t}`; extensive `data-tip` breakdowns; keyboard Space/Digit1-6 in `boot()`; `@media max-width:520px` responsive. Score 2.
+
+**F13 Dev panel**: `runTests()` asserts real invariants (no negative resources, caps respected, prereq chain, save/load hash round-trip, storm damage/repair, cooldown); `runBenchmark()` runs `simulate()` 200 turns headless, prints `stateHash`. Score 2.
+
+**G1**: `resMult(st,key)` reads `st.done.includes(...)`, multiplied into `m` in `prodBreakdown`, applied every turn, shown in tooltips. Score 4.
+
+**G2**: `stepNeeds` sets `shortNow` → `stepMorale` applies `dm-=12` → `moraleMult(c)` consumed in `prodBreakdown` output calc. Full chain each turn. Score 4.
+
+**G3**: `stepStorm`→`damageBld` sets hp → `prodBreakdown` disables/degrades output by hp → `repair()` spends parts+fatigue, restores hp=100 removing penalty. Score 4.
+
+**G4**: `priceOf` reads `st.res[r]`/cap scarcity AND `cv.drift[r]` random-walked each turn in `stepCaravan`. Score 4.
+
+**G5**: refugees (`addColonist`,`subRes`), bloom (`subRes`/`addRes`, colonist morale/fatigue), sickness/vault/strike similarly mutate `st.res`/`st.cols` state directly, not just log. Score 4.
+
+todo_notes: none found (no `// TODO` markers present).
+
+single_biggest_weakness: ash/rock terrain materials are ambient rather than tracked stock resources (an explicitly documented design simplification), slightly flattening the literal "ash→soil" chain described in the brief, though otherwise systems are unusually thoroughly interconnected.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls stepStorm..stepEndCheck in fixed order; R(st) used everywhere",
+    "F2": "canBuildAt checks b.ter.includes(t.tr); adjMult() multiplies output in prodBreakdown",
+    "F3": "forge inn{ore:3,power:2} out{metal:3} consumed/produced in stepProduction; caps enforced in addRes",
+    "F4": "addColonist fields skill/fatigue read by skillMult/prodBreakdown",
+    "F5": "stepNeeds sets shortNow, stepMorale -12 morale, moraleMult read in prodBreakdown",
+    "F6": "researchStatus enforces req; resMult/unlockedBld read st.done in production/build checks",
+    "F7": "stepEvents weighted pool.reduce selection; evCd[ev.id]=8 cooldown decremented per turn",
+    "F8": "priceOf reads st.res + cv.drift; tradeBuy/tradeSell wired to ui.buy/ui.sell buttons",
+    "F9": "stormSeverity grows with turn; damageBld sets hp; prodBreakdown reduces output by hp; repair() costs parts+fatigue",
+    "F10": "loadState->validateState throws message shown in #saveErr",
+    "F11": "stepEndCheck win/loss checks; scoreOf() combines 4 state values; maybeModals renders summary",
+    "F12": "ui.tab() switches tabs; log() stores turn; keydown handler Digit1-6/Space; media query at 520px",
+    "F13": "runTests asserts cap/roster/prereq invariants; runBenchmark runs simulate(200) headless printing stateHash",
+    "G1": "resMult(st,key) reads st.done, multiplied into m in prodBreakdown every turn",
+    "G2": "shortNow -> stepMorale dm-=12 -> moraleMult(c) consumed in prodBreakdown output calc",
+    "G3": "damageBld sets hp -> prodBreakdown disables/degrades output -> repair() restores hp, removing penalty",
+    "G4": "priceOf reads st.res[r]/cap scarcity and cv.drift[r] random-walked in stepCaravan",
+    "G5": "refugees/bloom/sickness choice apply() functions call addColonist/subRes/addRes/morale/fatigue directly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ash/rock terrain materials are treated as ambient rather than tracked stock resources (a documented simplification), slightly flattening the literal ash-to-soil chain, though systems are otherwise deeply and consistently interconnected."
+}
+```

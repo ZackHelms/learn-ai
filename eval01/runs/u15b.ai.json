@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `newGame()` builds one `st` object; `R(st)` mulberry32-style PRNG used everywhere (no Math.random); `endTurn()` calls storm→power→production→needs→morale→pop→caravan→events→endcheck in fixed order. Score 2.
+
+**F2 Map**: `W=8`, `NT=64` grid; `genMap()` uses seeded `R(st)`/`RP`/`RI` for terrain; `canBuildAt` checks `b.ter.includes(t.tr)`; `adjMult()` feeds `prodBreakdown` (`m*=aj.m`) changing real output. Score 2.
+
+**F3 Economy**: chains ore→metal (`mine`→`forge` `inn.ore`), water/soil→food (`soilworks`→`greenhouse`); `caps()` enforced in `addRes()` with overflow logged via `stats.overflow`. Score 2.
+
+**F4 Population**: `addColonist` creates skill/fatigue/morale/job/assigned; `skillMult`/fatigue checks read in `prodBreakdown` used by `stepProduction`. Score 2.
+
+**F5 Needs**: `stepNeeds` sets `shortNow.food/water`; `stepMorale` applies `dm-=12` per shortage, `+3` recovery; `moraleMult(c)` used in `prodBreakdown`. Score 2.
+
+**F6 Research**: 10 nodes; `researchStatus` enforces `req.every`; `payCost` deducts; each unlock read elsewhere (`resMult`, `st.done.includes("geotaps")`, `unlockedBld`, `caps()` logistics, `damageBld` shelters). Score 2.
+
+**F7 Events**: 12 events; weighted `pool.reduce`/`roll` selection; 6 events with 2-3 differing-outcome choices; `st.evCd[ev.id]=8` cooldown decremented each turn. Score 2.
+
+**F8 Trade**: `priceOf()` reads `st.res[r]`/cap scarcity and `cv.drift` random-walk; `cv.inv` limited stock; `tradeBuy`/`tradeSell` both mutate state. Score 2.
+
+**F9 Hazard**: `stormDue` every 8 turns, `stormSeverity` grows with turn; `damageBld` disables hp<30/degrades hp<70 (read in `prodBreakdown`); `stormwall`/`shelters` reduce damage; `repair()` costs parts+labor. Score 2.
+
+**F10 Save/load**: `serialize()`→textarea JSON; `loadState`/`validateState` throw on bad input, caught in `ui.loadApply` showing `#saveErr`. Score 2.
+
+**F11 End conditions**: win (`turn===60`, pop≥12, needsMet) and lose (`cols.length<=0`) both in `stepEndCheck`, called from `endTurn`; `scoreOf` combines pop/research/stock/turns; modal via `maybeModals`. Score 2.
+
+**F12 UI**: `ui.tab()` switches tabs; log lines show `T${l.t}`; extensive `data-tip` tooltips; keyboard `Space`/`Digit1-6` wired in `boot()`; `@media (max-width:520px)` present. Score 2.
+
+**F13 Dev panel**: `runTests()` asserts real invariants (caps respected, assignment validity, prereq chain, hash round-trip); `runBenchmark`/`simulate()` runs 200 headless turns, prints `stateHash`. Score 2.
+
+**G1**: `resMult(st,key)` checks `st.done.includes(...)`, multiplies output in `prodBreakdown`, visible via tooltip mults every turn. Score 4.
+
+**G2**: `stepNeeds`→`shortNow`→`stepMorale` (`dm-=12`)→`c.morale`→`moraleMult(c)` read in `prodBreakdown`, full traceable chain each turn. Score 4.
+
+**G3**: `stepStorm`→`damageBld`(hp)→`prodBreakdown` (hp<30 disabled/hp<70 ×0.6)→`repair()` spends parts+labor→hp=100 recovery. Score 4.
+
+**G4**: `priceOf` reads `st.res[r]/cap` and `cv.drift[r]` (random-walked each turn in `stepCaravan`), used by both `buyPrice`/`sellPrice`. Score 4.
+
+**G5**: refugees choices call `addColonist`/`subRes`/`bumpMorale`; sickness choices set `c.fatigue`/`c.morale` differently per branch — real state mutation, not log-only. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls stepStorm..stepEndCheck in fixed order; R(st) used for all randomness",
+    "F2": "genMap uses R(st); canBuildAt checks t.tr; adjMult m read in prodBreakdown",
+    "F3": "forge inn.ore->metal, soilworks->greenhouse; caps()/addRes() clamp+log overflow",
+    "F4": "addColonist fields; skillMult/fatigue read in prodBreakdown used by stepProduction",
+    "F5": "shortNow set in stepNeeds; dm-=12 in stepMorale; moraleMult read in prodBreakdown",
+    "F6": "researchStatus enforces req; resMult/unlockedBld/caps() read st.done everywhere",
+    "F7": "pool weighted roll in stepEvents; evCd[id]=8 cooldown decremented per turn",
+    "F8": "priceOf reads st.res+cv.drift; tradeBuy/tradeSell mutate cv.inv and st.res",
+    "F9": "damageBld disables/degrades hp read in prodBreakdown; repair() costs parts+fatigue",
+    "F10": "serialize()/loadState(); ui.loadApply catches errors into #saveErr",
+    "F11": "stepEndCheck win/lose; scoreOf(pop,research,stock,turns); maybeModals renders summary",
+    "F12": "ui.tab(); log l.t; data-tip tooltips; Space/DigitN keydown handler; media query present",
+    "F13": "runTests() checks caps/assignments/prereqs/hash; runBenchmark runs simulate() 200 turns",
+    "G1": "resMult(st,key) read in prodBreakdown m*=rm, e.g. filtration/hydroponics/smelting",
+    "G2": "shortNow->stepMorale dm-=12->c.morale->moraleMult in prodBreakdown",
+    "G3": "stepStorm->damageBld(hp)->prodBreakdown disables/degrades->repair() restores hp",
+    "G4": "priceOf(st,r) reads st.res[r]/cap and cv.drift[r] drifted each turn in stepCaravan",
+    "G5": "refugees/sickness choice.apply() write addColonist/subRes/c.morale/c.fatigue directly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Narrow-screen media query only tweaks grid/font sizing rather than truly reflowing the two-column map/tileinfo layout for mobile."
+}
+```

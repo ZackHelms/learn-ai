@@ -28,7 +28,9 @@ NOTE1: JS syntax error on load: A3=0, all C/D runtime 0. Agreement check: Haiku 
 NOTE2: Saturates the eval: clean load, 21/21 assertions, identical benchmark hash across reload. Haiku grader agreed 46/46 (18/18 items exact)
 
 
-## Eval runs (9Aug2026)
+## (9Aug2026) Eval runs
+These were in claude code cli where CLAUDE.md and .claude/** context files would be used
+
 | 2026-08-09_22:37:30_EDT | Claude Code (bare) | claude-opus-5 (max)      | t15 | xxxxxx | $xxxxx   | xx + xxxx = xxxxx | xxxx |
 |                Datetime |            Harness |   LLM (Reasoning effort) | Run |   Time |     Cost | det + ai  = Score | Notes |
 | ----------------------- | -------------------| -------------------------| --- | ------ | -------- | ----------------- | ----- |
@@ -42,18 +44,13 @@ NOTE2: Saturates the eval: clean load, 21/21 assertions, identical benchmark has
 
 ## (10Aug2026) Eval runs 
 
-**Grader**: sonnet-5 (high), ai grader prompt v1.3 via grade.sh, each ai eval api cost equivalent is $0.95-$1.10 (110 input, 20.7k output, 622.0k cache read, 102.6k cache write).
+**Grader**: sonnet-5 (high)
 **Scores**: from command like `./eval01/listscore.py r0{1..5}{a..e}` that (for each rNN) is AVG of the ai grader runs.
-Each row is 1-shot to handle the prompt, 1 deterministic eval py, and 5 ai-grader runs averaged.
-haiku-4-5 run via regular claude cli prompt which uses CLAUDE.md and .claude/** context and memory. (opus5xhigh was too).
-sonnet5: eval01/generate.sh was created in order to get clean bare bones generation and first tried with sonent5-low/med/hi/xhi/max; this enables comparison of impact of context files.
-v1.2 & v1.3 correspond to grader updates (eval01/grade.sh), i.e. the back end grading work.
-generate.sh impacts the front end work by the LLM+effort, so I will eventually re-run haiku with it and call those runs something other than r0{1,2,3,4,5} like r5{1,2,3,4,5} or s0{1,2,3,4,5}
-Looks like haiku doesnt actually use reasoning effort levels (based on similarity between r11-r15) even though the claude code interface lets you select an effort level. The Claude desktop app lets you select for haiku a deeper thinking mode.
+**Script**: `./eval01/zrunall.sh` provides a single script for running the entire generate+eval process for one model at a time.
+NOTE: Looks like haiku doesnt actually use reasoning effort levels (based on similarity between r11-r15) even though the claude code interface lets you select an effort level. The Claude desktop app lets you select for haiku a deeper thinking mode.
 
 |                Datetime |            Harness |   LLM (Reasoning effort) | Run |   Time |     Cost | det + ai  = Score | Notes |
 | ----------------------- | -------------------| -------------------------| --- | ------ | -------- | ----------------- | ----- |
-
 | 2026-08-09_17:11:22_EDT | Claude Code (bare) | claude-haiku-4-5 (low)   | r11 |  3m19s | $ 0.1771 | 37 + 38.6 =  75.6 |  14 input,  22.5k output,    37.7k cache read,  29.4k cache write ($ 0.1771) |
 | 2026-08-09_20:05:28_EDT | Claude Code (bare) | claude-haiku-4-5 (medium)| r12 |  2m36s | $ 0.1431 | 49 + 29.4 =  78.4 |  14 input,  17.8k output,    37.7k cache read,  24.4k cache write ($ 0.1431) |
 | 2026-08-09_20:05:35_EDT | Claude Code (bare) | claude-haiku-4-5 (high)  | r13 |  3m14s | $ 0.1739 | 50 + 30.6 =  80.6 |  14 input,  22.2k output,    37.7k cache read,  28.6k cache write ($ 0.1739) |
@@ -72,17 +69,9 @@ Looks like haiku doesnt actually use reasoning effort levels (based on similarit
 | 2026-08-10_12:43:10_EDT | Claude Code (bare) | claude-opus-5 (xhigh)    | t14 | 32m23s | $10.0894 | 34 + 46.0 =  80.0 | 114 input, 166.4k output,  8288.4k cache read, 178.3k cache write ($10.0894) |
 | 2026-08-10_12:42:50_EDT | Claude Code (bare) | claude-opus-5 (max)      | t15 | 38m42s | $12.9251 | 29 + 45.8 =  74.8 | 152 input, 197.2k output, 12150.1k cache read, 191.8k cache write ($12.9251) |
 
-| 2026-08-09_17:11:22_EDT | Claude Code (bare) | claude-fable-5 (low)     | u11 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
-| 2026-08-09_20:05:28_EDT | Claude Code (bare) | claude-fable-5 (medium)  | u12 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
-| 2026-08-09_20:05:35_EDT | Claude Code (bare) | claude-fable-5 (high)    | u13 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
-| 2026-08-09_20:05:40_EDT | Claude Code (bare) | claude-fable-5 (xhigh)   | u14 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
-| 2026-08-09_20:05:46_EDT | Claude Code (bare) | claude-fable-5 (max)     | u15 | xxxxxx | $ xxxxxx | xx + xxxx = xxxxx | xxxxx |
-
-
-
-
-
-
-
-
+| 2026-08-09_17:11:22_EDT | Claude Code (bare) | claude-fable-5 (low)     | u11 |  6m32s | $ 2.6521 | 34 + 46.0 =  80.0 | 10 input,   33.9k output,   198.2k cache read,  38.0k cache write ($ 2.6521) |
+| 2026-08-09_20:05:28_EDT | Claude Code (bare) | claude-fable-5 (medium)  | u12 | 10m36s | $ 4.7398 | 41 + 46.0 =  87.0 | 25 input,   54.0k output,   812.9k cache read,  61.1k cache write ($ 4.7398) |
+| 2026-08-09_20:05:35_EDT | Claude Code (bare) | claude-fable-5 (high)    | u13 | 26m07s | $13.2028 | 29 + 46.0 =  75.0 | 50 input,  133.7k output,  3098.1k cache read, 162.1k cache write ($13.2028) |
+| 2026-08-09_20:05:40_EDT | Claude Code (bare) | claude-fable-5 (xhigh)   | u14 | 26m15s | $12.3045 | 34 + 46.0 =  80.0 | 53 input,  125.4k output,  2858.4k cache read, 147.7k cache write ($12.3045) |
+| 2026-08-09_20:05:46_EDT | Claude Code (bare) | claude-fable-5 (max)     | u15 | 50m04s | $17.7021 | 54 + 46.0 = 100.0 | 89 input,  215.8k output,  3993.4k cache read, 145.9k cache write ($17.7021) |
 

@@ -1,0 +1,72 @@
+## Worksheet
+
+**F1 Core loop**: `G` state object; `mulb()`/`rnd()`/`ri()` seeded RNG used everywhere (no Math.random); `simTurn()` calls phases in fixed order. Score 2.
+
+**F2 Map**: `genMap()` builds 64-tile grid from seeded rng; `canBuild()` checks `def.terrain`; `adjCount()` feeds greenhouse/condenser/forge output formulas. Score 2.
+
+**F3 Economy**: ore→metal (forge), metal→parts (workshop), ash→soil (sifter)→food (greenhouse); `capFor()`/`capsPhase()` enforce caps and log overflow. Score 2.
+
+**F4 Population**: `newColonist()` gives id/skill/fatigue/morale/job/at; `effOf()` reads skill+fatigue+morale in `runBuilding()`. Score 2.
+
+**F5 Needs**: `needsPhase()` consumes food/water, sets `state.short`; `peoplePhase()` drops morale on shortage (`dm-=12`) and recovers (`dm+=3`) when fed; morale feeds `effOf()`. Score 2.
+
+**F6 Research**: 10 nodes in `RESEARCH`; `buyResearch()` enforces `req`/cost; every node's `hasR()` check found live in production/storm/market/people code. Score 2.
+
+**F7 Events**: 13 entries in `EVENTS`; weighted draw in `eventsPhase()` (`tw`, `roll-=e.w`); 6 events with 2-3 differing choice branches; `eventCd` cooldown checked in `eligibleEvents()`. Score 2.
+
+**F8 Trade**: `priceOf()` reads `state.res[g]`/cap scarcity and `market.drift` (random-walk in `marketPhase()`); `m.inv` limits caravan stock; `doBuy()`/`doSell()` both mutate state. Score 2.
+
+**F9 Hazard**: `stormPhase()` fires every 8 turns, `sev=1+floor(turn/20)`; `hpMul` halves output when `b.hp<50`, disables at 0; `stormMitigation()` (forecast/reinforce) and Storm Wall reduce dmg; `doRepair()` spends parts. Score 2.
+
+**F10 Save/load**: `exportSave()`→JSON string in textarea; `importSave()` parses and validates schema/fields with specific `bad()` errors. Score 2.
+
+**F11 End conditions**: `endCheck()` win (turn≥60, pop≥12, no shortage) and lose (`colonists.length===0`) both reachable; `scoreOf()` combines pop/research/stock/turns/win; `renderModal()` shows summary table. Score 2.
+
+**F12 UI**: `ui.tab`/`renderTabs()`/`onClick('tab')` switch panels; `renderLog()` prefixes `T`+turn; `data-tip` + `onOver()` tooltips; `onKey()` Space/Digit1-6 shortcuts; `@media (max-width:640px)` responsive CSS. Score 2.
+
+**F13 Dev panel**: `runTestsCore()` 19 real invariant checks (determinism, caps, prereqs, adjacency, roster); `benchCore()`/`runPolicy()` run 200 headless turns and print `hashState()`. Score 2.
+
+**G1**: `hasR(state,'ashAgri')` etc. read inside `runBuilding()` production formulas every production phase, visibly changes output numbers. Score 4.
+
+**G2**: `needsPhase()` sets `state.short` → `peoplePhase()` `dm-=12` morale → `effOf()` multiplies output by morale term. Full chain each turn. Score 4.
+
+**G3**: `stormPhase()` reduces `b.hp` → `runBuilding()` `hpMul` cuts output/disables → `doRepair()` spends parts and restores hp to 100. Score 4.
+
+**G4**: `priceOf()` = `BASE_PRICE * drift * scarcity(state.res[g]/cap)`; `drift` random-walked every `marketPhase()`. Score 4.
+
+**G5**: `refugees`/`cistern` choice branches each mutate different state (food/colonists/morale/parts) not just log text. Score 4.
+
+## Summary
+This is an unusually complete, tightly cross-wired submission — nearly every system's output is consumed elsewhere, and the interaction chains (storm→damage→repair, research→yield, shortage→morale→output, trade drift/scarcity, event branching) are all traceable end-to-end in the actual production/consumption code rather than cosmetic. I did not find dead stubs, unused functions, or TODOs.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "simTurn() runs stormPhase/productionPhase/.../endCheck in fixed order using mulb(state)",
+    "F2": "adjCount() bonus read in runBuilding() for condenser/greenhouse/forge",
+    "F3": "forge ins.ore->outs.metal, workshop ins.metal->outs.parts; capsPhase() clamps+logs overflow",
+    "F4": "effOf(c,def) reads c.skill/c.fatigue/c.morale, called from runBuilding()",
+    "F5": "needsPhase() sets state.short; peoplePhase() dm-=12 on shortage, dm+=3 recovery",
+    "F6": "hasR(state,'smelt') etc. read in runBuilding() switch for all 10 RESEARCH ids",
+    "F7": "eventsPhase() weighted draw over 13 EVENTS; eventCd cooldown checked in eligibleEvents()",
+    "F8": "priceOf() uses state.res[g]/capFor and market.drift updated each marketPhase()",
+    "F9": "stormPhase() cuts b.hp; hpMul halves runBuilding() output; doRepair() spends parts",
+    "F10": "exportSave()/importSave() round-trip with field-by-field validation and bad() errors",
+    "F11": "endCheck() sets state.over for win/lose; scoreOf() combines 5 factors; renderModal() shows table",
+    "F12": "onKey() Space/Digit1-6; data-tip + onOver(); @media(max-width:640px)",
+    "F13": "runTestsCore() 19 asserts; benchCore()/runPolicy() headless 200-turn hashState() print",
+    "G1": "hasR(state,'ashAgri') multiplies r.outs.food in runBuilding() greenhouse case",
+    "G2": "state.short.f/w -> peoplePhase() morale dm -> effOf() output multiplier, every turn",
+    "G3": "stormPhase() b.hp-=dmg -> runBuilding() hpMul -> doRepair() -parts, hp=100",
+    "G4": "buyPriceOf/sellPriceOf read priceOf() = BASE_PRICE*drift*scarcity(state.res[g])",
+    "G5": "cistern choices: purge(-40% water) vs filters(-3 parts) vs risk(25% morale/fatigue hit)"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "No functional gap found on read-through; only softness is that slotless buildings (storehouse/wall) can silently lose their bonus when storm-damaged with no distinct UI cue beyond the HP number."
+}
+```
