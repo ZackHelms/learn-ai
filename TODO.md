@@ -1,10 +1,10 @@
 # TODO
 
-The working backlog. Open this when you sit down.
-
-This file is written to be **read cold** — assume no memory of the session that
-produced the repo. [`docs/ROADMAP.md`](docs/ROADMAP.md) covers *what the modules
-are*; this covers *what needs doing*. They deliberately do not overlap.
+The working backlog, written to be **read cold** - assume no memory of the
+session that produced the repo. This root file is a quick read: repo-wide items
+plus pointers to the per-track backlogs. Each active track keeps its own
+`TODO.md` with the details. [`docs/ROADMAP.md`](docs/ROADMAP.md) covers *what
+the modules are*; the TODO files cover *what needs doing*.
 
 ---
 
@@ -26,7 +26,7 @@ bash scripts/pull-roster.sh
 ```
 
 > **Expect the first pull to fail.** The model tags in `models/roster.yaml` were
-> never confirmed against the live registry — see *Unverified tags* below. A 404
+> never confirmed against the live registry - see *Unverified tags* below. A 404
 > means the roster is stale, not that you did something wrong.
 > `scripts/pull-roster.sh` prints the three-step fix.
 
@@ -36,82 +36,28 @@ and record what you get in its
 
 ---
 
-## Decisions pending
+## Where the backlog lives
 
-Mine to make, nobody else's. Each says what happens if left alone, so **silence
-is a valid answer** — these are not blocking.
-
-- [ ] **Ordering: evals at module 03, before the agent loop.**
-      Reasoning in [ROADMAP](docs/ROADMAP.md#two-decisions-about-ordering).
-      *If unchanged:* evals land at 03, and everything downstream gets written
-      to be measurable against the harness built there.
-
-- [ ] **The spine example carried across modules.**
-      Currently proposed: a changelog / release-notes drafter that reads
-      `git log` and emits structured output. Chosen because ground truth is
-      cheap, structured output is where small models fail legibly, and it needs
-      real tools by module 04.
-      *If unchanged:* module 02 onward is written around it. Changing it later
-      means rewriting exercises, not editing a line.
+| Track | Backlog | Status |
+|---|---|---|
+| 01 - Local models | [`track-01-local-models/TODO.md`](track-01-local-models/TODO.md) | decisions pending + empirical gates on module 01 |
+| 02 - Free tier | none - status in [ROADMAP](docs/ROADMAP.md#track-02--free-tier) | module 01 being written live in a separate session (2026-08) |
+| 03 - Claude Pro | none - candidates in [ROADMAP](docs/ROADMAP.md#track-03--claude-pro) | planned, nothing actionable yet |
+| 04 - Benchmark | [`track-04-benchmark/TODO.md`](track-04-benchmark/TODO.md) | **in progress** - eval02-05 being built; details and open questions there |
 
 ---
 
-## Gated on running module 01
-
-Empirical. Not settleable from the armchair, and **module 02 gets written wrong
-if these are guessed at.** Record answers in module 01's field notes.
-
-- [ ] **Is the smallest model usefully bad, or uselessly bad?**
-      The premise of the whole course is that weak models fail *legibly* — that
-      the failure points at its cause. A model emitting pure noise teaches
-      nothing. If rung 0 is noise rather than instructive failure, drop it and
-      start the ladder a rung higher.
-
-- [ ] **Can the top rung complete a multi-step tool loop?**
-      **This is the largest design risk in the curriculum.** Module 04 assumes
-      "a working agent" is reachable on this roster. Nothing in module 01 tests
-      it directly, but Exercise A is the leading indicator: a model that cannot
-      reliably emit a JSON object will not reliably emit a tool call — same
-      capability, different hat.
-      *If it fails:* module 04 needs constrained decoding (llama.cpp GBNF
-      grammars) or heavier scaffolding — and should say so plainly rather than
-      pretend the roster is fine.
-
----
-
-## Repo maintenance
+## Repo-wide maintenance
 
 - [ ] **Clear the `tag_verified: false` flags.** Run `/update-models` from a
       machine with network access. Note the likely failure mode: fixing only the
       one tag that blocked you and leaving the other five stale.
 - [ ] **Test the macOS paths.** Native Ollama on macOS, and Ubuntu-on-Apple-
-      Silicon. Both are currently documented as untested — honest, but untested.
-- [ ] **CI** — `render-roster.py --check` plus a link check on PR. Waiting until
+      Silicon. Both are currently documented as untested - honest, but untested.
+- [ ] **CI** - `render-roster.py --check` plus a link check on PR. Waiting until
       `/verify-docs` has proven itself locally.
-- [ ] **Scheduled freshness check** — monthly job running the `freshness-auditor`
+- [ ] **Scheduled freshness check** - monthly job running the `freshness-auditor`
       subagent, opening an issue when the roster drifts.
-
----
-
-## Track 04 — benchmark backlog
-
-Specs for all four are in [ROADMAP](docs/ROADMAP.md#track-04--benchmark);
-these are the build items, in intended order.
-
-- [ ] **Build eval04 (constraint stack) first** — smallest, no dependencies,
-      becomes the cheap daily driver. Gate before shipping: a reference output
-      proving the 23 satisfiable constraints are actually satisfiable, and
-      flag-scoring that punishes "flag everything".
-- [ ] **Build eval02 (play Ashfall)** — Playwright driver + state/action
-      contract v1 against `reference/ashfall-reference-v1.html`. The contract
-      is versioned like a prompt; the artifact never changes.
-- [ ] **Build eval03 (repair)** — derive the defective file from the reference,
-      seed N defects, write the hidden suite + a reference fix that passes 100%.
-- [ ] **Build eval05 (poisoned context)** — bundle *generator* (event script ->
-      spec/changelog/logs with injected contradictions) so the answer key is
-      derived, not hand-written.
-- [ ] **Track-level scorecard** — once two or more evals exist, a small script
-      aggregating per-eval results into one table per model config.
 
 ---
 
@@ -141,32 +87,9 @@ Web sessions apply an environment network policy that **403s `ollama.com`,
 reachable.
 
 So `/update-models` and the `freshness-auditor` subagent must run from a local
-session, or those hosts need adding to the environment's allowed list — see
+session, or those hosts need adding to the environment's allowed list - see
 <https://code.claude.com/docs/en/claude-code-on-the-web>. The symptom is HTTP
 403, not a DNS failure; don't mistake it for a dead link.
-
-### Library versions, verified from pypi/npm on 2026-07-29
-
-Pulled live from the registries, so these are real rather than recalled. Useful
-when writing modules 03, 07, and 08. Not pinned anywhere in the repo — treat as
-a starting point to re-check, not as gospel.
-
-| Package | Version | Notes |
-|---|---|---|
-| `pydantic-ai` | 2.20.0 | candidate for module 08 |
-| `mcp` (Python) | **2.0.0** | major bump, released 2026-07-28 |
-| `@modelcontextprotocol/sdk` (npm) | 1.30.0 | |
-| `inspect-ai` | 0.3.251 | candidate for module 03 |
-| `deepeval` | 4.1.4 | |
-| `promptfoo` (npm) | 0.121.19 | pypi copy is stale — use npm |
-| `langgraph` | 1.2.10 | |
-| `openai` | 2.50.0 | |
-| `smolagents` | 1.26.0 | |
-| `llama-cpp-python` | 0.3.34 | |
-| `ollama` (client) | 0.6.2 | |
-
-⚠️ **Module 07 must target MCP SDK 2.x.** The 2.0.0 release is recent enough
-that most tutorials surfaced by search will be 1.x.
 
 ### What is actually verified in this repo
 
@@ -180,21 +103,24 @@ exercise's grading logic against handcrafted cases, all relative links and
 anchors.
 
 **Never run:** anything requiring a model. No model was pulled, loaded, or
-benchmarked. That is why the repo ships **zero performance figures** — it ships
+benchmarked. That is why the repo ships **zero performance figures** - it ships
 `scripts/bench.py` and an empty `FIELD-NOTES.md` instead.
 
 The macOS instructions and the llama.cpp appendix are likewise unverified and
-marked as such in the text.
+marked as such in the text. (Track 04 is the exception on model runs: its
+RESULTS files record real model runs with real costs.)
 
 ---
 
 ## Done
 
+- Per-track TODO split: root TODO became repo-wide items + pointers;
+  Track 01 and Track 04 carry their own backlogs, 2026-08-12
 - Track 04 (benchmark): `eval01/` moved to
   `track-04-benchmark/eval01-build-ashfall/` with history
-  ([ADR 0007](docs/decisions/0007-benchmark-track.md)), eval02–05 specced in
+  ([ADR 0007](docs/decisions/0007-benchmark-track.md)), eval02-05 specced in
   ROADMAP, reference artifact frozen from run u35, 2026-08-12
-- Track restructure: top-level `track-NN-slug/` layout, tracks 01–03
+- Track restructure: top-level `track-NN-slug/` layout, tracks 01-03
   ([ADR 0006](docs/decisions/0006-tracks-top-level.md)), 2026-08-08
 - Modules 00 (overview) and 01 (local model lab), with exercises
 - `models/roster.yaml` as single source of truth, with generated-block rendering

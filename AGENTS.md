@@ -113,7 +113,7 @@ track-NN-slug/           one track per directory; README.md + MM-slug/ modules
   track-03-claude-pro/     what Claude Pro unlocks
   track-04-benchmark/      the measuring instrument: evalNN-slug/ modules + frozen reference/ fixtures
 scripts/                 check-env, pull-roster, bench, render-roster (Track 01)
-TODO.md                  the working backlog — actionable items live HERE
+TODO.md                  repo-wide backlog + pointer index; active tracks carry their own TODO.md
 docs/STYLE.md            voice rules + module template  ← read before writing
 docs/ROADMAP.md          curriculum design; track and module specs, ordering
 docs/decisions/          ADRs for load-bearing choices
@@ -146,7 +146,7 @@ docs/decisions/          ADRs for load-bearing choices
 
 | Task | How |
 |---|---|
-| Find what needs doing | Read `TODO.md`. Record new open items there, not in a new file |
+| Find what needs doing | Read `TODO.md`, then the relevant track's own `TODO.md` (linked from root). Record new items in the nearest backlog, never a new file |
 | Refresh models against upstream | `/update-models`, or edit `models/roster.yaml` and re-render |
 | Start a new module | `/new-module`, or copy the template from `docs/STYLE.md` |
 | Check docs are consistent | `/verify-docs` |
