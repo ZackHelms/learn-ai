@@ -1,0 +1,55 @@
+Reading through the source, I traced the colonist→building assignment path since it underlies most production math.
+
+**Worksheet**
+
+- F1: `GameState` is one state object; `PRNG`/`this.rng` seeds all randomness; `endTurn()` runs needs→production→morale→events→caravan→storm in fixed order. Score 2.
+- F2: 8x8 `generateMap()` seeded via `rng.pick`; `canBuildAt` checks terrain. But `adjacencyBonus` multiplier sits *after* the early-return in `calculateProduction` (see G-notes below), so it never executes for any real building. Score 1.
+- F3: Chains defined (`forge`, `greenhouse`) and `STORAGE_CAPS` enforced on buy via `Math.min`. However `calculateProduction()` filters `colonists` by `c.building === "x,y"`, and `c.building` is only ever set inside `assignColonist()`, which has **no call site anywhere** (People tab button has no listener). So `assigned` is always `[]`, and any building with non-empty `produces` hits `if (assigned.length===0 && ...) return;` and never actually produces. Score 1.
+- F4: Colonist records have skill/fatigue/morale/job/assigned — all present, but `c.skill`/`c.fatigue` are only read inside the dead `assigned.forEach` in `calculateProduction`, which never fires (see F3). Score 1.
+- F5: `endTurn()` subtracts food/water per colonist directly from `resources` (not gated by the assignment bug), shortage does `c.morale -= 10`, recovery via `morale += 3` when unassigned — these work. But "morale changes output" relies on the same dead `moraleFactor` code path. Score 1.
+- F6: 8 `RESEARCH_NODES`, prereqs enforced in `canResearch`, costs deducted in `doResearch`. Working effects: `shieldtech` (used in `triggerAshstorm`), `recycling` (mutates `STORAGE_CAPS`). `ashharv`/`alloy`/`hydroponics` modify `prod` which is always 0 (dead production); `advpropulsion` and `morale` node are never read anywhere. Score 1.
+- F7: 12 `EVENTS`, weighted pick in `fireEvent()`, 7 events with 2 choices mapping to distinct outcome cases in `resolveEventChoice`, cooldown via `eventCooldowns[name]=turn+5`. Score 2.
+- F8: Price uses `game.resources[res]/STORAGE_CAPS[res]` (real stockpile factor); `globalPriceDrift` never mutates anywhere (dead). Buy button (inline onclick) works but never decrements `caravanInventory[res]`, and there is no sell control/handler at all. Score 1.
+- F9: `triggerAshstorm()` fires every 7 turns, severity scales with `turn`, `shieldtech` reduces damage — all real. `output -= tile.damage*0.3` sits after the same dead early-return as adjacency, so damage never actually reduces output; no `repair` function exists anywhere. Score 1.
+- F10: No save/export/import UI or function; `.save-load-section`/`.textarea-input` CSS classes are defined but never rendered or referenced by any JS. Score 0.
+- F11: Win (`turn>=61` + pop/food/water) and lose (`colonists.length===0`, or failed win check) both reachable in `endTurn`; `renderEndScreen` computes a multi-factor score and renders a summary. Score 2.
+- F12: Tab switching wired via `data-tab` listeners; log lines prefixed `[T${turn}]`; keyboard shortcuts (Space, Digit1-5) real; `@media` responsive rules present. Tooltip is just native `tileDiv.title` (coords/terrain), doesn't explain production numbers. Score 1.
+- F13: `runTests()` checks 15 real invariants (caps, bounds, prereqs, PRNG determinism); `runBenchmark()` runs 200 headless `endTurn()` calls and prints `stateHash()`. Score 2.
+
+- G1: `applyResearch` multiplies `prod.metal`/`prod.food` by research flags, but `prod` is always all-zero because `calculateProduction`'s early-return blocks every producing building (no `c.building` ever gets set). Multiplying 0 by 1.3 is invisible to the player. Score 1.
+- G2: Shortage→morale drop is real (`resources.food<foodNeed` → `c.morale-=10`), but morale→output link is inside the same dead `assigned.forEach`. Matches rubric's own "damage but no output loss → at most 1" precedent. Score 1.
+- G3: `triggerAshstorm` sets `tile.damage` (real state change); damage→output-loss code is unreachable (dead branch); no repair function exists anywhere to spend resources/restore output. Score 1.
+- G4: `inventoryFactor = 1 + resources[res]/STORAGE_CAPS[res]*0.5` reads live stockpile each render in `renderTradeTab`; `globalPriceDrift` is declared but never updated (dead half, but "and/or" is satisfied by the stockpile factor). Score 3.
+- G5: `Equipment Failure` (`costParts` vs `gainScrip`) and `Medical Emergency` (`costFood` vs `loseColonist`) each write distinct resource/colonist mutations in `resolveEventChoice`, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 0, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 1, "G2": 1, "G3": 1, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "GameState + PRNG(this.rng); endTurn() resolves needs->production->morale->events->storm in order",
+    "F2": "canBuildAt() checks terrain; adjacencyBonus multiplier unreachable (see F3 bug)",
+    "F3": "calculateProduction() filters colonists by c.building, which assignColonist() (never called) is the only setter of",
+    "F4": "colonist fields present; c.skill/c.fatigue only read inside dead assigned.forEach in calculateProduction",
+    "F5": "endTurn subtracts food/water, shortage sets c.morale-=10, recovery via morale+=3 when unassigned",
+    "F6": "shieldtech read in triggerAshstorm(), recycling mutates STORAGE_CAPS; alloy/hydroponics/ashharv act on always-zero prod",
+    "F7": "EVENTS weighted pick in fireEvent(); resolveEventChoice branches on choice.outcome; eventCooldowns[name]=turn+5",
+    "F8": "trade price uses resources[res]/STORAGE_CAPS[res]; buy onclick never decrements caravanInventory; no sell code exists",
+    "F9": "triggerAshstorm() called every 7 turns w/ severity=turn/15; damage-output link and repair() are unreachable/absent",
+    "F10": "no save/export/import function or rendered UI anywhere despite CSS classes existing",
+    "F11": "endTurn sets won/gameOver from turn/pop/food/water; renderEndScreen sums populationScore+researchScore+... ",
+    "F12": "tab-button listeners set currentTab; log entries prefixed [T${turn}]; keydown handles Space/Digit1-5",
+    "F13": "runTests() asserts 15 invariants; runBenchmark() runs 200 endTurn() calls headless and prints stateHash()",
+    "G1": "applyResearch() multiplies prod.metal by 1.3 but prod is always 0 due to F3 assignment bug",
+    "G2": "resources.food<foodNeed -> c.morale-=10 works; moraleFactor read only inside dead assigned.forEach",
+    "G3": "triggerAshstorm sets tile.damage; output-=damage*0.3 unreachable; no repair function found anywhere",
+    "G4": "renderTradeTab computes price from resources[res]/STORAGE_CAPS[res] every render call",
+    "G5": "resolveEventChoice: costFood vs loseColonist, costParts vs gainScrip each mutate different state fields"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "assignColonist() is never called from any UI handler, so every colonist keeps c.building=null forever, which makes calculateProduction() skip all producing buildings and leaves the entire economy, research-yield, and storm-damage-to-output chains permanently dead."
+}
+```

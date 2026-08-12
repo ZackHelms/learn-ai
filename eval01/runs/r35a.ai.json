@@ -1,0 +1,65 @@
+**F1 Core loop**: GameState (window.game) + mulberry32 seeded rng used in generateMap/colonists/events; processTurn() calls fixed sequence of 9 sub-systems. Score 2
+
+**F2 Map**: generateMap() loops 8x8 using this.rng(); canBuildAt() checks tile.terrain; getAdjacencyBonus() feeds outMult in processProduction(). Score 2
+
+**F3 Economy**: greenhouse consumes water (from condenser) to make food, lab consumes power to make scrip; resourceCaps checked/enforced with overflow event in processProduction(). Score 2
+
+**F4 Population**: colonists have skillLevel/fatigue/morale/job via buildingAssignments; skillMult & fatigue read in processProduction() outMult formula. Score 2
+
+**F5 Needs**: consumeNeeds() decrements food/water; updateMorale() -15 per unmet need; moraleFactor used in processProduction(); morale recovers +5 when >80 and via shelter's prod.morale. Score 2
+
+**F6 Research**: 8 nodes in initResearch(); prereq checked in completeResearch(); but only 5/8 nodes (advanced-farming, water-treatment, power-cell, fusion-core, ashfall-shielding) have any coded effect — smelting/mining-tools/hydroponics are dead. Score 1
+
+**F7 Events**: processEvents() only defines 4 events (not 10+), uniform not weighted selection, no player-choice branches, no cooldown tracking. Score 1
+
+**F8 Trade**: tradeWith() buy/sell work, caravanInventory limited & decremented; but globalSupplyDrift stays `{}` forever (no keys ever added), so tradePrices never actually respond to stockpile/drift. Score 1
+
+**F9 Hazard**: processAshstorms() damages building.health, but severity calc uses `this.turn-this.lastAshstorm` *after* setting lastAshstorm=turn, always yielding severity=1; building.health never read in processProduction(); no repair function exists anywhere. Score 1
+
+**F10 Save/load**: serialize() -> JSON textarea; loadFromText() calls GameState.deserialize(), catches parse errors and alerts message. Score 2
+
+**F11 End conditions**: checkGameOver() has WIN (turn/pop/resources) and LOSE (colonists=0) branches; calculateScore() combines pop/research/resources/turn; showGameOverModal() renders differing summaries. Score 2
+
+**F12 UI**: renderTabs() switches panels; log entries show `[entry.turn]`; tile tooltip shows adjacency %; attachKeyboardShortcuts() (Space, 1-6); @media(max-width:600px) rules adapt layout. Score 2
+
+**F13 Dev panel**: runTests() checks 10 real invariants (caps, prereqs, save/load roundtrip, ranges); runBenchmark() runs headless GameState loop 200 turns and prints stateHash(). Score 2
+
+**G1**: No production-yield read of any research flag; completeResearch() only touches resourceCaps/one-time power add, processProduction() never references research object. Score 0
+
+**G2**: consumeNeeds() shortage -> updateMorale() -15 -> moraleFactor in processProduction() reduces outMult same turn, sequenced correctly in processTurn(). Score 4
+
+**G3**: processAshstorms() sets buildings[key].health down, but processProduction() never reads building.health, and no repair function exists anywhere. Score 1
+
+**G4**: tradePrices only mutated via globalSupplyDrift loop, but that object is initialized `{}` and never gets keys added anywhere — prices are permanently static. Score 0
+
+**G5**: processEvents() events array has no player-facing choices (all auto-resolved via impact()); .choice-buttons CSS class is never instantiated in JS. Score 0
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 0, "G2": 4, "G3": 1, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "GameState + mulberry32(seed) rng; processTurn() calls 9 subsystems in fixed order",
+    "F2": "generateMap() 8x8 via rng; canBuildAt() checks terrain; getAdjacencyBonus() used in processProduction()",
+    "F3": "greenhouse consumes water for food, lab consumes power for scrip; resourceCaps enforced with overflow logging",
+    "F4": "colonist.skillLevel/fatigue read in processProduction() outMult; buildingAssignments = job",
+    "F5": "consumeNeeds() shortage -> updateMorale() -15; moraleFactor used in processProduction()",
+    "F6": "initResearch() 8 nodes, completeResearch() enforces prereq/cost; only 5/8 nodes have any coded effect",
+    "F7": "processEvents() has only 4 hardcoded events, uniform random, no choices, no cooldown",
+    "F8": "tradeWith() buy/sell work but globalSupplyDrift never populated so tradePrices never actually drift",
+    "F9": "processAshstorms() damages building.health but severity always =1 (order bug), no repair fn, health unused in production",
+    "F10": "serialize()/GameState.deserialize() with try/catch alert('Invalid: '+e.message) in loadFromText()",
+    "F11": "checkGameOver() WIN/LOSE both reachable; calculateScore() combines pop/research/resources/turn; showGameOverModal()",
+    "F12": "renderTabs() tab switch; log shows [entry.turn]; attachKeyboardShortcuts(); @media 600px rules",
+    "F13": "runTests() 10 real invariant checks; runBenchmark() headless 200-turn loop prints stateHash()",
+    "G2": "consumeNeeds shortage sets foodConsumed=false -> updateMorale() -15 -> moraleFactor reduces processProduction() outMult same turn",
+    "G3": "processAshstorms() reduces buildings[key].health but processProduction() never reads .health, no repair function exists",
+    "G1": "no code in processProduction() reads any research completion flag; research only touches caps/one-time power"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Several systems (research effects, event choices, trade price drift, storm damage->output link, repair) exist as data/UI but their core state-mutation wiring is missing or dead code, so most cross-system chains besides needs->morale->output don't actually fire."
+}
+```

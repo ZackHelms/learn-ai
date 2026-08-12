@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `state` object holds all data; `makeRng()` mulberry32-style PRNG used for all randomness; `endTurn()` calls resolveProduction→resolveNeeds→rollEvent→finishTurnTail (fixed order). Score 2.
+
+**F2 — Map**: `genGrid()` builds 64 tiles from `rng.next()`; `canBuild()` checks `b.terrain.includes(tile.terrain)`; `adjacencyMultiplier()` multiplies `out` in `resolveProduction()`. Score 2.
+
+**F3 — Economy**: ore→metal (forge consumes `ore,power`), soil→food (greenhouse consumes `soil,water`), ash→soil (ashfield). `RES_CAPS` enforced with overflow logged (`overflow>0.05`). Score 2.
+
+**F4 — Population**: colonists have `skill,fatigue,morale,job,tile`; `skillMul` and `moraleFactor(worker.morale)` used in `resolveProduction`; `gainSkill` reads `worker.fatigue<80`. Score 2.
+
+**F5 — Needs**: `resolveNeeds()` subtracts food/water per colonist; shortage sets `moraleDelta-=8`; `moraleFactor()` consumed in production; recovery via `fatigue<40` morale gain. Score 2.
+
+**F6 — Research**: 11 nodes in `RESEARCH`; `canResearch()` checks prereqs; `doResearch()` deducts cost; effects read elsewhere (`metallurgy`→forge*1.25, `tradeRoutes`→`tradeBonus`, `masonry`→`popCap`). Score 2.
+
+**F7 — Events**: 12 events in `EVENTS`; weighted pick via `totalWeight`/`r-=e.weight`; 6 events (`wanderers`,`sickness`,`dispute`,`toxiccloud`,`drifter`,`malfunction`) have 2-choice branches; `events.cooldowns` gates re-selection. Score 2.
+
+**F8 — Trade**: `priceFor()` uses `supplyDemand` (drifts) and stock `pressure`; `refreshCaravanInventory` limited qty decremented in `tradeBuy`; both `tradeBuy`/`tradeSell` implemented. Score 2.
+
+**F9 — Hazard**: `resolveStorm()` fires on `nextStorm` schedule, `severity` scales with `st.turn`; `disabledTurns>0` blocks production; `mitigationFactor()` reads stormwall building/research; `doRepair` costs parts and restores. Score 2.
+
+**F10 — Save/load**: `serialize()` dumps full JSON to textarea; `deserialize()` validates required fields and returns clear `msg` on bad input, shown via `saveMsg`. Score 2.
+
+**F11 — End conditions**: `checkEndConditions()` sets `phase='won'`/`'lost'`, both reachable; `computeScore()` combines pop/research/stock/turn; `renderEndScreen()` shows summary modal. Score 2.
+
+**F12 — UI**: `switchTab()` wired to tab buttons and keys `1-5`; `log.turn` shown per line; `tip()` used extensively; `Space` ends turn; `@media(max-width:400px)` layout. Score 2.
+
+**F13 — Dev panel**: `runTests()` asserts real invariants (terrain enforcement, prereq enforcement, morale/shortage, save/load hash equality); `runBenchmark()` runs 200 headless turns via `greedyPolicyTurn`, prints `stateHash`. Score 2.
+
+**G1**: `st.research.metallurgy.done` read in `resolveProduction()` to multiply forge `out` every turn; visible via research tag UI. Score 4.
+
+**G2**: shortage in `resolveNeeds()` drops `c.morale`; `moraleFactor(worker.morale)` multiplies output next turn in `resolveProduction()`. Score 4.
+
+**G3**: storm damages `tile.hp`; only `disabledTurns>0` (from hp hitting 0) blocks output — partial hp damage has no output effect; `doRepair` restores hp/disabledTurns. Binary linkage, not graduated. Score 2.
+
+**G4**: `priceFor()` reads `st.trade.supplyDemand[res]` (drifted every turn in `tickTrade`→`driftSupplyDemand`) and `stock/cap` pressure from player resources. Score 4.
+
+**G5**: `wanderers`/`drifter` choices call `addColonist`/adjust `res.scrip`/`res.food`; `malfunction` choice sets `tile.hp`/`disabledTurns` — durable state, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 2, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "makeRng() PRNG; endTurn() calls resolveProduction/resolveNeeds/rollEvent/finishTurnTail in fixed order",
+    "F2": "genGrid() from rng; canBuild() checks terrain; adjacencyMultiplier() used in resolveProduction",
+    "F3": "forge consumes ore+power, greenhouse consumes soil+water; RES_CAPS enforced with overflow log",
+    "F4": "skillMul/moraleFactor(worker.morale) in resolveProduction; gainSkill reads worker.fatigue",
+    "F5": "resolveNeeds subtracts food/water, shortage sets moraleDelta-=8, moraleFactor read in production",
+    "F6": "canResearch/doResearch gate+deduct; metallurgy.done and tradeRoutes.done read in production/priceFor",
+    "F7": "EVENTS weighted pick via totalWeight; 6 choice events; events.cooldowns gates re-selection",
+    "F8": "priceFor() reads supplyDemand+stock pressure; tradeBuy/tradeSell both implemented with limited inventory",
+    "F9": "resolveStorm severity scales with turn; disabledTurns blocks production; doRepair restores",
+    "F10": "serialize()/deserialize() with required-field validation and saveMsg error display",
+    "F11": "checkEndConditions sets won/lost; computeScore combines state; renderEndScreen shows summary",
+    "F12": "switchTab wired to buttons+keys 1-5; tip() tooltips; Space shortcut; media query layout",
+    "F13": "runTests asserts real invariants; runBenchmark runs 200 headless turns and prints stateHash",
+    "G1": "research.metallurgy.done multiplies forge out in resolveProduction every turn",
+    "G2": "shortage lowers c.morale in resolveNeeds; moraleFactor(morale) multiplies output next turn",
+    "G3": "storm reduces tile.hp but only disabledTurns (hp=0) blocks output; doRepair restores both",
+    "G4": "priceFor reads drifting supplyDemand and stock/cap pressure from player resources",
+    "G5": "wanderers/drifter choices call addColonist/mutate res; malfunction sets tile.hp/disabledTurns"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Storm damage to buildings is effectively binary (only full disable via hp=0 stops output), so partial hp damage never reduces production."
+}
+```

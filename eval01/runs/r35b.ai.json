@@ -1,0 +1,69 @@
+# Worksheet
+
+**F1 (Core loop):** GameState holds all state; mulberry32(seed) rng used throughout (no Math.random found); processTurn() calls consumeNeeds→updateMorale→processProduction→updateSkills→recoverFatigue→processTradeCaravan→processEvents→processAshstorms→checkGameOver in fixed order. Score 2.
+
+**F2 (Map):** generateMap fills 64 tiles from rng; canBuildAt checks terrain against requirements map; getAdjacencyBonus computes bonus read by processProduction's outMult. Score 2.
+
+**F3 (Economy):** condenser(power→water) then greenhouse(water→food) is a real 2-step chain; resourceCaps enforced with overflow event in processProduction. Score 2.
+
+**F4 (Population):** colonists have skill/skillLevel/fatigue/morale; buildingAssignments = job; skillMult and fatigue read in processProduction. Score 2.
+
+**F5 (Needs):** consumeNeeds tracks foodConsumed/waterConsumed; updateMorale drops morale on shortage; moraleFactor used in production formula; shelter/high-morale bonus allow recovery. Score 2.
+
+**F6 (Research):** 8 nodes, prereq check in completeResearch, cost deducted; only 5/8 nodes (advanced-farming, water-treatment, power-cell, fusion-core, ashfall-shielding) have real effects, mining-tools/smelting/hydroponics do nothing. Score 1.
+
+**F7 (Events):** processEvents has only 4 hardcoded events, uniform (not weighted) selection via Math.floor(rng()*events.length), no choices, no cooldown tracking. Score 1.
+
+**F8 (Trade):** tradeWith handles buy/sell both ways, caravanInventory limited qty; but globalSupplyDrift is initialized `{}` and never gets keys, so its drift loop in generateCaravanInventory never runs — prices are effectively static. Score 1.
+
+**F9 (Hazard):** processAshstorms fires periodically, ashfall-shielding halves damage; but severity is computed AFTER `lastAshstorm=this.turn`, making `(turn-lastAshstorm)` always 0, so severity is stuck at 1; building.health is never read by processProduction; no repair function exists anywhere. Score 1.
+
+**F10 (Save/load):** serialize() → JSON textarea; loadFromText calls GameState.deserialize wrapped in try/catch, shows alert on bad JSON. Score 2.
+
+**F11 (End conditions):** checkGameOver has lose (colonists.length===0) and win (turn≥60, pop≥12, food/water>50) both reachable; calculateScore uses multiple state fields; showGameOverModal renders distinct WIN/LOSE summaries. Score 2.
+
+**F12 (UI):** renderTabs wires click handlers; log entries show `[turn]`; tile tooltips show terrain/health/adjacency; keyboard 1-6 and Space wired in attachKeyboardShortcuts; @media(max-width:600px) present. Score 2.
+
+**F13 (Dev panel):** runTests asserts caps, non-negative resources, prereq enforcement, colonist ranges, save/load roundtrip — real invariants; runBenchmark runs 200 headless processTurn() calls and prints stateHash(). Score 2.
+
+**G1:** research completion special-cases (advanced-farming/water-treatment/power-cell raise caps, fusion-core injects power per reactor) mutate state, but processProduction's outMult never reads any research flag — no continuous yield formula link. Score 2.
+
+**G2:** consumeNeeds sets foodConsumed=false → updateMorale (-15) → moraleFactor=colonist.morale/100 read in processProduction's outMult every turn. Score 4.
+
+**G3:** processAshstorms reduces building.health, but processProduction never reads building.health (damaged buildings produce at full rate) and no repair function exists anywhere. Score 1.
+
+**G4:** tradePrices set once from constants; globalSupplyDrift starts `{}` and is never populated with keys, so the drift-update loop in generateCaravanInventory is dead code — prices never move. Score 0.
+
+**G5:** no event in processEvents offers player choices (all use automatic `impact()`); `.choice-buttons` CSS class has no JS wiring anywhere. Score 0.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 2, "G2": 4, "G3": 1, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "processTurn() calls systems in fixed order using mulberry32 rng exclusively",
+    "F2": "getAdjacencyBonus() read in processProduction() to scale outMult",
+    "F3": "condenser(power->water) feeds greenhouse(water->food); overflow logged in processProduction",
+    "F4": "colonist.skillLevel/fatigue read via skillMult/outMult in processProduction",
+    "F5": "foodConsumed=false -> updateMorale delta -15 -> moraleFactor in outMult",
+    "F6": "completeResearch() only applies effects for 5/8 nodes (advanced-farming, water-treatment, power-cell, fusion-core, ashfall-shielding)",
+    "F7": "processEvents() has only 4 hardcoded events, uniform random pick, no choices/cooldown",
+    "F8": "globalSupplyDrift={} never gains keys so drift loop in generateCaravanInventory never executes",
+    "F9": "severity computed after lastAshstorm=this.turn, always evaluates to 1; building.health unused in production",
+    "F10": "serialize()/GameState.deserialize() with try/catch alert on bad paste",
+    "F11": "checkGameOver() WIN/LOSE both reachable; calculateScore() feeds showGameOverModal()",
+    "F12": "renderTabs() click handlers, attachKeyboardShortcuts() 1-6/Space, @media(max-width:600px)",
+    "F13": "runTests() checks caps/prereqs/ranges; runBenchmark() runs 200 headless processTurn() + stateHash()",
+    "G1": "completeResearch() special-cases raise resourceCaps/inject power, but processProduction never reads research flags",
+    "G2": "foodConsumed false -> updateMorale -15 -> moraleFactor read in processProduction outMult",
+    "G3": "processAshstorms reduces building.health but processProduction ignores health; no repair function exists",
+    "G4": "tradePrices static since globalSupplyDrift's key-driven update loop never runs (dict starts empty)",
+    "G5": "no event choice UI/branches exist; choice-buttons class unused in JS"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ashstorm building damage never reduces production and no repair mechanism exists at all, breaking the entire hazard-recovery chain despite health being tracked."
+}
+```

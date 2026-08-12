@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `S` state object, `RNG`/`mulberry32` used for all randomness (test asserts no Math.random), `endTurn()` resolves storm→repair→production→storage→consumption→morale→skill→pop→events→market→end in fixed documented order. Score 2.
+
+**F2 Map**: 64-tile grid, terrain from `newState` RNG seeded by `seed^0x9e3779b9`, `canBuild()` checks `B.terr.indexOf(t.t)`, adjacency (`adjInfo`) changes `outs[r]` in `tileRates()`, consumed by production loop. Score 2.
+
+**F3 Economy**: chains ash→soil→food (ashworks→composter→greenhouse), ore→metal (mine/forge); `storageCap()` clamps resources, overflow tracked in `st.stats.overflow` and logged. Score 2.
+
+**F4 Population**: colonist records `{skill,fatigue,morale,job,tile}`; `workerFactor()` reads skill/fatigue/morale, used in `crewFactor()`→production. Score 2.
+
+**F5 Needs**: `needF/needW` vs `st.res`, `st.shortage` set, shortage cuts morale (`d-=16*mm`), morale recovers when surplus (`d+=4`). Score 2.
+
+**F6 Research**: 11 nodes, `canResearch` enforces `N.pre`, `doResearch` deducts cost, `techMult()` applied in `tileRates`, plus `stormMitigation`/`moraleLossMult`/tech-gated buildings. Score 2.
+
+**F7 Events**: 12 events, weighted roll (`deck.reduce`+`roll`), 5 events (vein, refugees, leak, dustlung, sabotage) have differing-outcome choices, `st.eventCd` cooldowns. Score 2.
+
+**F8 Trade**: `price()` reads `st.res[r]`/cap and `market.drift`; `c.inv` limited and decremented by `tradeBuy`; `tradeSell`/`tradeBuy` both wired to UI buttons. Score 2.
+
+**F9 Hazard**: storm at `st.turn>=storm.next`, `sev` scales with turn, `damageMult(t)` cuts output in `tileRates`, `stormwalls`/`reinforced`/windbreak mitigate, `repair()` spends parts. Score 2.
+
+**F10 Save/load**: `serialize()`→textarea, `deserialize()` validates shape with specific thrown errors shown in `saveMsg`. Score 2.
+
+**F11 End conditions**: `checkEnd()` checks pop<=0 (lose) and turn>=60 with pop/food/water/morale bar (win/lose), `scoreOf()` combines pop/research/turn/stock/morale, `renderEndModal()` summary. Score 2.
+
+**F12 UI**: `wire()` tab clicks, log entries show `T+e.t`, extensive `data-tip` tooltips with computed breakdowns, keydown handles Space/1-6, `@media(max-width:420px)` layout. Score 2.
+
+**F13 Dev panel**: `runTests()` 26 real-invariant assertions (roster/tile consistency, save round-trip, research raising production, morale reducing output), `runBenchmark()` headless 200-turn loop with `stateHash()`. Score 2.
+
+**G1**: `techMult(st,bk,res)` reads `st.research.*`, applied inside `tileRates()` output calc every production pass. Score 4.
+
+**G2**: shortage flags from consumption step feed `d-=16*mm` on colonist morale; `workerFactor` morale term feeds `crewFactor`→`tileRates` output each turn. Score 4.
+
+**G3**: storm sets `t.dmg`; `damageMult`/`dmg>=3` exclusion cuts/zeroes output in `tileRates`; `repair()` spends parts and resets `dmg=0` restoring full output. Score 4.
+
+**G4**: `price()` multiplies `BASE_PRICE` by `market.drift[r]` (random-walked each turn) and by stockpile scarcity term `(1.45-0.75*stock/cap)`. Score 4.
+
+**G5**: event choice `apply()` functions mutate `st.res`, `st.colonists` (push/splice, fatigue, morale) directly, e.g. `vein`/`refugees`/`dustlung` branches differ in state writes. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "RNG/mulberry32 seeds S.rng.s, endTurn() runs fixed documented resolution order",
+    "F2": "canBuild() checks B.terr, adjInfo()/tileRates() adjMult/adjAdd change outs[r]",
+    "F3": "ashworks->composter->greenhouse chain; storageCap() clamps, stats.overflow logged",
+    "F4": "colonist {skill,fatigue,morale}; workerFactor() reads them, used in crewFactor()",
+    "F5": "st.shortage.food/water set in consumption step, reduces morale via d-=16*mm; recovers via d+=4",
+    "F6": "techMult() reads st.research flags, applied in tileRates() output calc",
+    "F7": "EVENTS[] weighted roll in endTurn(); 5 choice events; st.eventCd cooldown",
+    "F8": "price() reads st.res/cap and market.drift; tradeBuy/tradeSell decrement/increment c.inv",
+    "F9": "storm loop sets t.dmg; damageMult() cuts tileRates output; repair() spends parts",
+    "F10": "serialize()/deserialize() with explicit thrown errors shown in #saveMsg",
+    "F11": "checkEnd() win/lose both reachable (tests 25/26); scoreOf() + renderEndModal()",
+    "F12": "wire() tab clicks, data-tip tooltips, keydown Space/1-6, @media narrow layout",
+    "F13": "runTests() 26 invariant asserts; runBenchmark() headless loop prints stateHash()",
+    "G1": "techMult(st,bk,res) read inside tileRates() every production pass",
+    "G2": "shortage flags -> colonist morale d-=16*mm -> workerFactor morale term -> crewFactor output",
+    "G3": "storm sets t.dmg -> damageMult cuts tileRates -> repair() spends parts, resets dmg=0",
+    "G4": "price() = BASE_PRICE * market.drift[r] * stock/cap scarcity term",
+    "G5": "event choice apply() functions mutate st.res/st.colonists directly, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Homelessness morale penalty uses array index (idx>=house) rather than tracking which specific colonists are actually unhoused, a minor logic looseness in an otherwise tightly wired system."
+}
+```

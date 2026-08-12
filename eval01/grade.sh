@@ -17,10 +17,12 @@
 #     ~/.claude/settings.json (e.g. "plan") cannot hijack the grader into
 #     "writing the grading to the plan file" instead of answering
 #   - every reply is vetted with eval_ashfall.load_ai - the same parser
-#     listscore.py and --merge use. An unusable reply is retried once, then
-#     parked at runs/<stem>.ai.json.rejected with no .ai.json written, so
-#     re-running the same sweep re-grades only what is missing (existing
-#     outputs SKIP, which is not counted as a failure)
+#     listscore.py and --merge use. An unusable reply is retried (MAX_ATTEMPTS
+#     at the top of the file), then parked at runs/<stem>.ai.json.rejected with
+#     no .ai.json written, so re-running the same sweep re-grades only what is
+#     missing (existing outputs SKIP, which is not counted as a failure)
+#   - args whose candidate HTML does not exist are reported as ERROR and
+#     skipped; the rest are still graded, and the exit code stays nonzero
 #
 # Parallel jobs share nothing except the server-side prompt cache, which reuses
 # identical prefix tokens for speed/cost and cannot carry content between requests.
@@ -37,6 +39,7 @@ EFFORT="high"
 SUFFIX=""
 JOBS=5
 FORCE=0
+MAX_ATTEMPTS="${MAX_ATTEMPTS:-2}"   # tries per grading run before parking the reply as .rejected
 
 usage() {
   cat <<'EOF'
@@ -87,11 +90,20 @@ mkdir -p "$FAIL_DIR" "$SKIP_DIR"
 trap 'rm -rf "$WORKDIR"' EXIT
 
 reply_has_scores() {
-  # Acceptance check for a grader reply: exactly what listscore.py and
-  # eval_ashfall.py --merge will run on it later.
-  PYTHONPATH="$SCRIPT_DIR" python3 -c \
-    'import sys; from eval_ashfall import load_ai; load_ai(sys.argv[1])' \
-    "$1" >/dev/null 2>"$2"
+  # Acceptance check for a grader reply: the same parser listscore.py and
+  # eval_ashfall.py --merge run later, PLUS completeness - all 13 F and 5 G
+  # items must be present. load_ai tolerates skipped items (scored 0) so a
+  # human doing a manual --merge is never blocked, but accepting such a reply
+  # here silently drags the candidate's average down (set3 r32c: the grader
+  # skipped all 13 F items, scoring 5/46 against siblings at 24-25). An
+  # incomplete reply is a failed attempt: retry, then park as .rejected.
+  PYTHONPATH="$SCRIPT_DIR" python3 -c '
+import sys
+from eval_ashfall import load_ai
+missing = load_ai(sys.argv[1])[3]
+if missing:
+    raise SystemExit("incomplete grader reply: skipped %s" % ",".join(missing))
+' "$1" >/dev/null 2>"$2"
 }
 
 echo "grader: model=$MODEL effort=$EFFORT suffix='$SUFFIX' jobs=$JOBS" >&2
@@ -114,9 +126,9 @@ resolve_arg() {
         RES_SFX="${stem#"$cand"}"
         return 0
       fi
-      echo "error: $arg: no candidate found (tried $stem.html, $cand.html)" >&2 ;;
+      echo "ERROR: $arg: no candidate found (tried $stem.html, $cand.html)" >&2 ;;
     *)
-      echo "error: $arg: no candidate found (tried $stem.html)" >&2 ;;
+      echo "ERROR: $arg: no candidate found (tried $stem.html)" >&2 ;;
   esac
   return 1
 }
@@ -154,7 +166,7 @@ grade_one() {
 
   echo "[$tag] grading -> $out" >&2
   local attempt note
-  for attempt in 1 2; do
+  for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     t0="$(date +%s)"
     # Empty cwd on purpose: no CLAUDE.md, no project settings, no repo memory.
     # Explicit permission mode on purpose: without one, the user's settings
@@ -175,14 +187,14 @@ grade_one() {
       echo "[$tag] OK -> $out ($((t1 - t0))s)$note" >&2
       return 0
     fi
-    if [ "$attempt" -eq 1 ]; then
-      echo "[$tag] RETRY: attempt 1 unusable after $((t1 - t0))s (claude rc=$rc)" >&2
+    if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+      echo "[$tag] RETRY: attempt $attempt unusable after $((t1 - t0))s (claude rc=$rc)" >&2
     fi
   done
 
   if [ -s "$reply" ]; then
     mv "$reply" "$out.rejected"
-    echo "[$tag] FAIL: no usable F/G scores after 2 attempts; reply kept at $out.rejected" >&2
+    echo "[$tag] FAIL: no usable F/G scores after $MAX_ATTEMPTS attempts; reply kept at $out.rejected" >&2
     tail -n 2 "$job_dir/validate.err" >&2 || true
   else
     echo "[$tag] FAIL: claude exited $rc with an empty reply; stderr tail:" >&2
@@ -192,20 +204,30 @@ grade_one() {
   return 1
 }
 
-# Resolve every arg before starting anything, so a typo in a 25-job sweep
-# fails fast instead of surfacing minutes in.
+# Resolve every arg before starting anything. Args whose candidate is missing
+# are reported as ERROR and skipped - the rest still get graded (a failed
+# generation must not block grading its siblings). They count as failures in
+# the summary and the exit code. Only when NOTHING resolves (e.g. a typoed
+# sweep) does the script stop before spending any grading calls.
 CANDS=()
 SFXS=()
-bad=0
+missing=0
 for arg in "$@"; do
   if resolve_arg "$arg"; then
     CANDS+=("$RES_CAND")
     SFXS+=("$RES_SFX")
   else
-    bad=1
+    missing=$((missing + 1))
+    : > "$FAIL_DIR/missing_$(echo "$arg" | tr '/' '_')"
   fi
 done
-if [ "$bad" -ne 0 ]; then exit 1; fi
+if [ "${#CANDS[@]}" -eq 0 ]; then
+  echo "ERROR: none of the $# argument(s) resolved to a candidate - nothing to grade" >&2
+  exit 1
+fi
+if [ "$missing" -gt 0 ]; then
+  echo "ERROR: $missing argument(s) have no candidate file (see above); grading the ${#CANDS[@]} that do" >&2
+fi
 
 i=0
 while [ "$i" -lt "${#CANDS[@]}" ]; do
@@ -221,8 +243,13 @@ while [ "$i" -lt "${#CANDS[@]}" ]; do
 done
 wait
 
-failures="$(find "$FAIL_DIR" -type f | wc -l)"
+failures="$(find "$FAIL_DIR" -type f | wc -l)"   # includes missing-candidate args
 skips="$(find "$SKIP_DIR" -type f | wc -l)"
-total="${#CANDS[@]}"
-echo "done: $((total - failures - skips)) graded, $skips skipped (existing), $failures failed" >&2
+total=$#
+graded=$((total - failures - skips))
+if [ "$missing" -gt 0 ]; then
+  echo "done: $graded graded, $skips skipped (existing), $failures failed ($missing of them: candidate missing)" >&2
+else
+  echo "done: $graded graded, $skips skipped (existing), $failures failed" >&2
+fi
 [ "$failures" -eq 0 ]

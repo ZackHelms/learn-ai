@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `S` single state object; `RNG` class (mulberry32) used everywhere via `st.rng.s`; `endTurn()` resolves storm→production→storage→consumption→morale→skill→departures→events→market→checkEnd in fixed order. Score 2.
+
+**F2 Map**: 64 tiles (8x8) generated from `new RNG(seed^0x9e3779b9)`; `canBuild()` checks `B.terr.indexOf(t.t)`; `adjInfo`/`tileRates` apply `adjMult`/`adjAdd` to real output numbers. Score 2.
+
+**F3 Economy**: ash→soil (ashworks→composter) and soil+water→food (greenhouse), ore→metal (forge); `storageCap()` enforced, overflow tracked in `st.stats.overflow`. Score 2.
+
+**F4 Population**: `makeColonist` gives skill/fatigue/morale/job; `workerFactor(c)` reads skill/fatigue/morale, feeds `crewFactor`→`tileRates`. Score 2.
+
+**F5 Needs**: `needF/needW` consumption in `endTurn`; `st.shortage.food` drops morale (`d-=16*mm`); morale feeds `workerFactor`; recovery via `d+=4` when no shortage. Score 2.
+
+**F6 Research**: 11 nodes; `canResearch` checks `N.pre`; `doResearch` deducts cost; effects read via `techMult`, `stormMitigation`, `canBuild` tech-gate. Score 2.
+
+**F7 Events**: 12 events, weighted `deck.reduce(w)`/roll selection; 5 events (`vein`,`refugees`,`leak`,`dustlung`,`sabotage`) have 2-3 differentiated choices; `st.eventCd` cooldown decremented each turn. Score 2.
+
+**F8 Trade**: `price()` reads `st.market.drift[r]` and stock/cap scarcity; `c.inv[r]` limited and decremented; `tradeBuy`/`tradeSell` both implemented. Score 2.
+
+**F9 Hazard**: storms trigger at `st.storm.next`, `sev` scales with `turn/10`; `damageMult(t)` cuts output; `stormwalls`/`reinforced`/windbreak reduce damage; `repair()` costs parts. Score 2.
+
+**F10 Save/load**: `serialize`→JSON text in textarea; `deserialize` validates shape, throws specific `Error`s shown via `saveMsg`. Score 2.
+
+**F11 End conditions**: `checkEnd` — lose via `popCount<=0`, win via `turn>=60` + conditions; `scoreOf` combines pop/research/turn/stock/morale; `renderEndModal` shows summary. Score 2.
+
+**F12 UI**: `data-tab` handlers switch tabs; `logTo` stores `t:turn`, rendered as `T+e.t`; `data-tip`/`wireTips` tooltips everywhere; keydown handles Space + keys 1-6; `@media(max-width:420px)` responsive CSS. Score 2.
+
+**F13 Dev panel**: `runTests()` has 26 substantive invariant assertions (roster consistency, research-boosts-production, save/load hash roundtrip, win/lose reachability); `runBenchmark` runs `greedyTurn`/`endTurn(st,true)` headless, prints `stateHash`. Score 2.
+
+**G1**: `st.research.filtration` etc read in `techMult()`, applied to `outs` in `tileRates()` every turn, shown in tooltips. Score 4.
+
+**G2**: `needF/needW` shortfall sets `st.shortage`, which reduces `c.morale` (`d-=16*mm`), then `workerFactor(c)` (uses `c.morale`) feeds `crewFactor`→production next tick. Score 4.
+
+**G3**: storm damages `t.dmg`; `damageMult(t)` cuts `tileRates` output; `repair(st,i)` spends `parts`, resets `t.dmg=0` restoring full output. Minor gap: repair silently blocks if no idle rested colonist exists. Score 4.
+
+**G4**: `price()` multiplies `BASE_PRICE` by `st.market.drift[r]` (random-walked each turn) and by `1.45-0.75*stock/cap`. Score 4.
+
+**G5**: `vein`/`refugees`/`leak`/`dustlung`/`sabotage` choices call `give()`, push to `st.colonists`, alter `c.fatigue`/`c.morale` directly, not just logged. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() resolves storm/production/consumption/events/market in documented fixed order, all RNG via RNG(st.rng.s)",
+    "F2": "tiles from RNG(seed^0x9e3779b9); canBuild checks B.terr; adjInfo/tileRates apply adjMult to outs",
+    "F3": "ashworks->composter(ash->soil)->greenhouse(soil+water->food); storageCap()+stats.overflow",
+    "F4": "workerFactor(c) reads c.skill/c.fatigue/c.morale, used in crewFactor->tileRates",
+    "F5": "st.shortage.food lowers morale (d-=16*mm), morale feeds workerFactor, recovers via d+=4",
+    "F6": "canResearch enforces N.pre, doResearch deducts cost, techMult/stormMitigation/canBuild read st.research",
+    "F7": "deck weighted by e.w/roll; vein/refugees/leak/dustlung/sabotage have branching choices; st.eventCd cooldown",
+    "F8": "price() reads st.market.drift and stock/cap; c.inv[r] decremented on buy, incremented on sell",
+    "F9": "st.storm.next triggers sev scaling with turn; damageMult cuts output; repair() costs parts",
+    "F10": "serialize()/deserialize() with textarea, deserialize throws specific validation Errors shown in saveMsg",
+    "F11": "checkEnd: popCount<=0 lose, turn>=60+conditions win; scoreOf combines multiple fields; renderEndModal",
+    "F12": "data-tab click handlers, logTo stores turn, wireTips tooltips, keydown Space/1-6, @media 420px",
+    "F13": "runTests() 26 real invariant assertions; runBenchmark headless greedyTurn+endTurn(st,true) prints stateHash",
+    "G1": "st.research.filtration read in techMult(), applied to tileRates outs every turn",
+    "G2": "shortage sets morale drop (16*mm) then workerFactor(c.morale) drives next-turn crewFactor output",
+    "G3": "storm sets t.dmg; damageMult cuts tileRates output; repair() spends parts and resets dmg to restore output",
+    "G4": "price() = BASE_PRICE * st.market.drift[r] * (1.45-0.75*stock/cap)",
+    "G5": "event choices call give()/push colonists/alter c.morale directly in st, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "repair() silently fails with no idle rested colonist available, which can stall the storm-damage recovery chain indefinitely."
+}
+```

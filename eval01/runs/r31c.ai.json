@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** Single `Game` class instance `game`; `mulberry32` seeded RNG used everywhere (no `Math.random`); `endTurn()` resolves consumption→morale→production→skill→departures→caravan→storm→events→caps→win/lose in fixed order. Score 2.
+
+**F2 (Map):** 8x8 loop in `initMap()` (64 tiles); terrain from `this.rng()`; `buildBuilding()` checks `building_def.terrain.includes(tile.terrain)`. No adjacency bonus code found anywhere. Score 1.
+
+**F3 (Economy):** `produceResources()` consumes power→metal (ore_forge), water→food (greenhouse/hydro_farm); caps enforced and overflow logged in `endTurn()`. Score 2.
+
+**F4 (Population):** Colonists have skill/fatigue/morale/job (`initColonists`), but `produceResources()` uses hardcoded `avg_skill = workers>0?3:1`, never reads `col.skill`/`col.fatigue`. Score 1.
+
+**F5 (Needs):** `food_deficit`/`water_deficit` lower `col.morale` in `endTurn()`; but morale is never read by `produceResources()`, and morale has no upward recovery path anywhere. Score 1.
+
+**F6 (Research):** 8 nodes in `initResearch()`; prereqs/costs enforced in `completeResearch()`; only irrigation/smelting/hydro/reinforcement gate real production/damage effects — battery, medicine, industrial, repair unlocks are never read elsewhere. Score 1.
+
+**F7 (Events):** Only 7 event types (`caravan, ashstorm, discovery, accident, visitor, illness, harvest_bonus`) vs required 10+; `fireRandomEvent` selection is uniform, not weighted; 5 events have differentiated choice effects; `events_fired` cooldown exists. Score 1.
+
+**F8 (Trade):** `tradeResource()` buy/sell both mutate `resources`/`scrip`; price formula reads `market_demand` but that object is never updated anywhere, and no caravan-limited inventory exists. Score 1.
+
+**F9 (Hazard):** `applyAshstorm()` damages tiles by turn-based severity; `produceResources()` applies `damage_factor`; `storm_shelter` (reinforcement research) reduces damage; `repairBuilding()` spends 5 parts to restore. Score 2.
+
+**F10 (Save/load):** `save()`/`load()` JSON round-trip via textarea; `load()` catches only JSON.parse syntax errors, no structural validation of loaded shape. Score 1.
+
+**F11 (End conditions):** Win (`turn>=60 && colonists>=12...`) and lose (`colonists.length===0`) both reachable in `endTurn()`; `endGame()` sums score_pop/research/resources/turns; `showEndGame()` renders breakdown. Score 2.
+
+**F12 (UI):** `switchTab()` wired to buttons; log entries show `entry.turn`; keyboard shortcuts in `keydown` listener; media query for narrow screens; `.tooltip`/`.tooltip-text` CSS defined but never applied to any rendered element. Score 1.
+
+**F13 (Dev panel):** `runTests()` checks 15 real invariants (bounds, prereqs, save/load roundtrip, PRNG determinism); `runBenchmark()` runs 200 headless turns via `bench_game.endTurn()` and prints `simpleHash(final_state)`. Score 2.
+
+**G1:** `irrigation`/`hydro` research gates `water_condenser`/`hydro_farm` in `buildBuilding()`; `produceResources()` reads `output_base` per building type (hydro_farm=20 > greenhouse=15) — real but via unlocking new building type, not a direct multiplier. Score 3.
+
+**G2:** `food_deficit`/`water_deficit` → `col.morale -=1` is real state change, but morale is never read in `produceResources()`'s hardcoded `avg_skill` — final link missing. Score 1.
+
+**G3:** `applyAshstorm()` sets `tile.building.damage`; `produceResources()` applies `damage_factor`; `repairBuilding()` spends 5 parts and restores damage, recovering output next turn — full chain traceable. Score 4.
+
+**G4:** Price formula in `tradeResource()`/render reads `game.market_demand[...]`, but that object is initialized to 0 and never modified anywhere in the file. Score 1.
+
+**G5:** `discovery`/`accident`/`visitor`/`illness` event choices each mutate different resource/colonist fields (`resources.parts`, `resources.scrip`, push new colonist, `col.morale`), not just logs. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 1, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 1, "G3": 4, "G4": 1, "G5": 4},
+  "evidence": {
+    "F1": "Game class + mulberry32 rng; endTurn() runs fixed system order",
+    "F2": "initMap() 8x8 via rng; buildBuilding() checks terrain; no adjacency code found",
+    "F3": "produceResources() consumes power/water to output metal/food; caps enforced in endTurn()",
+    "F4": "produceResources() uses hardcoded avg_skill, never reads col.skill/fatigue",
+    "F5": "food/water deficit lowers col.morale in endTurn(); morale never read by production, no recovery path",
+    "F6": "irrigation/smelting/hydro/reinforcement gate real effects; battery/medicine/industrial/repair unused",
+    "F7": "only 7 event types in fireEvent()/fireRandomEvent(), selection uniform not weighted",
+    "F8": "tradeResource() reads market_demand but it's never updated anywhere; no caravan inventory cap",
+    "F9": "applyAshstorm() damages tiles; produceResources() damage_factor; repairBuilding() spends parts",
+    "F10": "save()/load() JSON roundtrip; load() only catches JSON.parse errors, no shape validation",
+    "F11": "endTurn() win/lose checks both reachable; endGame() sums score_pop/research/resources/turns",
+    "F12": "switchTab()/keydown wired; log-turn shown; .tooltip CSS defined but never applied to any element",
+    "F13": "runTests() 15 real invariants; runBenchmark() 200 headless turns + simpleHash(final_state)",
+    "G1": "hydro research gates hydro_farm (output_base 20) read in produceResources()",
+    "G2": "morale drops from deficit in endTurn() but produceResources() ignores morale entirely",
+    "G3": "applyAshstorm() damage -> produceResources() damage_factor -> repairBuilding() restores output",
+    "G4": "price formula reads game.market_demand which is initialized 0 and never modified",
+    "G5": "discovery/accident/visitor/illness choices each write distinct resource/colonist state changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Colonist skill/fatigue/morale and research-driven yield multipliers are tracked but never actually read by the production formula, which uses hardcoded constants instead."
+}
+```

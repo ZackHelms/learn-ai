@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: `game` singleton state; `mulberry32(seed)` used for map/pop/events/hazards/trade; `endTurn()` calls production→consumption→morale→hazards→trade→events→clamp→checkEnd in fixed order. Score 2.
+
+**F2 Map**: 64-tile `generateMap()` uses `this.rng()`; `canBuild()` checks `binfo.terrain.includes(tile.terrain)`; `getAdjacencyBonus()` changes `output` in `resolveProduction()`. Score 2.
+
+**F3 Economy**: `forge` consumes `power` → `metal`, `greenhouse` consumes `water` → `food`; `Math.min(...,storageMax)` caps; `clampResources()` logs overflow to `overflowLog`. Score 2.
+
+**F4 Population**: colonists have skill/fatigue/morale/assigned; `worker.skill` read in `resolveProduction()`, but `fatigue` is only written there, never read by production formula. Score 1.
+
+**F5 Needs**: `resolveConsumption()` deducts food/water, shortage cuts morale; recovery via rest (+2 morale); but morale is never read in `resolveProduction()` output formula. Score 1.
+
+**F6 Research**: 8 nodes in `initResearch`; prereqs checked in `canResearch`; costs deducted in `doResearch`; `efficiency`/`foundation`/`resilience`/`storage` effects wired, but `labor` (+1 skill) has no call site. Score 1.
+
+**F7 Events**: only 5 events in `fireEvent()` (need 10+); weighted via `w` flattening; only 3 events (Refugee/Cache/Toxic) have differentiated 2-choice outcomes; `eventCooldown` object never read/written. Score 1.
+
+**F8 Trade**: `tradeWith()` handles buy/sell with limited `offer.stock`, but `resolveTrade()` price = base + fully random shifts, never reads `this.resources` or a persisted drifting variable. Score 1.
+
+**F9 Hazard**: `resolveHazards()` storms every 8 turns, severity scales with `turn`; `tile.damaged` reduces `output` in production; `research.foundation.done` reduces dmg; `repairBuildings()` spends `parts` and resets damage. Score 2.
+
+**F10 Save/load**: `exportSave()` serializes state (missing `storageMax`, `ashstormSeverity`); `importSave()` uses try/catch on `JSON.parse` and shows `err.textContent` on failure, but no deeper schema validation. Score 1.
+
+**F11 End conditions**: both `population.length===0` and turn>=60 win/lose checked in `checkEndConditions()`; `calculateScore()` combines pop/research/resources/turn; but the end-screen render block runs only once at script-parse time (before `gameOver` can be true) and is never invoked from `endTurn()`/`render()`. Score 1.
+
+**F12 UI**: `switchTab()` wired to buttons and keys `1-6`; log entries show `entry.turn`; tile/resource `title` tooltips show breakdowns; `Space` ends turn; `@media (max-width:600px)` adapts layout. Score 2.
+
+**F13 Dev panel**: `runTests()` asserts real invariants (skill/morale ranges, prereq enforcement, no dup IDs); `runBenchmark()` runs 200 headless `endTurn()` calls and prints `getStateHash()`. Score 2.
+
+**G1**: `research.efficiency.done` read inside main `resolveProduction()` loop, multiplies `output` by 1.2 for all non-residence buildings every turn. Score 3.
+
+**G2**: shortage writes `p.morale -= 15/10` in `resolveConsumption()`, but morale is never read in `resolveProduction()`; only extreme case (morale≤0 → colonist removed via `splice`) indirectly cuts output. Score 2.
+
+**G3**: `resolveHazards()` sets `tile.damaged`; `resolveProduction()` multiplies output by `(1-damaged*0.5)`; `repairBuildings()` spends `parts` and resets `damaged=0` restoring full output. Score 4.
+
+**G4**: `resolveTrade()` price = `basePrice + supplyShift + demandShift`, both fully re-rolled random each caravan, never reads `this.resources` or persists between caravans. Score 0.
+
+**G5**: `Refugee Arrival` choices push colonists+cut food vs. cut morale; `Toxic Plume` choices cut food vs. cut morale-20; both wired via `choices[idx].effect()` in `resolveEventChoice()`, durably mutating `resources`/`population`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 1, "11": 1, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 2, "G3": 4, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls production/consumption/morale/hazard/trade/event/clamp/end in fixed order using mulberry32 rng",
+    "F2": "getAdjacencyBonus() feeds output in resolveProduction(); canBuild() checks tile.terrain",
+    "F3": "forge consumes power->metal, greenhouse consumes water->food; clampResources() logs overflowLog",
+    "F4": "worker.skill read in resolveProduction(); worker.fatigue only written there, never read for output",
+    "F5": "resolveConsumption() cuts p.morale on shortage; morale never read in resolveProduction()",
+    "F6": "canResearch()/doResearch() enforce prereq+cost; labor research effect (+1 skill) has no call site",
+    "F7": "fireEvent() has 5 events with w-weighted pick; eventCooldown object never read/written",
+    "F8": "resolveTrade() price = basePrice+random shifts, never reads this.resources or persists drift",
+    "F9": "resolveHazards() sets tile.damaged, resolveProduction() reduces output, repairBuildings() spends parts",
+    "F10": "exportSave()/importSave() JSON round-trip but omits storageMax; catch(e) shows err.textContent",
+    "F11": "checkEndConditions() sets gameOver/endScore but end-screen block only runs once at script parse, never on real game-over",
+    "F12": "switchTab() wired to buttons/keys 1-6; tile/resource title= tooltips; media query at 600px",
+    "F13": "runTests() checks skill/morale ranges and prereqs; runBenchmark() runs 200 endTurn() calls, prints getStateHash()",
+    "G1": "research.efficiency.done multiplies output by 1.2 inside resolveProduction() every relevant turn",
+    "G2": "resolveConsumption() cuts morale on shortage but resolveProduction() never reads morale; only colonist removal at morale=0 cuts labor",
+    "G3": "resolveHazards() sets tile.damaged -> resolveProduction() output*(1-damaged*0.5) -> repairBuildings() spends parts, resets damage",
+    "G4": "resolveTrade() price built from random supplyShift/demandShift only, never reads this.resources",
+    "G5": "Refugee Arrival and Toxic Plume choices call effect() writing different resources/morale/population changes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Morale never feeds back into production output and the end-game summary screen never renders after a real game-over, breaking two core feedback loops."
+}
+```

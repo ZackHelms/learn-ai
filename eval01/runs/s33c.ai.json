@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `createNewGame` returns single state object; `nextRand`/`_rngState` used everywhere (grid gen, spawns, events, hazards) — no `Math.random` found; `processTurn` calls phases in fixed documented order. Score 2.
+
+**F2 — Map**: 64-tile grid (8x8) via `makeGrid`, terrain from seeded `nextRand`; `buildAt` checks `def.terrain.includes(cell.terrain)`; `adjacencyMultiplier` changes `totalMult` in `computeProduction`/`productionPhase`. Score 2.
+
+**F3 — Economy**: ore→metal (`mine`→`forge`), ash→food (`ashcollector`→`greenhouse`) chains consume inputs; `storageCap`/`addResource` cap and log overflow. Score 2.
+
+**F4 — Population**: colonists have skill/fatigue/morale/assignment (`spawnColonist`); `skillFactor`/`moraleFactor` read in `computeProduction`/`productionPhase`, but `fatigue` is never read directly by production code, only by `moralePhase`/`fatiguePhase`. Score 1.
+
+**F5 — Needs**: `consumptionPhase` computes shortage → `_shortagePenalty`; `moralePhase` applies penalty; `moraleFactor` in production; recovery via rest/clinic/events. Score 2.
+
+**F6 — Research**: 10 nodes in `RESEARCH_DEFS`; `researchAvailable` enforces `prereq`; `spendResources` deducts cost; effects (`mineMult` etc, `stormMult`, unlock gating via `buildingUnlocked`, `tradeBonus`) all read elsewhere. Score 2.
+
+**F7 — Events**: 15 entries in `EVENTS`; weighted pick in `eventPhase`; 5 events (`sickness`,`bandittoll`,`crackedpipe`,`toxicfumes`,`refugees`) have 2 choices with distinct state effects; `eventCooldowns` gate re-selection. Score 2.
+
+**F8 — Trade**: `caravanPrice` reads `state.caravan.drift` (updated per turn in `caravanPhase`) and `stockRatio`; `caravan.inventory[].qty` limited and decremented; `buyResource`/`sellResource` both implemented. Score 2.
+
+**F9 — Hazard**: `hazardPhase` fires on schedule, `severity` grows with `state.turn`; `cell.hp` reduced, `hpFactor` cuts output, hp<=0 disables production; `windbreak`/`stormshelters` mitigate; `repairAt` costs parts and restores hp. Score 2.
+
+**F10 — Save/load**: `serialize` → JSON to `#saveArea` textarea; `loadBtn` parses, `validateSnapshot` throws descriptive errors shown in `#saveStatus`. Score 2.
+
+**F11 — End conditions**: `endConditionPhase` checks pop<=0 (lose) and turn>=60 win/lose via `checkCriticalNeeds`; tests 19/20 show both reachable; `computeScore` uses pop/research/turn/stock/scrip; `showEndScreen` renders summary. Score 2.
+
+**F12 — UI**: tab buttons toggle `.panel.active`; `renderLog` prefixes `T`+turn; `tip()`/`data-tip` tooltips show factor breakdowns; keydown handler for Space/1-6; `@media max-width:480px` responsive CSS. Score 2.
+
+**F13 — Dev panel**: 20 non-trivial assertions (adjacency, skill growth, save/load hash roundtrip, win/lose reachability); `runBenchmark` runs 200 turns headless via `autopilotDecide`+`processTurn`, prints `hashState`. Score 2.
+
+**G1**: `RESEARCH_DEFS[...].effect` (e.g. `mineMult`) summed in `researchMultFor`, read via `buildingResearchMultKey` in `productionPhase` every turn. Score 4.
+
+**G2**: `consumptionPhase` shortage → `_shortagePenalty` → `moralePhase` lowers `c.morale` → `moraleFactor` cuts next turn's `productionPhase` output. Score 4.
+
+**G3**: `hazardPhase` damages `cell.hp` → `hpFactor` cuts production, hp<=0 disables → `repairAt` spends parts, restores hp=100 reviving output. Score 4.
+
+**G4**: `caravanPrice` reads `caravan.drift[res]` (drifted each turn in `caravanPhase`) for buy/sell, plus `stockRatio` (player stock/cap) for sell price. Score 4.
+
+**G5**: `sickness` choices damage a building/lower morale vs. risk colonist loss; `bandittoll` spends scrip vs. removes 15% of a resource — both write real resource/colonist/hp state, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "nextRand(state) with _rngState drives all randomness; processTurn() fixed phase order",
+    "F2": "makeGrid() 64 tiles from seeded rng; buildAt() checks def.terrain; adjacencyMultiplier() alters output",
+    "F3": "mine->forge (ore->metal), ashcollector->greenhouse (ash->food); storageCap()/addResource() cap+overflow",
+    "F4": "worker.skill/morale read in computeProduction(); worker.fatigue never read by production code directly",
+    "F5": "consumptionPhase() sets _shortagePenalty, moralePhase() applies it, moraleFactor used in production",
+    "F6": "10 RESEARCH_DEFS; researchAvailable() checks prereq; researchMultFor() effects read in production/hazard/trade",
+    "F7": "15 EVENTS; weighted pick in eventPhase(); 5 events w/ 2 choices; eventCooldowns gate reselection",
+    "F8": "caravanPrice() reads caravan.drift (updated in caravanPhase) and stockRatio; buyResource/sellResource both work",
+    "F9": "hazardPhase() severity grows with turn, damages cell.hp; hpFactor cuts output; repairAt() costs parts",
+    "F10": "serialize()->textarea; loadBtn parses+validateSnapshot() throws, caught and shown in #saveStatus",
+    "F11": "endConditionPhase() pop<=0/turn>=60 branches; computeScore() multi-field; showEndScreen() renders summary",
+    "F12": "nav#tabs click toggles .active panels; renderLog() shows T+turn; tip() tooltips; keydown Space/1-6; media query",
+    "F13": "runTests() 20 real assertions incl. save/load hash roundtrip; runBenchmark() 200 headless turns prints hashState()",
+    "G1": "RESEARCH_DEFS effect (mineMult) -> researchMultFor() -> read in productionPhase() totalMult",
+    "G2": "consumptionPhase shortage -> _shortagePenalty -> moralePhase morale drop -> moraleFactor in productionPhase",
+    "G3": "hazardPhase damages cell.hp -> hpFactor cuts output -> repairAt spends parts, restores hp=100",
+    "G4": "caravanPrice() reads caravan.drift (drifted per turn) and stockRatio for buy/sell pricing",
+    "G5": "sickness/bandittoll choice.apply() write differing resource/colonist/hp changes, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Fatigue is tracked and affects morale but is never read directly by the production formula, so F4 misses a required part."
+}
+```

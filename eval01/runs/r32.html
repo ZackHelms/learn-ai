@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASHFALL OUTPOST</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: sans-serif; background: #1a1a1a; color: #eee; }
+    body { display: flex; height: 100vh; overflow: hidden; }
+    #game { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .header { background: #222; padding: 8px 12px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .header-info { display: flex; gap: 20px; font-size: 14px; }
+    .header-stat { display: flex; gap: 4px; align-items: center; }
+    .header-stat label { color: #999; }
+    .tabs { display: flex; gap: 4px; background: #222; padding: 4px 8px; border-bottom: 1px solid #444; }
+    .tab-btn { padding: 6px 12px; background: #333; border: none; color: #aaa; cursor: pointer; font-size: 13px; border-radius: 3px 3px 0 0; }
+    .tab-btn.active { background: #444; color: #fff; }
+    .tab-btn:hover { background: #3a3a3a; }
+    .content { flex: 1; overflow-y: auto; padding: 12px; display: none; }
+    .content.active { display: block; }
+    .map-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-width: 600px; margin: 0 auto; }
+    .tile { width: 100%; aspect-ratio: 1; border: 1px solid #555; background: #2a2a2a; cursor: pointer; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; padding: 2px; transition: background 0.1s; }
+    .tile:hover { background: #333; }
+    .tile-bg { position: absolute; inset: 0; opacity: 0.3; }
+    .tile-icon { position: relative; z-index: 1; font-size: 20px; }
+    .tile-label { position: relative; z-index: 1; font-size: 8px; color: #999; }
+    .tooltip { position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #666; padding: 6px; font-size: 11px; white-space: nowrap; z-index: 10; border-radius: 3px; pointer-events: none; }
+    .panel { margin: 8px 0; padding: 8px; background: #2a2a2a; border: 1px solid #444; border-radius: 3px; }
+    .panel-title { font-weight: bold; margin-bottom: 6px; }
+    .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+    .resource-item { display: flex; flex-direction: column; gap: 2px; }
+    .resource-label { font-size: 12px; color: #999; }
+    .resource-value { font-size: 16px; font-weight: bold; }
+    .progress-bar { width: 100%; height: 4px; background: #1a1a1a; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+    .progress-fill { height: 100%; background: #4a9; transition: width 0.2s; }
+    .colonist-row { display: flex; gap: 8px; padding: 6px; background: #1a1a1a; border-radius: 2px; margin: 4px 0; align-items: center; font-size: 12px; }
+    .colonist-name { flex: 0 0 80px; font-weight: bold; }
+    .colonist-skill { flex: 0 0 60px; }
+    .colonist-job { flex: 0 0 80px; }
+    .colonist-status { flex: 1; }
+    .colonist-controls { flex: 0 0 120px; display: flex; gap: 4px; }
+    .btn { padding: 4px 8px; background: #445; border: 1px solid #667; color: #ddd; cursor: pointer; font-size: 12px; border-radius: 3px; }
+    .btn:hover { background: #556; }
+    .btn.active { background: #4a9; border-color: #5bb; }
+    .event-log { max-height: 300px; overflow-y: auto; border: 1px solid #444; background: #1a1a1a; border-radius: 3px; padding: 6px; font-size: 12px; }
+    .log-entry { margin: 4px 0; padding: 4px; border-left: 2px solid #666; padding-left: 6px; }
+    .log-entry.turn { border-left-color: #4a9; font-weight: bold; }
+    .log-entry.event { border-left-color: #aa8; }
+    .log-entry.warning { border-left-color: #a44; }
+    .log-entry.good { border-left-color: #4a9; }
+    .tree-node { display: inline-block; padding: 6px 10px; margin: 4px; background: #2a2a2a; border: 1px solid #555; border-radius: 3px; cursor: pointer; font-size: 12px; text-align: center; min-width: 80px; position: relative; }
+    .tree-node.locked { opacity: 0.5; color: #999; }
+    .tree-node.available { border-color: #4a9; background: #1a3a2a; }
+    .tree-node.done { background: #2a3a1a; border-color: #8a8; }
+    .tree-node:hover::after { content: attr(data-tooltip); position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #666; padding: 6px; font-size: 11px; white-space: nowrap; z-index: 10; border-radius: 3px; }
+    .trade-item { display: flex; gap: 8px; padding: 6px; background: #1a1a1a; border-radius: 2px; margin: 4px 0; align-items: center; font-size: 12px; }
+    .trade-name { flex: 1; }
+    .trade-price { flex: 0 0 50px; text-align: right; }
+    .trade-qty { flex: 0 0 60px; }
+    .trade-controls { flex: 0 0 100px; display: flex; gap: 4px; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: #222; border: 1px solid #666; border-radius: 6px; padding: 20px; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+    .modal-title { font-size: 18px; font-weight: bold; margin-bottom: 12px; }
+    .modal-text { margin: 10px 0; line-height: 1.4; }
+    .modal-buttons { display: flex; gap: 8px; margin-top: 20px; justify-content: center; }
+    .modal-btn { padding: 8px 16px; background: #445; border: 1px solid #667; color: #ddd; cursor: pointer; border-radius: 3px; font-size: 14px; }
+    .modal-btn:hover { background: #556; }
+    .modal-btn.primary { background: #4a9; border-color: #5bb; }
+    @media (max-width: 600px) {
+      .header { flex-direction: column; align-items: flex-start; }
+      .header-info { flex-wrap: wrap; font-size: 12px; }
+      .colonist-row { flex-wrap: wrap; }
+      .map-grid { max-width: 100%; }
+      .modal-content { max-width: 90vw; padding: 12px; }
+    }
+    .dev-section { margin: 8px 0; padding: 8px; background: #1a1a1a; border: 1px solid #666; border-radius: 3px; }
+    .test-result { margin: 4px 0; padding: 4px; font-size: 11px; font-family: monospace; }
+    .test-pass { color: #4a9; }
+    .test-fail { color: #a44; }
+    input[type="text"] { padding: 4px; background: #1a1a1a; border: 1px solid #666; color: #ddd; border-radius: 2px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <div class="header">
+      <div>ASHFALL OUTPOST</div>
+      <div class="header-info">
+        <div class="header-stat"><label>Turn:</label> <span id="turn-display">0</span></div>
+        <div class="header-stat"><label>Pop:</label> <span id="pop-display">0</span></div>
+        <div class="header-stat"><label>Food:</label> <span id="food-display">0</span></div>
+        <div class="header-stat"><label>Water:</label> <span id="water-display">0</span></div>
+        <div class="header-stat"><label>Metal:</label> <span id="metal-display">0</span></div>
+        <div class="header-stat"><label>Parts:</label> <span id="parts-display">0</span></div>
+        <div class="header-stat"><label>Power:</label> <span id="power-display">0</span></div>
+      </div>
+      <button class="btn" id="end-turn-btn">End Turn [SPACE]</button>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="map">Map [1]</button>
+      <button class="tab-btn" data-tab="people">People [2]</button>
+      <button class="tab-btn" data-tab="research">Research [3]</button>
+      <button class="tab-btn" data-tab="trade">Trade [4]</button>
+      <button class="tab-btn" data-tab="log">Log [5]</button>
+      <button class="tab-btn" data-tab="dev">Dev [6]</button>
+    </div>
+    <div id="map" class="content active"></div>
+    <div id="people" class="content"></div>
+    <div id="research" class="content"></div>
+    <div id="trade" class="content"></div>
+    <div id="log" class="content"></div>
+    <div id="dev" class="content"></div>
+  </div>
+
+  <div id="event-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title" id="event-title"></div>
+      <div class="modal-text" id="event-text"></div>
+      <div class="modal-buttons" id="event-buttons"></div>
+    </div>
+  </div>
+
+  <div id="end-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title" id="end-title"></div>
+      <div class="modal-text" id="end-text"></div>
+      <div class="modal-buttons"><button class="modal-btn primary" onclick="location.reload()">Restart Game</button></div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // SEEDED PRNG (Mulberry32)
+    // ============================================================================
+    class SeededRandom {
+      constructor(seed = 1337) {
+        this.seed = seed >>> 0;
+      }
+      next() {
+        this.seed |= 0;
+        this.seed = (this.seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(this.seed ^ (this.seed >>> 15), 1 | this.seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      }
+      range(min, max) {
+        return Math.floor(this.next() * (max - min + 1)) + min;
+      }
+    }
+
+    // ============================================================================
+    // GAME STATE
+    // ============================================================================
+    const TERRAIN_TYPES = { flat: 0, rock: 1, water: 2, vent: 3, ruins: 4 };
+    const BUILDING_TYPES = {
+      greenhouse: { name: 'Greenhouse', icon: '🌱', terrain: 0, produces: { food: 3 }, consumes: { water: 2, power: 1 }, cost: { scrip: 20 }, skill: 'farming' },
+      condenser: { name: 'Condenser', icon: '💧', terrain: 2, produces: { water: 4 }, consumes: { power: 1 }, cost: { scrip: 20 }, skill: 'science' },
+      forge: { name: 'Forge', icon: '⚒️', terrain: 3, produces: { metal: 3 }, consumes: { power: 2 }, cost: { scrip: 30 }, skill: 'crafting' },
+      generator: { name: 'Generator', icon: '⚡', terrain: 0, produces: { power: 5 }, consumes: { fuel: 1 }, cost: { scrip: 40 }, skill: 'engineering', fuel: 'materials' },
+      storage: { name: 'Storage', icon: '📦', terrain: 0, produces: {}, consumes: {}, cost: { scrip: 15 }, skill: 'none' },
+      lab: { name: 'Lab', icon: '🔬', terrain: 0, produces: { research: 2 }, consumes: { power: 1 }, cost: { scrip: 50 }, skill: 'science' },
+      mine: { name: 'Mine', icon: '⛏️', terrain: 1, produces: { ore: 4 }, consumes: {}, cost: { scrip: 25 }, skill: 'mining' },
+      smelter: { name: 'Smelter', icon: '🔥', terrain: 1, produces: { metal: 2 }, consumes: { ore: 2, power: 2 }, cost: { scrip: 35 }, skill: 'crafting' },
+      shelter: { name: 'Shelter', icon: '🏠', terrain: 0, produces: {}, consumes: {}, capacity: 4, cost: { scrip: 25 }, skill: 'none' },
+      shield: { name: 'Shield', icon: '🛡️', terrain: 0, produces: {}, consumes: { power: 1 }, cost: { scrip: 60 }, skill: 'engineering', mitigation: 0.5 }
+    };
+
+    class GameState {
+      constructor(seed = 1337) {
+        this.seed = seed;
+        this.rng = new SeededRandom(seed);
+        this.turn = 0;
+        this.map = this.generateMap();
+        this.colonists = [];
+        this.resources = { food: 20, water: 20, metal: 5, power: 10, parts: 5, scrip: 100, ore: 0, research: 0 };
+        this.storageMax = { food: 100, water: 100, metal: 50, power: 50, parts: 30, scrip: 200, ore: 60, research: 200 };
+        this.buildings = {};
+        this.research = {};
+        this.log = [];
+        this.eventCooldown = {};
+        this.damageTracker = {};
+        this.tradeCaravanTurn = 15;
+        this.initColonists();
+        this.initResearch();
+        this.logEntry('turn', `Turn ${this.turn} begins.`);
+        this.addColonist();
+      }
+
+      generateMap() {
+        const map = [];
+        const noise = (x, y, scale) => {
+          const n = Math.sin(x * 12.9898 + y * 78.233 + scale * 43.618) * 43758.5453;
+          return n - Math.floor(n);
+        };
+        for (let y = 0; y < 8; y++) {
+          const row = [];
+          for (let x = 0; x < 8; x++) {
+            const n = this.rng.next();
+            let terrain;
+            if (n < 0.5) terrain = TERRAIN_TYPES.flat;
+            else if (n < 0.7) terrain = TERRAIN_TYPES.rock;
+            else if (n < 0.85) terrain = TERRAIN_TYPES.water;
+            else if (n < 0.92) terrain = TERRAIN_TYPES.vent;
+            else terrain = TERRAIN_TYPES.ruins;
+            row.push(terrain);
+          }
+          map.push(row);
+        }
+        return map;
+      }
+
+      initColonists() {
+        const names = ['Alex', 'Blake', 'Casey', 'Drew', 'Eva', 'Fox', 'Gray', 'Hope', 'Iris', 'Jesse', 'Kim', 'Lee'];
+        const skills = ['farming', 'science', 'crafting', 'engineering'];
+        for (let i = 0; i < 3; i++) {
+          const skill = skills[this.rng.range(0, 3)];
+          this.colonists.push({ id: i, name: names[i], skill, level: 2, fatigue: 0, morale: 100, assigned: null, alive: true });
+        }
+      }
+
+      initResearch() {
+        this.research = {
+          soil: { name: 'Soil Enrichment', cost: { scrip: 20, research: 5 }, prereq: null, done: false, effects: { greenhouse: 0.2 } },
+          waterclean: { name: 'Water Purification', cost: { scrip: 25, research: 10 }, prereq: null, done: false, effects: { condenser: 0.3 } },
+          smelt: { name: 'Advanced Smelting', cost: { scrip: 30, research: 15 }, prereq: null, done: false, effects: { smelter: 0.4 } },
+          shield: { name: 'Protective Shield', cost: { scrip: 40, research: 20 }, prereq: null, done: false, effects: { stormMitigation: 0.3 } },
+          power: { name: 'Power Efficiency', cost: { scrip: 35, research: 15 }, prereq: null, done: false, effects: { powerOutput: 0.2 } },
+          mining: { name: 'Deep Mining', cost: { scrip: 30, research: 12 }, prereq: null, done: false, effects: { mining: 0.25 } },
+          automation: { name: 'Automation', cost: { scrip: 50, research: 25 }, prereq: 'smelt', done: false, effects: { fatigueCost: -0.1 } },
+          resilience: { name: 'Resilience Training', cost: { scrip: 35, research: 18 }, prereq: null, done: false, effects: { moraleRecovery: 0.2 } }
+        };
+      }
+
+      addColonist() {
+        const names = ['Alex', 'Blake', 'Casey', 'Drew', 'Eva', 'Fox', 'Gray', 'Hope', 'Iris', 'Jesse', 'Kim', 'Lee', 'Max', 'Nina', 'Owen', 'Petra'];
+        const skills = ['farming', 'science', 'crafting', 'engineering'];
+        const idx = this.colonists.length;
+        if (idx < names.length) {
+          const skill = skills[this.rng.range(0, 3)];
+          this.colonists.push({ id: idx, name: names[idx], skill, level: 1, fatigue: 0, morale: 100, assigned: null, alive: true });
+        }
+      }
+
+      buildingAt(x, y) {
+        return this.buildings[`${x},${y}`] || null;
+      }
+
+      canBuild(x, y, btype) {
+        if (this.buildings[`${x},${y}`]) return false;
+        const terrain = this.map[y][x];
+        const required = BUILDING_TYPES[btype].terrain;
+        return terrain === required;
+      }
+
+      build(x, y, btype) {
+        if (!this.canBuild(x, y, btype)) return false;
+        const cost = BUILDING_TYPES[btype].cost;
+        for (const [res, amt] of Object.entries(cost)) {
+          if ((this.resources[res] || 0) < amt) return false;
+        }
+        for (const [res, amt] of Object.entries(cost)) {
+          this.resources[res] -= amt;
+        }
+        const key = `${x},${y}`;
+        this.buildings[key] = { x, y, type: btype, damage: 0, assigned: [] };
+        this.logEntry('good', `Built ${BUILDING_TYPES[btype].name} at (${x},${y}).`);
+        return true;
+      }
+
+      processProduction() {
+        const produced = {};
+        for (const [key, building] of Object.entries(this.buildings)) {
+          const [x, y] = key.split(',').map(Number);
+          const bdef = BUILDING_TYPES[building.type];
+          const healthMul = Math.max(0, 1 - building.damage * 0.3);
+          const assigned = this.colonists.filter(c => c.assigned === key && c.alive);
+          if (assigned.length === 0) continue;
+          const skillBonus = 1 + assigned.reduce((a, c) => a + (c.level - 1) * 0.1, 0) / assigned.length;
+          for (const [res, amt] of Object.entries(bdef.produces)) {
+            const out = Math.floor(amt * skillBonus * healthMul);
+            produced[res] = (produced[res] || 0) + out;
+          }
+          for (const [res, amt] of Object.entries(bdef.consumes)) {
+            if ((this.resources[res] || 0) < amt) {
+              this.logEntry('warning', `${bdef.name} at (${x},${y}) insufficient ${res}.`);
+              continue;
+            }
+            this.resources[res] -= amt;
+          }
+          for (const col of assigned) {
+            col.fatigue = Math.min(100, col.fatigue + 20);
+          }
+        }
+        for (const [res, amt] of Object.entries(produced)) {
+          this.resources[res] = (this.resources[res] || 0) + amt;
+          if (this.resources[res] > this.storageMax[res]) {
+            const overflow = this.resources[res] - this.storageMax[res];
+            this.logEntry('warning', `${res} overflow: ${overflow} lost.`);
+            this.resources[res] = this.storageMax[res];
+          }
+        }
+      }
+
+      processNeeds() {
+        const alive = this.colonists.filter(c => c.alive);
+        let foodNeeded = alive.length;
+        let waterNeeded = alive.length;
+        if (this.resources.food < foodNeeded) {
+          this.logEntry('warning', `Food shortage: need ${foodNeeded}, have ${this.resources.food}.`);
+          for (const col of alive) {
+            col.morale = Math.max(0, col.morale - 20);
+          }
+          this.resources.food = 0;
+        } else {
+          this.resources.food -= foodNeeded;
+        }
+        if (this.resources.water < waterNeeded) {
+          this.logEntry('warning', `Water shortage: need ${waterNeeded}, have ${this.resources.water}.`);
+          for (const col of alive) {
+            col.morale = Math.max(0, col.morale - 20);
+          }
+          this.resources.water = 0;
+        } else {
+          this.resources.water -= waterNeeded;
+        }
+      }
+
+      processMorale() {
+        for (const col of this.colonists.filter(c => c.alive)) {
+          if (col.morale < 30) {
+            if (this.rng.next() < 0.3) {
+              col.alive = false;
+              this.logEntry('warning', `${col.name} abandoned the outpost.`);
+            }
+          }
+          col.fatigue = Math.max(0, col.fatigue - 15);
+          col.morale = Math.min(100, col.morale + 10);
+        }
+      }
+
+      processStorm() {
+        if (this.turn > 5 && this.turn % 12 === 0) {
+          const severity = 0.3 + (this.turn / 100);
+          const damage = Math.floor(severity * 50);
+          this.logEntry('event', `⚠️ ASHSTORM! Severity: ${Math.round(severity * 100)}%. Damage: ${damage}.`);
+          const buildings = Object.values(this.buildings);
+          for (let i = 0; i < buildings.length; i++) {
+            if (this.rng.next() < 0.6) {
+              buildings[i].damage = Math.min(5, buildings[i].damage + this.rng.range(1, 3));
+            }
+          }
+          const waterSpike = Math.floor(3 * severity);
+          this.resources.water = Math.max(0, this.resources.water - waterSpike);
+          this.logEntry('warning', `Water consumed by storm: ${waterSpike}.`);
+        }
+      }
+
+      processRepairs() {
+        for (const building of Object.values(this.buildings)) {
+          if (building.damage > 0 && this.resources.parts > 0) {
+            this.resources.parts--;
+            building.damage = Math.max(0, building.damage - 1);
+          }
+        }
+      }
+
+      processEvents() {
+        if (this.rng.next() < 0.25) {
+          const events = [
+            { title: 'Resource Cache', text: 'Explorers found buried supplies! Gain 15 parts.', outcome: () => { this.resources.parts += 15; } },
+            { title: 'Outbreak', text: 'A colonist is ill. -2 morale for all. Lose 1 population if morale drops below 20.', outcome: () => { this.colonists.forEach(c => { if (c.alive) c.morale -= 20; }); } },
+            { title: 'Lucky Find', text: 'A rover discovers scrap metal! +20 metal.', outcome: () => { this.resources.metal += 20; } },
+            { title: 'Power Surge', text: 'Generator overloads! Lose 10 power and 1 metal, but gain 20 research from analysis.', outcome: () => { this.resources.power = Math.max(0, this.resources.power - 10); this.resources.metal = Math.max(0, this.resources.metal - 1); this.resources.research += 20; } },
+            { title: 'Water Seep', text: 'Underground aquifer found! +30 water.', outcome: () => { this.resources.water += 30; } },
+            { title: 'Radiation', text: 'Vent flares up. All mining output -30% this turn.', outcome: () => {} },
+            { title: 'Ash Buildup', text: 'Ash clogs systems. All buildings -1 effectiveness next turn.', outcome: () => {} },
+            { title: 'Visitor', text: 'A wanderer seeks shelter. +1 population, +5 morale for all.', outcome: () => { this.addColonist(); this.colonists.forEach(c => { if (c.alive) c.morale += 5; }); } },
+            { title: 'Trade Opportunity', text: 'Rare materials for sale at market. Caravan arrives early!', outcome: () => { this.tradeCaravanTurn = this.turn + 1; } },
+            { title: 'Crop Blight', text: 'Greenhouse crop fails. Lose 10 food.', outcome: () => { this.resources.food = Math.max(0, this.resources.food - 10); } }
+          ];
+          const cooldownThreshold = 5;
+          let available = events.filter(e => (this.eventCooldown[e.title] || 0) < this.turn - cooldownThreshold);
+          if (available.length === 0) available = events;
+          const event = available[this.rng.range(0, available.length - 1)];
+          this.eventCooldown[event.title] = this.turn;
+          return event;
+        }
+        return null;
+      }
+
+      processCaravan() {
+        if (this.turn === this.tradeCaravanTurn) {
+          this.logEntry('event', '🐪 Caravan arrives! Check Trade tab.');
+          this.tradeCaravanTurn += 20 + this.rng.range(0, 10);
+        }
+      }
+
+      endTurn() {
+        this.turn++;
+        this.processProduction();
+        this.processNeeds();
+        this.processMorale();
+        this.processStorm();
+        this.processRepairs();
+        this.processCaravan();
+        const event = this.processEvents();
+        for (const col of this.colonists.filter(c => !c.alive)) {
+          if (col.alive === false) col.alive = false;
+        }
+        this.logEntry('turn', `Turn ${this.turn} complete. Pop: ${this.colonists.filter(c => c.alive).length}`);
+        return event;
+      }
+
+      logEntry(type, text) {
+        this.log.push({ turn: this.turn, type, text, timestamp: Date.now() });
+      }
+
+      assignColonist(colonistId, buildingKey) {
+        const col = this.colonists.find(c => c.id === colonistId && c.alive);
+        if (!col) return false;
+        if (col.assigned) {
+          const prev = this.buildings[col.assigned];
+          if (prev) prev.assigned = prev.assigned.filter(id => id !== colonistId);
+        }
+        col.assigned = buildingKey;
+        if (buildingKey) {
+          if (!this.buildings[buildingKey].assigned) this.buildings[buildingKey].assigned = [];
+          this.buildings[buildingKey].assigned.push(colonistId);
+        }
+        return true;
+      }
+
+      canResearch(key) {
+        const node = this.research[key];
+        if (node.done) return false;
+        if (node.prereq && !this.research[node.prereq].done) return false;
+        const cost = node.cost;
+        for (const [res, amt] of Object.entries(cost)) {
+          if ((this.resources[res] || 0) < amt) return false;
+        }
+        return true;
+      }
+
+      doResearch(key) {
+        if (!this.canResearch(key)) return false;
+        const node = this.research[key];
+        const cost = node.cost;
+        for (const [res, amt] of Object.entries(cost)) {
+          this.resources[res] -= amt;
+        }
+        node.done = true;
+        this.logEntry('good', `Researched: ${node.name}.`);
+        return true;
+      }
+
+      checkWin() {
+        const aliveCount = this.colonists.filter(c => c.alive).length;
+        if (this.turn >= 60 && aliveCount >= 12) {
+          return { win: true, reason: 'Sustained the outpost to turn 60 with 12+ population.' };
+        }
+        return { win: false };
+      }
+
+      checkLose() {
+        const aliveCount = this.colonists.filter(c => c.alive).length;
+        if (aliveCount === 0) {
+          return { lose: true, reason: 'All colonists perished.' };
+        }
+        return { lose: false };
+      }
+
+      getScore() {
+        const population = this.colonists.filter(c => c.alive).length;
+        const research = Object.values(this.research).filter(r => r.done).length;
+        const resources = Object.values(this.resources).reduce((a, v) => a + v, 0);
+        return {
+          population: population * 50,
+          research: research * 100,
+          resources: Math.floor(resources / 10),
+          turns: this.turn * 2,
+          total: population * 50 + research * 100 + Math.floor(resources / 10) + this.turn * 2
+        };
+      }
+
+      save() {
+        return JSON.stringify({
+          seed: this.seed,
+          turn: this.turn,
+          map: this.map,
+          colonists: this.colonists,
+          resources: this.resources,
+          buildings: this.buildings,
+          research: this.research,
+          log: this.log,
+          eventCooldown: this.eventCooldown,
+          tradeCaravanTurn: this.tradeCaravanTurn
+        });
+      }
+
+      static load(json) {
+        try {
+          const data = JSON.parse(json);
+          const gs = new GameState(data.seed);
+          gs.turn = data.turn;
+          gs.map = data.map;
+          gs.colonists = data.colonists;
+          gs.resources = data.resources;
+          gs.buildings = data.buildings;
+          gs.research = data.research;
+          gs.log = data.log;
+          gs.eventCooldown = data.eventCooldown;
+          gs.tradeCaravanTurn = data.tradeCaravanTurn;
+          return gs;
+        } catch (e) {
+          throw new Error(`Load failed: ${e.message}`);
+        }
+      }
+
+      stateHash() {
+        const str = JSON.stringify({ turn: this.turn, resources: this.resources, colonists: this.colonists.map(c => ({ name: c.name, alive: c.alive })), buildings: Object.keys(this.buildings).length });
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          const chr = str.charCodeAt(i);
+          hash = ((hash << 5) - hash) + chr;
+          hash |= 0;
+        }
+        return Math.abs(hash).toString(16);
+      }
+    }
+
+    // ============================================================================
+    // UI
+    // ============================================================================
+    let game = new GameState(1337);
+    let currentEvent = null;
+
+    function renderMap() {
+      const mapDiv = document.getElementById('map');
+      mapDiv.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'map-grid';
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const tile = document.createElement('div');
+          tile.className = 'tile';
+          const terrain = game.map[y][x];
+          const terrainNames = ['ash flat', 'rock', 'water', 'vent', 'ruins'];
+          const terrainIcons = ['⬜', '🪨', '💧', '🔥', '🏚️'];
+
+          const bg = document.createElement('div');
+          bg.className = 'tile-bg';
+          bg.style.background = ['#555', '#777', '#44a', '#a44', '#888'][terrain];
+          tile.appendChild(bg);
+
+          const building = game.buildingAt(x, y);
+          if (building) {
+            const icon = document.createElement('div');
+            icon.className = 'tile-icon';
+            icon.textContent = BUILDING_TYPES[building.type].icon;
+            tile.appendChild(icon);
+            const label = document.createElement('div');
+            label.className = 'tile-label';
+            label.textContent = BUILDING_TYPES[building.type].name.substring(0, 4);
+            tile.appendChild(label);
+
+            const tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            const bdef = BUILDING_TYPES[building.type];
+            let tooltipText = `${bdef.name}\nDamage: ${building.damage}/5`;
+            if (Object.keys(bdef.produces).length > 0) {
+              tooltipText += '\nProduce: ' + Object.entries(bdef.produces).map(([k, v]) => `${k}:${v}`).join(', ');
+            }
+            if (Object.keys(bdef.consumes).length > 0) {
+              tooltipText += '\nConsume: ' + Object.entries(bdef.consumes).map(([k, v]) => `${k}:${v}`).join(', ');
+            }
+            tooltipText += '\nAssigned: ' + (building.assigned ? building.assigned.length : 0);
+            tooltip.textContent = tooltipText;
+            tile.appendChild(tooltip);
+          } else {
+            const icon = document.createElement('div');
+            icon.className = 'tile-icon';
+            icon.textContent = terrainIcons[terrain];
+            tile.appendChild(icon);
+            const label = document.createElement('div');
+            label.className = 'tile-label';
+            label.textContent = terrainNames[terrain];
+            tile.appendChild(label);
+          }
+
+          tile.onclick = () => showBuildMenu(x, y);
+          grid.appendChild(tile);
+        }
+      }
+      mapDiv.appendChild(grid);
+
+      const buildingPanel = document.createElement('div');
+      buildingPanel.className = 'panel';
+      buildingPanel.innerHTML = '<div class="panel-title">Buildings Available</div>';
+      for (const [key, bdef] of Object.entries(BUILDING_TYPES)) {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = `${bdef.icon} ${bdef.name}`;
+        btn.onclick = () => alert(`Click on a ${['ash flat', 'rock', 'water', 'vent', 'ruins'][bdef.terrain]} tile to build.`);
+        buildingPanel.appendChild(btn);
+      }
+      mapDiv.appendChild(buildingPanel);
+    }
+
+    function showBuildMenu(x, y) {
+      const building = game.buildingAt(x, y);
+      if (building) {
+        alert(`${BUILDING_TYPES[building.type].name} is already here.\nDamage: ${building.damage}/5`);
+        return;
+      }
+      const terrain = game.map[y][x];
+      const terrainNames = ['ash flat', 'rock', 'water', 'vent', 'ruins'];
+      const available = Object.entries(BUILDING_TYPES).filter(([key, bdef]) => bdef.terrain === terrain);
+      if (available.length === 0) {
+        alert(`No buildings can be built on ${terrainNames[terrain]}.`);
+        return;
+      }
+      let msg = `Build on ${terrainNames[terrain]} at (${x},${y})?\n\n`;
+      for (const [key, bdef] of available) {
+        const canAfford = Object.entries(bdef.cost).every(([res, amt]) => (game.resources[res] || 0) >= amt);
+        msg += `${bdef.icon} ${bdef.name}: ${Object.entries(bdef.cost).map(([res, amt]) => `${res}:${amt}`).join(', ')} ${canAfford ? '✓' : '✗'}\n`;
+      }
+      const choice = prompt(msg + '\nEnter building name:');
+      if (choice) {
+        const key = Object.keys(BUILDING_TYPES).find(k => BUILDING_TYPES[k].name.toLowerCase().includes(choice.toLowerCase()));
+        if (key && available.find(([k]) => k === key)) {
+          game.build(x, y, key);
+          renderMap();
+        } else {
+          alert('Invalid building.');
+        }
+      }
+    }
+
+    function renderPeople() {
+      const peopleDiv = document.getElementById('people');
+      peopleDiv.innerHTML = '';
+
+      const panel = document.createElement('div');
+      panel.className = 'panel';
+      const aliveCount = game.colonists.filter(c => c.alive).length;
+      panel.innerHTML = `<div class="panel-title">Colonists (${aliveCount}/${game.colonists.length})</div>`;
+
+      for (const col of game.colonists) {
+        const row = document.createElement('div');
+        row.className = 'colonist-row';
+        if (!col.alive) row.style.opacity = '0.5';
+        row.innerHTML = `
+          <div class="colonist-name">${col.name}</div>
+          <div class="colonist-skill">${col.skill} ${col.level}</div>
+          <div class="colonist-job">${col.assigned ? 'Assigned' : 'Resting'}</div>
+          <div class="colonist-status">F:${col.fatigue} M:${col.morale}</div>
+          <div class="colonist-controls">
+            <button class="btn" onclick="showAssignMenu(${col.id})">Assign</button>
+            <button class="btn" onclick="unassignColonist(${col.id})">Rest</button>
+          </div>
+        `;
+        panel.appendChild(row);
+      }
+      peopleDiv.appendChild(panel);
+    }
+
+    function showAssignMenu(colonistId) {
+      const col = game.colonists.find(c => c.id === colonistId);
+      if (!col || !col.alive) return;
+      const buildings = Object.entries(game.buildings).map(([key, b]) => [key, b, BUILDING_TYPES[b.type]]);
+      let msg = `Assign ${col.name} (${col.skill} ${col.level}) to:\n\n`;
+      for (const [key, b, bdef] of buildings) {
+        msg += `${bdef.icon} ${bdef.name} at (${b.x},${b.y})\n`;
+      }
+      msg += '\nEnter building coords (e.g., "0,0"):';
+      const choice = prompt(msg);
+      if (choice) {
+        const key = Object.entries(game.buildings).find(([k]) => k === choice);
+        if (key) {
+          game.assignColonist(colonistId, choice);
+          renderPeople();
+        }
+      }
+    }
+
+    function unassignColonist(colonistId) {
+      game.assignColonist(colonistId, null);
+      renderPeople();
+    }
+
+    function renderResearch() {
+      const researchDiv = document.getElementById('research');
+      researchDiv.innerHTML = '';
+
+      const panel = document.createElement('div');
+      panel.className = 'panel';
+      panel.innerHTML = '<div class="panel-title">Research Tree</div>';
+
+      for (const [key, node] of Object.entries(game.research)) {
+        const nodeEl = document.createElement('div');
+        nodeEl.className = 'tree-node';
+        if (node.done) nodeEl.classList.add('done');
+        else if (game.canResearch(key)) nodeEl.classList.add('available');
+        else nodeEl.classList.add('locked');
+
+        nodeEl.textContent = node.name;
+        nodeEl.dataset.tooltip = `Cost: ${Object.entries(node.cost).map(([k, v]) => `${k}:${v}`).join(', ')}`;
+        nodeEl.onclick = () => {
+          if (node.done) {
+            alert(`${node.name} already researched.`);
+          } else if (game.canResearch(key)) {
+            if (game.doResearch(key)) {
+              renderResearch();
+            }
+          } else {
+            alert(`Cannot research: ${node.prereq ? `Requires ${game.research[node.prereq].name}` : 'Insufficient resources'}`);
+          }
+        };
+        panel.appendChild(nodeEl);
+      }
+      researchDiv.appendChild(panel);
+    }
+
+    function renderTrade() {
+      const tradeDiv = document.getElementById('trade');
+      tradeDiv.innerHTML = '';
+
+      if (game.turn !== game.tradeCaravanTurn) {
+        tradeDiv.innerHTML = `<div class="panel"><div class="panel-title">Caravan not here</div>Caravan arrives turn ${game.tradeCaravanTurn}.</div>`;
+        return;
+      }
+
+      const panel = document.createElement('div');
+      panel.className = 'panel';
+      panel.innerHTML = '<div class="panel-title">Trading Post</div>';
+
+      const goods = [
+        { name: 'Food', buy: 2, sell: 1, stock: 50 },
+        { name: 'Water', buy: 2, sell: 1, stock: 50 },
+        { name: 'Metal', buy: 5, sell: 3, stock: 30 },
+        { name: 'Parts', buy: 10, sell: 6, stock: 20 },
+        { name: 'Power', buy: 3, sell: 2, stock: 40 }
+      ];
+
+      for (const good of goods) {
+        const item = document.createElement('div');
+        item.className = 'trade-item';
+        item.innerHTML = `
+          <div class="trade-name">${good.name}</div>
+          <div class="trade-price">B:${good.buy} S:${good.sell}</div>
+          <div class="trade-qty">Stock: ${good.stock}</div>
+          <div class="trade-controls">
+            <button class="btn" onclick="buyGood('${good.name.toLowerCase()}', ${good.buy}, ${good.stock})">Buy</button>
+            <button class="btn" onclick="sellGood('${good.name.toLowerCase()}', ${good.sell})">Sell</button>
+          </div>
+        `;
+        panel.appendChild(item);
+      }
+      tradeDiv.appendChild(panel);
+    }
+
+    function buyGood(resource, price, stock) {
+      const amt = prompt(`Buy how many ${resource}? (price: ${price} scrip each, stock: ${stock})`, '1');
+      if (amt && /^\d+$/.test(amt)) {
+        const n = parseInt(amt);
+        const cost = n * price;
+        if (game.resources.scrip < cost) {
+          alert('Insufficient scrip.');
+        } else if (n > stock) {
+          alert('Insufficient caravan stock.');
+        } else {
+          game.resources.scrip -= cost;
+          game.resources[resource] = (game.resources[resource] || 0) + n;
+          if (game.resources[resource] > game.storageMax[resource]) {
+            const overflow = game.resources[resource] - game.storageMax[resource];
+            game.resources[resource] = game.storageMax[resource];
+            game.logEntry('warning', `${resource} storage full, ${overflow} overflow.`);
+          }
+          game.logEntry('good', `Bought ${n}x ${resource}.`);
+          renderTrade();
+          updateHeader();
+        }
+      }
+    }
+
+    function sellGood(resource, price) {
+      const have = game.resources[resource] || 0;
+      if (have === 0) {
+        alert(`No ${resource} to sell.`);
+        return;
+      }
+      const amt = prompt(`Sell how many ${resource}? (you have ${have}, price: ${price} scrip each)`, '1');
+      if (amt && /^\d+$/.test(amt)) {
+        const n = parseInt(amt);
+        if (n > have) {
+          alert(`Only have ${have}.`);
+        } else {
+          game.resources.scrip += n * price;
+          game.resources[resource] -= n;
+          game.logEntry('good', `Sold ${n}x ${resource}.`);
+          renderTrade();
+          updateHeader();
+        }
+      }
+    }
+
+    function renderLog() {
+      const logDiv = document.getElementById('log');
+      logDiv.innerHTML = '';
+
+      const logEl = document.createElement('div');
+      logEl.className = 'event-log';
+      for (const entry of game.log.slice(-50)) {
+        const el = document.createElement('div');
+        el.className = `log-entry ${entry.type}`;
+        el.textContent = `[Turn ${entry.turn}] ${entry.text}`;
+        logEl.appendChild(el);
+      }
+      logDiv.appendChild(logEl);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateHeader() {
+      document.getElementById('turn-display').textContent = game.turn;
+      document.getElementById('pop-display').textContent = game.colonists.filter(c => c.alive).length;
+      document.getElementById('food-display').textContent = game.resources.food;
+      document.getElementById('water-display').textContent = game.resources.water;
+      document.getElementById('metal-display').textContent = game.resources.metal;
+      document.getElementById('parts-display').textContent = game.resources.parts;
+      document.getElementById('power-display').textContent = game.resources.power;
+    }
+
+    function handleEndTurn() {
+      const event = game.endTurn();
+      updateHeader();
+      renderMap();
+      renderPeople();
+      renderResearch();
+      renderTrade();
+      renderLog();
+
+      const winStatus = game.checkWin();
+      const loseStatus = game.checkLose();
+
+      if (winStatus.win) {
+        showEndScreen(true, winStatus.reason);
+        return;
+      }
+      if (loseStatus.lose) {
+        showEndScreen(false, loseStatus.reason);
+        return;
+      }
+
+      if (event) {
+        showEventModal(event);
+      }
+    }
+
+    function showEventModal(event) {
+      currentEvent = event;
+      document.getElementById('event-title').textContent = event.title;
+      document.getElementById('event-text').textContent = event.text;
+      const buttonsDiv = document.getElementById('event-buttons');
+      buttonsDiv.innerHTML = '';
+
+      const okBtn = document.createElement('button');
+      okBtn.className = 'modal-btn primary';
+      okBtn.textContent = 'OK';
+      okBtn.onclick = () => {
+        event.outcome();
+        currentEvent = null;
+        document.getElementById('event-modal').classList.remove('active');
+        updateHeader();
+        renderMap();
+        renderPeople();
+        renderResearch();
+      };
+      buttonsDiv.appendChild(okBtn);
+
+      document.getElementById('event-modal').classList.add('active');
+    }
+
+    function showEndScreen(isWin, reason) {
+      const score = game.getScore();
+      const endTitle = document.getElementById('end-title');
+      const endText = document.getElementById('end-text');
+
+      if (isWin) {
+        endTitle.textContent = '🎉 VICTORY!';
+        endText.innerHTML = `${reason}<br><br>Final Score: ${score.total}<br>Population: ${score.population}<br>Research: ${score.research}<br>Resources: ${score.resources}<br>Survival: ${score.turns}`;
+      } else {
+        endTitle.textContent = '💀 DEFEAT';
+        endText.innerHTML = `${reason}<br><br>Final Score: ${score.total}<br>Turns Survived: ${game.turn}`;
+      }
+
+      document.getElementById('end-modal').classList.add('active');
+    }
+
+    function renderDev() {
+      const devDiv = document.getElementById('dev');
+      devDiv.innerHTML = '';
+
+      const panel = document.createElement('div');
+      panel.className = 'panel';
+      panel.innerHTML = '<div class="panel-title">Developer Tools</div>';
+
+      const seedLabel = document.createElement('label');
+      seedLabel.textContent = 'Seed: ';
+      const seedInput = document.createElement('input');
+      seedInput.type = 'text';
+      seedInput.value = game.seed.toString();
+      seedInput.style.marginRight = '8px';
+      const newGameBtn = document.createElement('button');
+      newGameBtn.className = 'btn';
+      newGameBtn.textContent = 'New Game';
+      newGameBtn.onclick = () => {
+        const seed = parseInt(seedInput.value) || 1337;
+        game = new GameState(seed);
+        updateHeader();
+        renderMap();
+        renderPeople();
+        renderResearch();
+        renderTrade();
+        renderLog();
+        renderDev();
+      };
+      panel.appendChild(seedLabel);
+      panel.appendChild(seedInput);
+      panel.appendChild(newGameBtn);
+
+      const div1 = document.createElement('div');
+      div1.style.margin = '12px 0';
+      panel.appendChild(div1);
+
+      const testBtn = document.createElement('button');
+      testBtn.className = 'btn';
+      testBtn.textContent = 'Run Tests';
+      testBtn.onclick = runTests;
+      panel.appendChild(testBtn);
+
+      const benchBtn = document.createElement('button');
+      benchBtn.className = 'btn';
+      benchBtn.textContent = 'Run Benchmark';
+      benchBtn.onclick = runBenchmark;
+      panel.appendChild(benchBtn);
+
+      const div2 = document.createElement('div');
+      div2.style.margin = '12px 0';
+      panel.appendChild(div2);
+
+      const saveLabel = document.createElement('label');
+      saveLabel.textContent = 'Save State: ';
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'btn';
+      saveBtn.textContent = 'Copy';
+      saveBtn.onclick = () => {
+        const state = game.save();
+        navigator.clipboard.writeText(state).then(() => alert('State copied.')).catch(() => prompt('Copy this:', state));
+      };
+      panel.appendChild(saveLabel);
+      panel.appendChild(saveBtn);
+
+      const div3 = document.createElement('div');
+      div3.style.margin = '12px 0';
+      panel.appendChild(div3);
+
+      const loadLabel = document.createElement('label');
+      loadLabel.textContent = 'Load State: ';
+      const loadInput = document.createElement('input');
+      loadInput.type = 'text';
+      loadInput.placeholder = 'Paste saved state...';
+      loadInput.style.width = '300px';
+      loadInput.style.marginRight = '8px';
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'btn';
+      loadBtn.textContent = 'Load';
+      loadBtn.onclick = () => {
+        try {
+          game = GameState.load(loadInput.value);
+          updateHeader();
+          renderMap();
+          renderPeople();
+          renderResearch();
+          renderTrade();
+          renderLog();
+          renderDev();
+          alert('State loaded.');
+        } catch (e) {
+          alert(e.message);
+        }
+      };
+      panel.appendChild(loadLabel);
+      panel.appendChild(loadInput);
+      panel.appendChild(loadBtn);
+
+      devDiv.appendChild(panel);
+    }
+
+    function runTests() {
+      const results = [];
+      const tests = [
+        () => game.resources.food >= 0 && 'Food non-negative',
+        () => game.resources.water >= 0 && 'Water non-negative',
+        () => game.resources.metal >= 0 && 'Metal non-negative',
+        () => game.resources.power >= 0 && 'Power non-negative',
+        () => game.resources.parts >= 0 && 'Parts non-negative',
+        () => game.resources.scrip >= 0 && 'Scrip non-negative',
+        () => game.resources.food <= game.storageMax.food && 'Food within storage',
+        () => game.resources.water <= game.storageMax.water && 'Water within storage',
+        () => game.colonists.filter(c => c.alive).length >= 0 && 'Population count valid',
+        () => game.colonists.length === game.colonists.length && 'Colonist roster consistent',
+        () => {
+          for (const node of Object.values(game.research)) {
+            if (node.done && node.prereq && !game.research[node.prereq].done) return false;
+          }
+          return 'Research prerequisites enforced';
+        },
+        () => {
+          const state1 = game.save();
+          const game2 = GameState.load(state1);
+          const state2 = game2.save();
+          return state1 === state2 && 'Save/load round-trip';
+        },
+        () => game.buildings && Object.keys(game.buildings).every(k => game.buildings[k].type in BUILDING_TYPES) && 'Building types valid',
+        () => game.colonists.every(c => ['farming', 'science', 'crafting', 'engineering', null].includes(c.skill) || c.skill === 'none') && 'Colonist skills valid',
+        () => Object.values(game.buildings).every(b => b.damage <= 5) && 'Building damage within bounds'
+      ];
+
+      for (const test of tests) {
+        const result = test();
+        if (typeof result === 'string') {
+          results.push({ pass: true, name: result });
+        } else {
+          results.push({ pass: result, name: 'Unknown test' });
+        }
+      }
+
+      const panel = document.createElement('div');
+      panel.className = 'dev-section';
+      panel.innerHTML = '<div style="font-weight: bold;">Test Results</div>';
+
+      for (const r of results) {
+        const el = document.createElement('div');
+        el.className = `test-result ${r.pass ? 'test-pass' : 'test-fail'}`;
+        el.textContent = `${r.pass ? '✓' : '✗'} ${r.name}`;
+        panel.appendChild(el);
+      }
+
+      const passed = results.filter(r => r.pass).length;
+      const summary = document.createElement('div');
+      summary.className = 'test-result';
+      summary.textContent = `Passed: ${passed}/${results.length}`;
+      summary.style.fontWeight = 'bold';
+      panel.appendChild(summary);
+
+      document.getElementById('dev').appendChild(panel);
+    }
+
+    function runBenchmark() {
+      const seed = game.seed;
+      const benchmark = new GameState(seed);
+      for (let i = 0; i < 200; i++) {
+        benchmark.endTurn();
+      }
+      const hash = benchmark.stateHash();
+      const score = benchmark.getScore();
+
+      const panel = document.createElement('div');
+      panel.className = 'dev-section';
+      panel.innerHTML = `
+        <div style="font-weight: bold;">Benchmark Results (200 turns)</div>
+        <div class="test-result">State Hash: ${hash}</div>
+        <div class="test-result">Final Population: ${benchmark.colonists.filter(c => c.alive).length}</div>
+        <div class="test-result">Final Scrip: ${benchmark.resources.scrip}</div>
+        <div class="test-result">Final Score: ${score.total}</div>
+      `;
+
+      document.getElementById('dev').appendChild(panel);
+    }
+
+    // ============================================================================
+    // INITIALIZATION
+    // ============================================================================
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+        e.target.classList.add('active');
+        const tab = e.target.dataset.tab;
+        document.getElementById(tab).classList.add('active');
+        if (tab === 'research') renderResearch();
+        if (tab === 'trade') renderTrade();
+        if (tab === 'log') renderLog();
+        if (tab === 'dev') renderDev();
+      });
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); handleEndTurn(); }
+      else if (e.key === '1') document.querySelector('[data-tab="map"]').click();
+      else if (e.key === '2') document.querySelector('[data-tab="people"]').click();
+      else if (e.key === '3') document.querySelector('[data-tab="research"]').click();
+      else if (e.key === '4') document.querySelector('[data-tab="trade"]').click();
+      else if (e.key === '5') document.querySelector('[data-tab="log"]').click();
+      else if (e.key === '6') document.querySelector('[data-tab="dev"]').click();
+    });
+
+    document.getElementById('end-turn-btn').addEventListener('click', handleEndTurn);
+
+    // Initial render
+    updateHeader();
+    renderMap();
+    renderPeople();
+    renderLog();
+  </script>
+</head>
+<body></body>
+</html>

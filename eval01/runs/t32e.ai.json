@@ -1,0 +1,71 @@
+Reading through the code carefully now to verify wiring for each system before scoring.
+
+**F1 Core loop**: `newGame()` builds one `S` state object; `rnd(S)` seeded via `S.rngState`; `endTurn()` runs a fixed documented 13-step order. Score 2.
+
+**F2 Map**: `genMap()` builds 64 tiles from `rnd(S)`; `canBuild()` checks `d.terr.includes(t.terr)`; `adjBonus()` feeds `plan().scale`. Score 2.
+
+**F3 Economy**: greenhouse `stages` (ash→soil→food), forge ore→metal, workshop metal→parts; `applyCaps()` clamps and logs overflow, `stats.overflow` tracked. Score 2.
+
+**F4 Population**: `makePerson()` gives skill/fatigue/morale/job; `workerEff()` reads `p.skill`, `p.fatigue`, `p.morale` directly in production. Score 2.
+
+**F5 Needs**: `consume()` computes shortage into `S.starved/thirsted`; `moraleTick()` reduces morale on shortage, recovers (+2/+1) when fed; not instant loss. Score 2.
+
+**F6 Research**: 11 nodes in `TECH_ORDER`; `techStatus()`/`buyTech()` enforce prereqs and deduct cost; `techMult()` applies real multipliers read by `plan()`. Score 2.
+
+**F7 Events**: 12 events in `EVENTS`; weighted pick via `e.w`/`tot`; 6 events have 2-3 choices with divergent state writes; `S.cooldown[ev.k]=S.turn+8` enforced via `avail` filter. Score 2.
+
+**F8 Trade**: `stockFactor()` reads `S.res[k]`/cap; `S.drift[k]` random-walks each turn in `tradeTick()`; `stock[].amt` decremented on buy; `doBuy`/`doSell` both work. Score 2.
+
+**F9 Hazard**: storms fire on `turn%7===0`, `sev` scales with turn; `dmgFactor(dmg)` cuts `plan().scale`; `repair()` deducts parts and clears dmg. BUT `stormMitigation()` is used as `roll = rnd(S)*(1-mit)` — this makes higher mitigation *increase* the chance `roll<thresh` triggers damage (inverted logic bug), so the "research/building reduces damage" requirement is actually broken in code. Score 1.
+
+**F10 Save/load**: `serialize()` → JSON string in textarea; `deserialize()` validates required fields/shapes and returns clear `{err}` shown in `saveMsg`. Score 2.
+
+**F11 End conditions**: `checkEnd()` covers both win (turn 60, pop≥12, needsMet) and lose (pop 0, or turn 60 fail) paths, both reachable; `computeScore()` combines pop/tech/stock/turn/morale/skill/buildings; `renderModal()` shows summary screen. Score 2.
+
+**F12 UI**: `setTab()` switches panels; `log()` stores `S.turn`, rendered as `T${e.t}`; `data-tip` tooltips explain formulas throughout; keydown handler for Space/1-6; `@media(max-width:420px)` layout. Score 2.
+
+**F13 Dev panel**: `runTests()` has 24 non-trivial assertions (PRNG determinism, prereq enforcement, morale→output, save/load hash roundtrip); `runBenchmark()` runs `greedyTurn()` headlessly for N turns and prints `stateHash()`. Score 2.
+
+**G1**: `techMult(S,key,dir,res)` reads `S.tech.filters/soils/...`; consumed inside `plan()`'s `spread()` to scale `wantOut`/`wantIn`, visible in tooltips. Score 4.
+
+**G2**: `consume()` writes `S.starved/thirsted`; `moraleTick()` reads them to cut morale; `workerEff()` uses `p.morale` in `moraleF` factor feeding `plan()` output. Score 4.
+
+**G3**: `doStorm()` sets `t.b.dmg`; `dmgFactor(dmg)` cuts `plan().scale` (0 at dmg≥3); `repair()` spends `parts` and resets `dmg=0`, restoring output next turn. Score 4.
+
+**G4**: `stockFactor(S,k)` reads `S.res[k]/caps[k]`; `S.drift[k]` random-walks in `tradeTick()`; both combined in `sellPrice`/`buyPrice`. Score 4.
+
+**G5**: `refugees` choices push different colonist counts/morale into `S.people`; `dispute` choices apply different `p.morale` deltas by job or spend `S.res.water` — real divergent state writes, not just log lines. Score 4.
+
+No `// TODO` markers found in the source.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "newGame() builds S; rnd(S) uses S.rngState; endTurn() runs fixed 13-step order",
+    "F2": "genMap() seeds 64 tiles; canBuild() checks terrain; adjBonus() feeds plan().scale",
+    "F3": "greenhouse stages ash->soil->food; forge ore->metal; applyCaps() clamps+logs overflow",
+    "F4": "workerEff() reads p.skill/p.fatigue/p.morale directly in production formula",
+    "F5": "consume() sets S.starved/thirsted; moraleTick() drops/recovers morale from it",
+    "F6": "11 TECH_ORDER nodes; buyTech() enforces prereq/cost; techMult() applied in plan()",
+    "F7": "EVENTS len 12, weighted pick via e.w; 6 events w/ choices; S.cooldown[e.k]=turn+8",
+    "F8": "stockFactor() reads S.res; S.drift random-walks; doBuy/doSell both deduct/limit stock",
+    "F9": "doStorm(): roll=rnd(S)*(1-mit) makes higher mitigation MORE likely to trigger damage, inverted",
+    "F10": "serialize()/deserialize() validate fields, return {err} shown in saveMsg on bad input",
+    "F11": "checkEnd() covers win(turn60,pop12,needsMet) and lose(pop0/turn60 fail); computeScore() combines state; renderModal() shows summary",
+    "F12": "setTab() switches panels; log() stores turn; data-tip tooltips; keydown Space/1-6; media query <420px",
+    "F13": "runTests() 24 real-invariant asserts; runBenchmark() headless loop prints stateHash()",
+    "G1": "techMult() reads S.tech.*, applied in plan()'s spread() scaling wantOut/wantIn",
+    "G2": "consume()->S.starved/thirsted read by moraleTick()->p.morale read by workerEff() moraleF",
+    "G3": "doStorm() sets t.b.dmg -> dmgFactor() cuts plan().scale -> repair() spends parts, resets dmg",
+    "G4": "stockFactor(S.res) and S.drift (random walk) both combined in sellPrice/buyPrice",
+    "G5": "refugees/dispute choice branches write divergent S.people/p.morale/S.res changes, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "doStorm()'s mitigation formula roll=rnd(S)*(1-mit) is inverted, so higher storm mitigation from windbreaks/bunkers/research actually increases damage probability instead of reducing it."
+}
+```

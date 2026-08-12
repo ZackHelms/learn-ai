@@ -1,0 +1,69 @@
+# Worksheet
+
+**F1 Core loop**: `GameState` holds all state; `PRNG` (mulberry32-style) used via `this.rng` for map/colonists/events/etc.; `endTurn()` resolves needs→production→morale→departures→events→caravan→storm→endcheck in fixed order. Score 2.
+
+**F2 Map**: `generateMap()` builds 64 tiles from `this.rng.pick(TERRAINS)`; `canBuildAt` checks terrain via `getBuildingsForTerrain`; `getNeighbors` adjacency multiplies `output` in `calculateProduction`. Score 2.
+
+**F3 Economy**: `JOB_EFFECTS` (claims ore→metal, ash→soil→food chains) is defined but never referenced; actual `BUILDINGS` never produce ore/ash (only consumed, no replenishment besides trade/events); soil produced but never consumed anywhere. Storage caps enforced/overflow logged in `endTurn`, but no real multi-step chain. Score 1.
+
+**F4 Population**: colonists have `skill/fatigue/morale/job/assigned`; `calculateProduction` reads `c.skill`, `c.fatigue`, `c.morale`. Score 2.
+
+**F5 Needs**: `foodNeed`/`waterNeed` consumed in `endTurn`; shortage does `c.morale -= 10`; `moraleFactor` read in `calculateProduction`; morale recovers via `+3` when unassigned. Score 2.
+
+**F6 Research**: 8 nodes in `RESEARCH_NODES`; `canResearch` enforces prereqs; `doResearch` deducts cost; but `advpropulsion` and `morale` node effects are never read anywhere outside definition (dead). Score 1.
+
+**F7 Events**: 12 entries in `EVENTS`; weighted pick in `fireEvent`; 7 events have 2 choices resolved differently in `resolveEventChoice`; `eventCooldowns[event.name] = turn+5` checked before firing. Score 2.
+
+**F8 Trade**: price uses `inventoryFactor` from `game.resources[res]/STORAGE_CAPS[res]`; but Buy button never decrements `game.caravanInventory[res]` (unlimited buying) and no Sell control exists anywhere. Score 1.
+
+**F9 Hazard**: `triggerAshstorm` fires every 7 turns, `severity` scales with `turn`, `tile.damage` reduces `output` in `calculateProduction`, `shieldtech` reduces damage — but no repair function/button exists anywhere to spend resources and reduce `tile.damage`. Score 1.
+
+**F10 Save/load**: `.textarea-input`/`.save-load-section` CSS classes defined but never instantiated in JS; `getState()`/`stateHash()` exist but no export/import UI or parsing exists. Score 0.
+
+**F11 End conditions**: win at `turn>=61` with pop/food/water thresholds; lose at `colonists.length===0` or failed victory check; `renderEndScreen` computes `totalScore` from population/research/food/water/turns. Score 2.
+
+**F12 UI**: tab buttons wired via `data-tab`; log lines prefixed `[T${turn}]`; keyboard shortcuts (`Space`, `Digit1-5`) wired; `@media (max-width:600px)` responsive; but `.tooltip` CSS class unused in JS, only bare `tileDiv.title` (no number explanation). Score 1.
+
+**F13 Dev panel**: `runTests` has 15 real invariant checks (bounds, prereqs, terrain match, PRNG determinism); `runBenchmark` runs a fresh `GameState` 200 turns headless via `benchGame.endTurn()` and prints `stateHash()`. Score 2.
+
+**G1**: `applyResearch` reads `research.ashharv/hydroponics/alloy.completed` and multiplies `prod` values, applied every `endTurn`; but `recycling` compounds `STORAGE_CAPS` every turn (bug) and 2 nodes are dead. Score 3.
+
+**G2**: shortage sets `c.morale -= 10` in `endTurn`; `moraleFactor = c.morale/100` used directly in `calculateProduction` output formula every turn. Score 4.
+
+**G3**: `triggerAshstorm` sets `tile.damage`; `calculateProduction` subtracts `tile.damage*0.3` from output — but no repair action exists anywhere to spend resources and lower `tile.damage`, so recovery link is entirely absent. Score 2.
+
+**G4**: price formula in `renderTradeTab` reads `game.resources[res]/STORAGE_CAPS[res]` (inventoryFactor) and `globalPriceDrift[res]`, but `globalPriceDrift` is initialized to 0 and never updated anywhere. Score 3.
+
+**G5**: `resolveEventChoice` for Equipment Failure/Morale Crisis/Medical Emergency each branch mutates different resource/colonist state (`resources.parts`, `resources.scrip`, colonist `morale`, `colonists.splice`). Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 2, "5": 2, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 0, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 4, "G3": 2, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "GameState + PRNG rng used throughout; endTurn() resolves fixed order of 9 steps",
+    "F2": "generateMap uses rng.pick(TERRAINS); adjacencyBonus multiplies output in calculateProduction",
+    "F3": "JOB_EFFECTS chain claims unused; no building produces ore/ash; soil produced but never consumed",
+    "F4": "calculateProduction reads c.skill, c.fatigue, c.morale for output multiplier",
+    "F5": "endTurn shortage sets c.morale -= 10; moraleFactor read in calculateProduction; morale recovers +3 idle",
+    "F6": "8 RESEARCH_NODES, canResearch enforces prereqs; advpropulsion/morale effects never read elsewhere",
+    "F7": "12 EVENTS, weighted roll in fireEvent, 7 have 2 choices, eventCooldowns[event.name] checked",
+    "F8": "inventoryFactor uses game.resources; Buy button never decrements caravanInventory, no Sell exists",
+    "F9": "triggerAshstorm sets tile.damage read in calculateProduction; no repair function found anywhere",
+    "F10": ".textarea-input/.save-load-section CSS defined but never created/used in JS",
+    "F11": "turn>=61 win check, colonists.length===0 lose check, renderEndScreen computes totalScore",
+    "F12": "tab-button/data-tab wiring, [T${turn}] log prefix, Digit1-5 shortcuts; .tooltip class unused",
+    "F13": "runTests has 15 invariant asserts; runBenchmark runs 200-turn headless GameState + stateHash()",
+    "G1": "applyResearch reads research.ashharv/hydroponics/alloy.completed, multiplies prod every endTurn",
+    "G2": "shortage sets c.morale-=10 in endTurn; moraleFactor=c.morale/100 used in calculateProduction",
+    "G3": "triggerAshstorm sets tile.damage, calculateProduction subtracts damage*0.3; no repair/recovery code",
+    "G4": "trade price = basePrices*(1+globalPriceDrift)*inventoryFactor; globalPriceDrift never updated",
+    "G5": "resolveEventChoice branches mutate distinct state: resources.parts/scrip, colonist morale/splice"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Several claimed mechanics (multi-step resource chains, storm repair, trade sell, save/load, price drift) are defined in data/CSS or design notes but have no working call sites, leaving systems shallow or disconnected."
+}
+```

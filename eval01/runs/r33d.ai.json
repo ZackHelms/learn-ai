@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 - Core loop**: `GameState` class = single state object; `PRNG` (mulberry32-style) used via `this.rng` everywhere, no `Math.random()` found; `endTurn()` runs numbered steps 1-9 in fixed order. Score 2.
+
+**F2 - Map**: 64-tile grid via `generateMap()` using `this.rng.pick(TERRAINS)`; `canBuildAt` checks terrain via `getBuildingsForTerrain`; `adjacencyBonus` multiplies `output` in `calculateProduction()`. Score 2.
+
+**F3 - Economy**: forge/greenhouse are single-step consume→produce; "soil" is produced but never consumed anywhere; only cross-building linkage is via shared global pools (e.g. condenser water→greenhouse). Storage caps/overflow handled well in `endTurn()` step 3, but true multi-step chains as specified are weak. Score 1.
+
+**F4 - Population**: `colonists` array with `skill`, `fatigue`, `morale`, `job`, `assigned`; both `skill` and `fatigue` read in `calculateProduction()` (skillBonus, fatigueReduction). Score 2.
+
+**F5 - Needs**: per-colonist food/water consumption in `endTurn()`; shortage does `c.morale -= 10`; `moraleFactor` feeds `calculateProduction()`; unassigned colonists recover morale (`+3`/turn). Score 2.
+
+**F6 - Research**: 8 nodes in `RESEARCH_NODES`; `canResearch()` enforces prereqs; `doResearch()` deducts cost; but `advpropulsion` and `morale` (Cultural Programs) effects are never read anywhere outside their definitions — only 6/8 nodes have wired effects. Score 1.
+
+**F7 - Events**: 12 events in `EVENTS`; weighted pick in `fireEvent()`; 7 events have 2 choices with differing `resolveEventChoice()` branches; `eventCooldowns[name]=turn+5` filters future picks. Score 2.
+
+**F8 - Trade**: price formula reads `game.resources[res]` (inventoryFactor); but `caravanInventory[res]` is never decremented on buy, and no "Sell" button/handler exists anywhere. Score 1.
+
+**F9 - Hazard**: `triggerAshstorm()` fires every 7 turns, severity scales with `turn`, `tile.damage` reduces `calculateProduction()` output, `shieldtech` research reduces damage — but no repair function exists anywhere to spend resources and restore `tile.damage`. Score 1.
+
+**F10 - Save/load**: no save/export/import code found; `.textarea-input`/`.save-load-section` CSS classes exist but no JS creates or uses them. Score 0.
+
+**F11 - End conditions**: win check (`turn>=61` + pop/food/water thresholds) and lose check (`colonists.length===0`, or failed victory) both in `endTurn()`; `renderEndScreen()` computes and shows multi-factor `totalScore`. Score 2.
+
+**F12 - UI**: tab buttons wired to `render()`; log entries prefixed `[T${turn}]`; `tileDiv.title` is a minimal native tooltip (coords/terrain only, doesn't explain production numbers); keyboard shortcuts (`Space`, `Digit1-5`) wired; `@media (max-width:600px)` present. Score 1.
+
+**F13 - Dev panel**: `runTests()` has 15 real invariant checks (bounds, prereqs, map validity, PRNG determinism); `runBenchmark()` runs 200 headless `endTurn()` calls and prints `stateHash()`. Score 2.
+
+**G1**: `applyResearch()` reads `research.alloy.completed` → multiplies `prod.metal`, called every `endTurn()` after `calculateProduction()`. Score 3.
+
+**G2**: shortage sets `c.morale -= 10` in `endTurn()`; `moraleFactor = max(0.3, c.morale/100)` used directly in `calculateProduction()` output formula. Score 4.
+
+**G3**: `triggerAshstorm()` sets `tile.damage`; `calculateProduction()` subtracts `tile.damage*0.3` from output — but no repair mechanic exists anywhere to spend resources and reduce damage. Score 2.
+
+**G4**: trade price = `basePrices*(1+globalPriceDrift[res])*inventoryFactor` where inventoryFactor reads `game.resources[res]`; `globalPriceDrift` initialized to 0 and never mutated afterward. Score 3.
+
+**G5**: Equipment Failure (`costParts`/`gainScrip`) and Medical Emergency (`costFood`/`loseColonist`, splices `this.colonists`) both durably mutate state per branch, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 2, "5": 2, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 0, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 4, "G3": 2, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "GameState + PRNG.next() used throughout; endTurn() numbered steps 1-9",
+    "F2": "generateMap() rng.pick(TERRAINS); adjacencyBonus multiplies output in calculateProduction()",
+    "F3": "forge/greenhouse consume->produce is single-step; soil produced but never consumed anywhere",
+    "F4": "colonists[] with skill/fatigue read in calculateProduction() skillBonus/fatigueReduction",
+    "F5": "shortage sets c.morale-=10; moraleFactor used in calculateProduction(); unassigned morale recovers +3",
+    "F6": "doResearch()/canResearch() enforce cost+prereqs; advpropulsion & morale nodes never read elsewhere",
+    "F7": "12 EVENTS, weighted fireEvent(), 7 multi-choice events, eventCooldowns[name]=turn+5",
+    "F8": "price reads game.resources[res]; caravanInventory never decremented on Buy; no Sell handler",
+    "F9": "triggerAshstorm() sets tile.damage, read in calculateProduction(); no repair function exists",
+    "F10": "no save/export/import code; textarea CSS classes unused in JS",
+    "F11": "endTurn() sets won/gameOver; renderEndScreen() computes totalScore from 5 factors",
+    "F12": "tab buttons->render(); log [T${turn}]; keyboard shortcuts; tile.title tooltip lacks number explanation",
+    "F13": "runTests() 15 real invariants; runBenchmark() 200 headless endTurn() calls + stateHash()",
+    "G1": "research.alloy.completed read in applyResearch(), multiplies prod.metal, called each endTurn()",
+    "G2": "shortage->c.morale-=10; moraleFactor used directly in calculateProduction() output formula",
+    "G3": "triggerAshstorm sets tile.damage, reduces output in calculateProduction(); no repair code exists",
+    "G4": "trade price formula reads game.resources[res]/STORAGE_CAPS[res]; globalPriceDrift never updated",
+    "G5": "resolveEventChoice() costParts/gainScrip/costFood/loseColonist mutate resources/colonists array"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Save/load is entirely absent and several claimed mechanics (repair, sell, price drift, 2 research effects) are stubbed or unwired."
+}
+```

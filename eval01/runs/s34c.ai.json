@@ -1,0 +1,71 @@
+## Worksheet
+
+**F1 (Core loop):** Single `G` object; `makeRng()` (mulberry32-style) drives all randomness (`G.rng`); `resolveTurnCore`→`triggerEvent`→`finishTurn` fixed order. Score 2.
+
+**F2 (Map):** `genMap()` builds 8x8 via `pickWeighted(G.rng,...)`; `canBuildAt` checks `def.terrain.includes(tile.terrain)`; adjacency bonus added to `base` in `resolveProduction`. Score 2.
+
+**F3 (Economy):** ore→metal (mine→forge consumes ore) and ash(ambient)→soil→food (composter→greenhouse consumes soil); `addRes()` enforces `storageCap` with overflow logged. Score 2.
+
+**F4 (Population):** Colonist records have skill/fatigue/morale/assigned; `skillFactor(worker.skill)` and `fatigueFactor(worker.fatigue)` read in `resolveProduction`. Score 2 (minor bug noted below).
+
+**F5 (Needs):** `resolveNeeds` consumes food/water, shortage writes negative `delta` to `c.morale`; `moraleFactor(worker.morale)` used in production; morale recovers (+2/turn when no shortage). Score 2.
+
+**F6 (Research):** 9 nodes in `RESEARCH`; `canResearch` enforces `prereq`; `purchaseResearch` deducts cost; effects (`condenserMult`, `generatorMult`, `stormMitigation`, `repairDiscount`) read in `resolveProduction`/`resolveHazard`/`repairCost`. Score 2.
+
+**F7 (Events):** 12 entries in `EVENTS`; `pickWeighted(G.rng, eligible, e=>e.weight)`; 5 events (`wandererArrives`, `contaminatedWater`, `colonistDispute`, `ashLungSickness`, `raiderSkirmish`) have 2 choices with divergent state effects; `G.eventState[id]` cooldown tracked. Score 2.
+
+**F8 (Trade):** `buyPrice()` reads `G.res[res]/cap` and `G.market.drift[res]` (drift updates each turn in `updateMarketForNewTurn`); `inventory` qty capped and decremented in `tradeBuy`; `tradeSell` also works. Score 2.
+
+**F9 (Hazard):** `resolveHazard` fires on `turn%8===0`, severity scales `8+floor(turn/8)*3`; `damageFactor(b.damage)` reduces `resolveProduction` ratio; `windbreak`/`stormShelters`/`reinforced` reduce mitigation; `repairBuilding` spends parts and resets damage. Score 2.
+
+**F10 (Save/load):** `serializeState`→JSON text in textarea; `loadBtn` handler `JSON.parse` + `validateSaveObj` shows specific errors. Score 2.
+
+**F11 (End conditions):** `checkEndConditions` checks win (turn≥60, pop≥12, no shortage) and lose (pop=0); `computeScore` combines pop/research/stock/turn; `showEndScreen` renders summary. Score 2.
+
+**F12 (UI):** `switchTab`; log entries show `T${e.turn}`; `attachTooltip`/`resTooltipHtml`/`tileTooltipHtml` explain sources; Space/1-5 keybinds; `@media max-width:480px` responsive rules. Score 2.
+
+**F13 (Dev panel):** `runTests()` asserts real invariants (cap enforcement, save/load hash equality, prereq gating); `runBenchmark()` runs 200 headless turns via `endTurnAuto`, prints `stateHash`. Score 2.
+
+**G1:** `RESEARCH.efficientCondensers.condenserMult`/`geothermal.generatorMult` read as `yieldMult` in `resolveProduction`, applied every relevant turn. Score 4.
+
+**G2:** `resolveNeeds` shortage → `c.morale` delta → `moraleFactor(worker.morale)` in `resolveProduction` ratio, every turn, visible via `lastRatio`. Score 4.
+
+**G3:** `resolveHazard` sets `b.damage` → `damageFactor(b.damage)` cuts production ratio → `repairBuilding` spends parts, resets `b.damage=0`, restoring full ratio next turn. Score 4.
+
+**G4:** `buyPrice` reads `G.res[res]` stock ratio and `G.market.drift[res]` (drifts stochastically each turn). Score 4.
+
+**G5:** `wandererArrives` (colonist added/removed + resources) and `contaminatedWater` (parts spent vs water lost + morale) both mutate `G.res`/`G.colonists` directly, not just log. Score 4.
+
+Noted defect: `ashLungSickness`'s "Quarantine" branch sets `sick.assigned=null` directly instead of calling `unassignColonist`, leaving `b.worker` stale (edge-case inconsistency, not file-wide).
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "G object + makeRng(seed) as G.rng; resolveTurnCore/triggerEvent/finishTurn fixed order",
+    "F2": "genMap() 8x8 via pickWeighted(G.rng); canBuildAt checks terrain; adjacency bonus in resolveProduction",
+    "F3": "mine->forge (ore->metal), composter->greenhouse (soil->food); addRes() enforces storageCap, logs overflow",
+    "F4": "colonist.skill/fatigue read via skillFactor/fatigueFactor in resolveProduction",
+    "F5": "resolveNeeds shortage sets c.morale delta; moraleFactor(worker.morale) used in production ratio",
+    "F6": "9 RESEARCH nodes; canResearch enforces prereq; condenserMult/generatorMult read in resolveProduction",
+    "F7": "12 EVENTS, pickWeighted selection, 5 choice events with divergent effects, eventState cooldown",
+    "F8": "buyPrice() reads G.res ratio and G.market.drift; inventory qty decremented in tradeBuy/tradeSell",
+    "F9": "resolveHazard scales severity with turn; damageFactor cuts output; repairBuilding spends parts, resets damage",
+    "F10": "serializeState->textarea; loadBtn parses+validateSaveObj with specific error messages",
+    "F11": "checkEndConditions win/lose; computeScore combines state; showEndScreen renders summary",
+    "F12": "switchTab, log T${turn}, attachTooltip explains sources, Space/1-5 keys, mobile media query",
+    "F13": "runTests() asserts real invariants incl. save/load hash equality; runBenchmark 200 turns prints stateHash",
+    "G1": "RESEARCH.efficientCondensers/geothermal mult read as yieldMult in resolveProduction",
+    "G2": "resolveNeeds shortage -> c.morale -> moraleFactor() read in resolveProduction ratio",
+    "G3": "resolveHazard sets b.damage -> damageFactor() cuts ratio -> repairBuilding spends parts, resets damage",
+    "G4": "buyPrice reads G.res[res]/cap ratio and G.market.drift[res] (updated each turn)",
+    "G5": "wandererArrives/contaminatedWater choice branches mutate G.res/G.colonists directly, differently per option"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "ashLungSickness's Quarantine choice sets colonist.assigned=null without clearing the building's worker field, leaving a stale reference in that one branch."
+}
+```

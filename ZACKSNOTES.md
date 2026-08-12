@@ -299,9 +299,10 @@ claude --model claude-fable-5 --effort xhigh --permission-mode auto
 ```
 ## 11Aug2026
 
-`./eval01/zrunall.sh # set2 QQQ=2 DONE`
+> ./eval01/zrunall.sh    # set2 QQQ=2 DONE
 
-TODO ask fable5-max to do analysis:
+> Ask fable5-max to do analysis:
+claude --model claude-fable-5 --effort max --permission-mode auto
 Me:
 Analyze results of eval01 set2 to see if there is room for improvement in the procedure I am using with `./eval01/zrunall.sh` (most recently run with QQQ=2). 
 For example (things on my mind but likely not a comprehensive list of things to investigate & improve):
@@ -330,7 +331,10 @@ For example (things on my mind but likely not a comprehensive list of things to 
 Ask me questions now if needed, otherwise I'm going to step away for a few hours.
 Leave eval01-set2 alone and re-test with zrunall.sh which is currently configured to run eval01-set3 (QQQ=3).
 
+> review fable-max analysis and eval01-set3 results
 
+> In TODO.md > Repo maintenance, do "eval01: scorer fix batch (one coordinated change + re-score)." & "eval01: stray `eval01/eval01/` logs." then commit/push to main/remote.
+claude --model claude-fable-5 --effort max --permission-mode auto --name 202608120839-eval01-repo-maint
 
 
 

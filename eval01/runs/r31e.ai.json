@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `class Game` holds all state; `mulberry32(seed)` seeds `this.rng`, used in initMap/skill growth/departures/events/storms; `endTurn()` runs consumption→morale→production→skill→departures→caravan→storm→events→caps→win/lose in fixed order. Score 2.
+
+**F2 — Map**: 8x8 loop builds 64 tiles; terrain from `this.rng()`; `buildBuilding` checks `building_def.terrain.includes(tile.terrain)`. No adjacency-bonus code found anywhere. Score 1.
+
+**F3 — Economy**: `ore_forge`(power→metal), `greenhouse`/`hydro_farm`(water→food) are single-step conversions only, no A→B→C chain; `storage_caps` enforced with overflow logged in `endTurn`. Score 1.
+
+**F4 — Population**: colonist records have skill/fatigue/morale/job/assigned_building, but `produceResources()` uses hardcoded `avg_skill = b.workers>0?3:1`; `assigned_building` is never set anywhere, so `b.workers` stays 0 forever, making skill/fatigue dead for production. Score 1.
+
+**F5 — Needs**: `food_need`/`water_need` deducted per turn; deficit lowers `col.morale`; but morale is never read in `produceResources()`, and no code ever increases morale back up (no recovery path). Score 1.
+
+**F6 — Research**: 8 nodes in `initResearch`; prereqs enforced in `completeResearch`; costs deducted; 7/8 unlocks gate real buildings via `buildBuilding`'s research check, but `repair` node's `unlocks: null` has zero effect anywhere. Score 1.
+
+**F7 — Events**: only 7 event types (`event_defs`), not 10+; `fireRandomEvent` selects uniformly (`Math.floor(rng()*events.length)`), not weighted; 6 events have differentiated 2-choice branches; soft cooldown via `events_fired.includes()+rng()<0.5`. Score 1.
+
+**F8 — Trade**: `tradeResource` handles buy/sell both ways with caps; price formula reads `market_demand` but it's initialized to 0 and never written anywhere else, so prices are effectively static. Score 1.
+
+**F9 — Hazard**: `storm_arrival` fires every 15 turns; `severity=Math.floor(turn/10)` grows; `applyAshstorm` sets `tile.building.damage`; `damage_factor` in `produceResources` reduces output; `storm_shelter` (gated by `reinforcement` research) reduces damage; `repairBuilding` costs 5 parts and restores output. Score 2.
+
+**F10 — Save/load**: `save()` serializes full state to JSON text via textarea; `load()` wraps `JSON.parse` in try/catch, `loadGame()` alerts "Failed to load game state" on bad input. Score 2.
+
+**F11 — End conditions**: lose at `colonists.length===0`; win at `turn>=60 && pop>=12 && food>=30 && water>=20`; `endGame` computes `total_score` from pop/research/resources/turns; `showEndGame` renders summary modal. Score 2.
+
+**F12 — UI**: `switchTab` toggles tabs; log entries show `[T${entry.turn}]`; `.tooltip`/`.tooltip-text` CSS defined but never used in any rendered HTML; keydown listener for Space/1-5; `@media(max-width:600px)` present. Score 1.
+
+**F13 — Dev panel**: `runTests()` has 15 real invariant checks (negative resources, caps, prereqs, PRNG determinism, save/load roundtrip, bounds); `runBenchmark()` runs 200 headless `endTurn()` calls and prints `simpleHash(final_state)`. Score 2.
+
+**G1**: research gates specific buildings with fixed `output_base` (e.g. `hydro`→`hydro_farm` output 20 vs `greenhouse` 15) via `buildBuilding`'s research check; production formula itself never reads research state directly — hardcoded per-building special case. Score 2.
+
+**G2**: `food_deficit`/`water_deficit` write to `col.morale` (real state change), but `produceResources()` never reads `col.morale` — output never reduced by morale. Score 1.
+
+**G3**: `applyAshstorm` sets `tile.building.damage`; `damage_factor=1-(damage/100)` cuts output in `produceResources`; `repairBuilding` spends 5 parts and cuts damage by 30, restoring output; damage visible via tile `.dmg` class and building-info panel. Score 4.
+
+**G4**: `market_demand` read in price formula but never written anywhere after init (`=0` forever) — prices never actually drift or respond to stockpiles. Score 0.
+
+**G5**: `discovery`/`accident`/`visitor`/`illness` choices each write distinct resource/colonist state changes (e.g. visitor choice pushes new colonist vs. no-op decline), not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 2, "G2": 1, "G3": 4, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32(seed) drives all rng() calls; endTurn() resolves fixed system order",
+    "F2": "8x8 initMap loop; buildBuilding checks terrain.includes(tile.terrain); no adjacency bonus found",
+    "F3": "ore_forge/greenhouse/hydro_farm are single-step input->output; storage_caps overflow clamped in endTurn",
+    "F4": "avg_skill hardcoded to 3/1 in produceResources; assigned_building never set so workers stays 0",
+    "F5": "food_deficit/water_deficit decrement col.morale; morale never read in produceResources, no recovery path",
+    "F6": "8 nodes in initResearch; prereqs/costs enforced in completeResearch; 'repair' node unlocks:null, unused",
+    "F7": "only 7 event_defs entries; fireRandomEvent uses uniform rng, not weighted; events_fired gives soft cooldown",
+    "F8": "tradeResource buy/sell both work; market_demand read in price formula but never written after init",
+    "F9": "applyAshstorm sets tile.building.damage; damage_factor cuts output; storm_shelter+repairBuilding recover it",
+    "F10": "save() serializes to JSON textarea; load() try/catches JSON.parse, loadGame() alerts on failure",
+    "F11": "colonists.length===0 lose, turn>=60&&pop>=12 win in endTurn; endGame computes total_score, showEndGame renders",
+    "F12": "switchTab toggles .active; log shows [T${turn}]; .tooltip CSS defined but never used in render()",
+    "F13": "runTests() has 15 invariant checks; runBenchmark() runs 200 headless endTurn() and prints simpleHash",
+    "G1": "hydro research gates hydro_farm(output_base 20) vs greenhouse(15) via buildBuilding research check",
+    "G2": "food/water deficit writes col.morale but produceResources() never reads col.morale",
+    "G3": "applyAshstorm->tile.building.damage->damage_factor in produceResources->repairBuilding restores via parts cost",
+    "G4": "market_demand read in tradeResource price calc but never written anywhere after constructor init",
+    "G5": "discovery/accident/visitor/illness choices each write distinct resource/colonist state, not just log text"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Colonists are never assigned to buildings (assigned_building/workers stay 0), so skill, fatigue, and morale never actually feed into the production formula despite being tracked."
+}
+```

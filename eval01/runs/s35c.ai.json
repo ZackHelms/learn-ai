@@ -1,0 +1,69 @@
+# Worksheet
+
+**F1 Core loop**: `newGameState()` single state obj; `makeRNG`/`rngNext` (mulberry32) used everywhere, no `Math.random`; `runTurn()` resolves systems in fixed documented order. Score 2.
+
+**F2 Map**: 8x8 `CONFIG.GRID_SIZE`; `generateGrid(rng)` derives terrain from seeded rng; `canBuildAt` checks `def.terrain.includes(cell.terrain)`; `adjacencyMult` feeds `totalMultFor` changing real yields. Score 2.
+
+**F3 Economy**: ore→metal (`resolveConvert`), ash→soil→food (`resolveGreenhouse`); `capFor`/`gainResource`/`enforceStorageCaps` cap and log overflow. Score 2.
+
+**F4 Population**: colonist records w/ skill,fatigue,morale,job,assignedTo; `effectiveSkillMult`/`fatigueMult` read by `totalMultFor` in production. Score 2.
+
+**F5 Needs**: `resolveNeeds` consumes food/water per colonist; shortfall calls `adjustAllMorale`(-); `moraleMult` used in `totalMultFor`; `resolveColonistVitals` regenerates morale toward 60. Score 2.
+
+**F6 Research**: 12 nodes in `RESEARCH_DEFS`; `researchStatus`/`buyResearch` enforce prereq+cost; every node's `hasResearch()` check verified wired into a real formula (metallurgy→forge, composting→greenhouse, reclamation→condenser, shelters/reinforcement→storm mitig, advForging/salvageExpertise→building unlock, hydroponics→cap/water, tradeRoutes→caravan/price, rationing→consumption, silos→cap, geothermal→adjacency). Score 2.
+
+**F7 Events**: 12 in `EVENT_DEFS`; `rollEvent` uses `rngWeighted`; 5 events (mech_failure, migrant_arrival, illness_outbreak, ruins_cache, festival) have 2 choices with distinct state effects; `cooldowns` set in `applyEventChoice`, checked in `eligibleEvents`. Score 2.
+
+**F8 Trade**: `currentSellPrice` reads `market.drift` (drifted per turn in `updateMarketDrift`) and stock ratio; `caravan.inventory` capped and decremented in `tradeBuy`/`tradeSell`; both directions functional. Score 2.
+
+**F9 Hazard**: `isStormTurn`/`stormSeverity` grows with `state.turn`; `resolveStorm` damages `b.building.hp`; `totalMultFor` uses `hp/100` as dmg multiplier; shelters/reinforcement/windbreak reduce severity; `repairBuilding` costs parts, restores hp=100. Score 2.
+
+**F10 Save/load**: `serializeState` → JSON shown in textarea (copyable); `deserializeState`/`validateStateShape` parse+validate, `saveMsg` shows clear error text. Score 2.
+
+**F11 End conditions**: `checkEndConditions` sets win (`turn>=60 && pop>=WIN_POP && criticalNeedsMet`) and lose (`pop<=0` or shortfall) both reachable every turn; `computeScore` combines pop/research/turn/stock; `showEndScreen` renders summary. Score 2.
+
+**F12 UI**: `switchTab` toggles panels/buttons; `renderLog` shows `T${entry.turn}`; `attachTooltip` w/ per-context html (`resourceTooltipHtml`, `tileTooltipHtml`); keydown handler for Space/1-6; `@media(max-width:480px)` layout rules. Score 2.
+
+**F13 Dev panel**: `runTests` asserts real invariants (no negative/over-cap resources, save/load hash match, prereq rejection, metallurgy yield increase); `runBenchmark` runs `runTurn` headless for N turns and prints `hashState`. Score 2.
+
+**G1**: `hasResearch(state,'metallurgy')` read inside `resolveConvert` (`mult*=1.3`), applied every production tick, but effect is a per-building hardcoded special case, not surfaced in a dedicated tooltip line. Score 3.
+
+**G2**: `resolveNeeds` shortfall → `adjustAllMorale(state,-...)` → `moraleMult(colonist)` consumed in `totalMultFor` for all production types. Score 4.
+
+**G3**: `resolveStorm` sets `b.building.hp`; `totalMultFor` multiplies output by `hp/100`; `repairBuilding` spends parts and restores hp=100. Score 4.
+
+**G4**: `currentSellPrice` reads `state.market.drift[key]` (updated turnly in `updateMarketDrift`) and `state.resources[key]/cap` stock ratio. Score 4.
+
+**G5**: `migrant_arrival` choices durably add colonist+consume food vs. add scrip; `festival` choices spend food/water+raise morale vs. no-op — both write real state, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "makeRNG/rngNext (mulberry32) drive generateGrid, events, market, storms; runTurn() fixed order",
+    "F2": "generateGrid(rng) terrain; canBuildAt checks def.terrain; adjacencyMult used in totalMultFor",
+    "F3": "resolveConvert (ore->metal), resolveGreenhouse (ash->soil->food); gainResource caps + logs overflow",
+    "F4": "effectiveSkillMult/fatigueMult read colonist.skill/fatigue, multiplied in totalMultFor",
+    "F5": "resolveNeeds shortfall -> adjustAllMorale; moraleMult used in totalMultFor; vitals regen morale",
+    "F6": "12 RESEARCH_DEFS; buyResearch enforces prereq/cost; hasResearch() checked in each production fn",
+    "F7": "rollEvent uses rngWeighted; 5 choice events (mech_failure etc); cooldowns set/checked",
+    "F8": "currentSellPrice reads market.drift + stock ratio; tradeBuy/tradeSell cap caravan inventory",
+    "F9": "stormSeverity grows w/ turn; resolveStorm damages hp; totalMultFor uses hp/100; repairBuilding costs parts",
+    "F10": "serializeState->textarea; deserializeState validates and reports errors via saveMsg",
+    "F11": "checkEndConditions win/lose both reachable each turn; computeScore + showEndScreen summary",
+    "F12": "switchTab, renderLog T${turn}, attachTooltip breakdowns, keydown shortcuts, mobile media query",
+    "F13": "runTests asserts real invariants; runBenchmark runs runTurn headless, prints hashState",
+    "G1": "hasResearch('metallurgy') read in resolveConvert forge branch, mult applied every production tick",
+    "G2": "resolveNeeds shortfall -> adjustAllMorale -> moraleMult consumed in totalMultFor",
+    "G3": "resolveStorm sets hp -> totalMultFor dmgMult -> repairBuilding spends parts restores hp",
+    "G4": "currentSellPrice reads market.drift (drifted turnly) and resources[key]/cap stock ratio",
+    "G5": "migrant_arrival/festival choice branches durably add colonist/spend resources vs alternate branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research/adjacency effects are applied via many scattered per-id hardcoded checks (e.g. windbreak's def.mitigation field is defined but never read; actual mitigation is a separate hardcoded 0.12 constant) rather than a general, tooltip-visible modifier system."
+}
+```

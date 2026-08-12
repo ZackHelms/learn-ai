@@ -141,6 +141,48 @@ Add a row to `RESULTS.md`. Every row records the candidate config AND the grader
 - **Truncated, broken, and weird outputs get scored anyway.** The eval measures what the
   model did, not what it meant.
 
+## Interpreting results - effort levels and variance
+
+Lessons from sets 1-2 (RESULTS.md, 40 bare-harness runs, 2026-08-09..11) worth
+knowing before reading any score table here:
+
+- **`--effort` does nothing for Haiku 4.5.** Effort maps to the API's adaptive
+  thinking, which `claude-haiku-4-5` does not support, so the flag is silently
+  ignored (supported models are listed in the
+  [effort docs](https://platform.claude.com/docs/en/build-with-claude/effort),
+  checked 2026-08-11). The run data agrees: all 10 haiku runs in sets 1-2 used
+  2 turns and showed no time or token scaling from low to max. Haiku's five
+  "effort" rows per set are therefore five samples of ONE config - a free read
+  on run-to-run variance, not an effort comparison.
+- **Single-run variance is large.** Those 10 identical-config haiku runs:
+  total 71.5 +/- 9.1 sd (range 53.6-81.6); det half 40.9 +/- 9.0; ai half
+  30.6 +/- 3.6; wall time 2m36s-6m55s; cost $0.14-$0.32. Even the 5-run set
+  averages moved 14 points between set1 (78.6) and set2 (64.4). Treat
+  single-run gaps under ~10 points as ties - this is the "one sample is noisy"
+  rule above, now with measured numbers.
+- **The det half fails bimodally.** One binary runtime defect (a JS crash on
+  load, an overlay swallowing every click) zeroes the whole C/D runtime cluster
+  at once, so strong-model det scores sit near 54 or collapse to ~29-33 with
+  little in between. A big drop usually means one defect, not general decline -
+  read the per-check lines in `<id>.eval.json` before concluding anything.
+- **Higher effort buys work, not scores, once the model saturates the task.**
+  For sonnet/opus/fable, going low -> max multiplies turns, output tokens, wall
+  time, and cost by roughly 2-6x, while every non-defect total in sets 1-2
+  lands in 91-100 at ALL effort levels. When a high/xhigh/max run scores below
+  a lower-effort run, so far it has been a defect run, not "overthinking
+  degraded the answer": the three worst fable runs (u13/u23/u25, det 29-32)
+  all shipped the same genuine bug - a boot-time modal overlay whose CSS
+  `display:flex` overrides the HTML `hidden` attribute, leaving the page
+  unclickable - while their model-graded halves stayed 43.8-46 because the
+  code *reads* fine. Higher effort tends to produce bigger, more ambitious
+  builds, which is more surface area for one fatal defect in a one-shot
+  protocol with no chance to test in a browser.
+- **Practical default.** Use the lowest effort that saturates your task;
+  escalate to xhigh/max only when the task is genuinely beyond the model at
+  lower effort. Expect escalation to buy more thorough work at more cost and
+  more one-shot variance - not reliably higher scores - and replicate any
+  surprising drop before believing it (see the rerun rule above).
+
 ## Glossary - the industry terms this exercise teaches
 
 - **eval**: any measured test of model capability. This directory is one.

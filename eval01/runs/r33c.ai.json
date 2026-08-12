@@ -1,0 +1,68 @@
+## Worksheet
+
+**F1 Core loop**: `GameState` single state object; `PRNG` (mulberry32-style) drives all `rng.next/randInt/pick` calls; `endTurn()` runs numbered steps 1-9 in fixed order. Score 2.
+
+**F2 Map**: 64-tile grid via `generateMap()` using `rng.pick(TERRAINS)`; `canBuildAt` checks terrain; `adjacencyBonus` multiplies `output` in `calculateProduction`. Score 2.
+
+**F3 Economy**: `bldg.consumes`/`bldg.produces` gives single-hop conversions (ore→metal); no genuine 2-hop chain exists (ash never produced by anything, soil never consumed). Caps/overflow handled in `endTurn`. Score 1.
+
+**F4 Population**: colonists carry `skill,fatigue,morale,job`; `skill`/`fatigue`/`morale` read in `calculateProduction`; `job` read in skill-growth branch (`c.job==='farm'`). Score 2.
+
+**F5 Needs**: per-turn `foodNeed/waterNeed` consumption in `endTurn`; shortage does `c.morale -= 10`; `moraleFactor` used in production; morale recovers via unassigned-colonist branch (+3/turn). Score 2.
+
+**F6 Research**: 8 `RESEARCH_NODES`; `canResearch` enforces prereqs; `doResearch` deducts cost; but `morale` and `advpropulsion` nodes have no effect anywhere (`applyResearch`/`triggerAshstorm` never reference them). Score 1.
+
+**F7 Events**: 12 `EVENTS`; weighted pick in `fireEvent`; 7 events have 2 choices with distinct outcome branches in `resolveEventChoice`; `eventCooldowns[event.name]=turn+5` enforced in filter. Score 2.
+
+**F8 Trade**: price uses `inventoryFactor` from `game.resources[res]/STORAGE_CAPS[res]`; only a Buy button exists (no Sell anywhere); Buy never decrements `caravanInventory`, so it's not actually limited. Score 1.
+
+**F9 Hazard**: `triggerAshstorm` fires every ≥7 turns, severity scales with `turn`, `tile.damage` reduces `output` in `calculateProduction`, `shieldtech` reduces damage — but no repair function exists anywhere, damage never decreases. Score 1.
+
+**F10 Save/load**: `.textarea-input`/`.save-load-section` CSS exists but no tab, button, serialize-to-text, or import/parse code found anywhere in JS. Score 0.
+
+**F11 End conditions**: win/lose both checked in `endTurn` step 9 (`turn>=61` branch, `colonists.length===0`); `renderEndScreen` computes `totalScore` from population/research/food/water/turns. Score 2.
+
+**F12 UI**: tab switching via `.tab-button` listeners; log lines prefixed `[T${turn}]`; keyboard shortcuts (`Space`, `Digit1-5`) wired; responsive `@media(max-width:600px)`; but `.tooltip` CSS class is never applied anywhere in JS (only native `title` attr). Score 1.
+
+**F13 Dev panel**: `runTests()` has 15 real invariant checks (caps, bounds, prereqs, PRNG determinism); `runBenchmark()` runs 200 headless `endTurn()` calls and prints `stateHash()`. Score 2.
+
+**G1**: `applyResearch()` multiplies `prod.metal`/`prod.food` from `alloy`/`hydroponics`, called every `endTurn`; but `ashharv` doubles `prod.ash` which no building ever produces (dead branch). Score 3.
+
+**G2**: shortage sets `c.morale -= 10` in `endTurn`; `moraleFactor = c.morale/100` used directly in `calculateProduction` output formula every turn. Score 4.
+
+**G3**: `triggerAshstorm` sets `tile.damage`; `calculateProduction` subtracts `tile.damage*0.3` from output; but no repair function exists anywhere — damage never decreases, no resource cost to fix. Score 2.
+
+**G4**: trade price formula reads `game.resources[res]/STORAGE_CAPS[res]` every render of `renderTradeTab`; `globalPriceDrift` initialized but never mutated (dead). Score 3.
+
+**G5**: `Equipment Failure` choices `costParts` vs `gainScrip` mutate different resources; `Medical Emergency` choices `costFood` vs `loseColonist` (splices colonist array) — both durable, non-log-only mutations. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 2, "5": 2, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 0, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 3, "G2": 4, "G3": 2, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "GameState + PRNG used throughout; endTurn() runs 9 numbered steps in fixed order",
+    "F2": "generateMap uses rng.pick; canBuildAt checks terrain; adjacencyBonus multiplies output",
+    "F3": "forge consumes ore->metal via Math.min(available,amt*output); no true 2-hop chain (ash/soil dead ends)",
+    "F4": "colonist.skill/fatigue/morale read in calculateProduction; job read in skill-growth branch",
+    "F5": "foodNeed/waterNeed consumed in endTurn; shortage -> morale -=10; moraleFactor drives output",
+    "F6": "canResearch/doResearch wired; applyResearch only covers 6/8 nodes, morale & advpropulsion unused",
+    "F7": "12 EVENTS, weighted roll in fireEvent, 7 events 2-choice, eventCooldowns[name]=turn+5",
+    "F8": "price uses inventoryFactor from game.resources; only Buy button exists, no Sell, caravan qty never decremented",
+    "F9": "triggerAshstorm sets tile.damage, calculateProduction subtracts damage*0.3; no repair function found",
+    "F11": "endTurn step9 checks colonists.length/turn for win/lose; renderEndScreen computes totalScore",
+    "F12": "tab-button listeners, [T${turn}] log prefix, Digit1-5 keydown handler, media query 600px; .tooltip class unused in JS",
+    "F13": "runTests() 15 invariant asserts; runBenchmark() runs 200 headless endTurn() calls, prints stateHash()",
+    "G1": "applyResearch multiplies prod.metal/prod.food from completed research, called every endTurn; ashharv branch dead",
+    "G2": "shortage sets c.morale-=10 in endTurn, moraleFactor=c.morale/100 used in calculateProduction",
+    "G3": "triggerAshstorm sets tile.damage, calculateProduction reduces output by damage*0.3; no repair anywhere",
+    "G4": "renderTradeTab price = basePrices*inventoryFactor(game.resources[res]/STORAGE_CAPS[res]) every render",
+    "G5": "resolveEventChoice: costFood vs loseColonist (splices array), costParts vs gainScrip - distinct state writes"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Save/load is entirely absent (CSS scaffolding only) and ashstorm damage has no repair mechanic, so buildings degrade permanently."
+}
+```

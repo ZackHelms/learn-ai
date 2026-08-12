@@ -1,0 +1,68 @@
+## Worksheet
+
+**F1 – Core loop**: `GameState` class holds all state; `this.rng` (PRNG) used everywhere (no `Math.random` found); `endTurn()` resolves needs→production→research→colonists→departures→events→caravan→storm→endcheck in fixed order. Score 2.
+
+**F2 – Map**: `generateMap()` builds 64 tiles via `rng.pick(TERRAINS)`; `canBuildAt` checks `getBuildingsForTerrain`; `bldg.adjacencyBonus` multiplies `output` in `calculateProduction()`. Score 2.
+
+**F3 – Economy**: forge/greenhouse consume→produce (ore→metal, ash+water→food/soil) but soil is never consumed downstream, so no real multi-step chain exists; storage caps enforced/overflow logged in `endTurn`. Score 1.
+
+**F4 – Population**: colonists have `skill`, `fatigue`, `morale`, `job`, `assigned`; both `c.skill` and `c.fatigue` read in `calculateProduction()`. Score 2.
+
+**F5 – Needs**: `foodNeed`/`waterNeed` consumed per colonist in `endTurn`; shortage does `c.morale -= 10`; `moraleFactor` used in `calculateProduction`; unassigned colonists regain morale (+3/turn). Score 2.
+
+**F6 – Research**: 8 nodes in `RESEARCH_NODES`; `canResearch` enforces prereqs; `doResearch` deducts cost; `applyResearch` applies effects for ashharv/hydroponics/alloy/recycling, and `fieldwork`/`shieldtech` read elsewhere, but `advpropulsion` and `morale` nodes are never read anywhere. Score 1.
+
+**F7 – Events**: 12 entries in `EVENTS`; weighted roll in `fireEvent()`; 7 events have 2 choices with distinct `resolveEventChoice` branches; `eventCooldowns[name]=turn+5` filters `fireEvent`. Score 2.
+
+**F8 – Trade**: price uses `game.resources[res]` (stockpile) but `globalPriceDrift` never updates after init; caravan `Buy` button never decrements `game.caravanInventory[res]`; no "sell" code exists anywhere. Score 1.
+
+**F9 – Hazard**: `triggerAshstorm` fires every 7 turns, `severity` scales with `turn`, `tile.damage` reduces output in `calculateProduction`, `shieldtech` cuts damage — but no repair function exists anywhere; damage is permanent. Score 1.
+
+**F10 – Save/load**: `.textarea-input`/`.save-load-section` CSS exist but are never referenced in any render function; `getState()`/`stateHash()` exist but no export/import UI or parser wired. Score 0.
+
+**F11 – End conditions**: win at turn≥61 w/ pop≥12,food≥60,water≥60; lose at `colonists.length===0` or failed win check; `renderEndScreen` computes `totalScore` from pop/research/food/water/turns. Score 2.
+
+**F12 – UI**: tab buttons wired; log lines prefixed `[T${turn}]`; keyboard Space/Digit1-5 handled; `@media (max-width:600px)` adapts layout — but `.tooltip` class is unused and `tile.title` only shows position/terrain, not number derivation. Score 1.
+
+**F13 – Dev panel**: `runTests()` has 15 real invariant checks (bounds, prereqs, PRNG reproducibility); `runBenchmark()` runs a fresh `GameState` 200 turns headless via `endTurn()` and prints `stateHash()`. Score 2.
+
+**G1 – research→yield**: `research.ashharv/hydroponics/alloy.completed` read in `applyResearch(prod)`, called every `endTurn()` before resources updated; visible in stat totals. Score 4.
+
+**G2 – shortfall→morale→output**: shortage decrements `c.morale-=10` in `endTurn`; `moraleFactor=c.morale/100` used in `calculateProduction` output formula each turn. Score 4.
+
+**G3 – storm→damage→loss→repair→recovery**: `triggerAshstorm` sets `tile.damage`, read in `calculateProduction` (`output -= damage*0.3`), `shieldtech` mitigates — but no repair function anywhere, damage never reduces once built. Score 2.
+
+**G4 – trade prices from stockpiles/supply**: `inventoryFactor` reads `game.resources[res]/STORAGE_CAPS[res]` live each render; `globalPriceDrift` term present but dead (never mutated). Score 3.
+
+**G5 – event choices mutate state**: "Equipment Failure" (`costParts`→`resources.parts-=10` vs `gainScrip`→`resources.scrip+=30`) and "Morale Crisis" (`riskMorale`→all `c.morale-=15` vs `costScrip`→`resources.scrip-=40`) both durably alter state, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 1, "4": 2, "5": 2, "6": 1, "7": 2,
+        "8": 1, "9": 1, "10": 0, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 2, "G4": 3, "G5": 4},
+  "evidence": {
+    "F1": "GameState + this.rng used throughout; endTurn() fixed 9-step order",
+    "F2": "generateMap uses rng.pick; adjacencyBonus multiplies output in calculateProduction",
+    "F3": "forge consumes ore->metal, capped/overflow-logged in endTurn, but soil byproduct unused downstream",
+    "F4": "c.skill, c.fatigue, c.morale read in calculateProduction()",
+    "F5": "shortage -> c.morale-=10 in endTurn; moraleFactor used in calculateProduction",
+    "F6": "applyResearch reads ashharv/hydroponics/alloy/recycling; advpropulsion & morale never read",
+    "F7": "12 EVENTS, weighted fireEvent(), eventCooldowns[name]=turn+5 filters availability",
+    "F8": "inventoryFactor reads game.resources; globalPriceDrift never updated; no sell code exists",
+    "F9": "triggerAshstorm sets tile.damage read in calculateProduction; no repair function found",
+    "F11": "endTurn win/lose branches; renderEndScreen computes totalScore from 5 components",
+    "F12": "tab-button listeners, [T${turn}] log prefix, keydown Digit1-5/Space, @media 600px",
+    "F13": "runTests 15 invariant asserts; runBenchmark runs fresh GameState 200 turns + stateHash",
+    "G1": "research.ashharv/hydroponics/alloy.completed read in applyResearch(prod), called every endTurn",
+    "G2": "c.morale-=10 on shortage in endTurn; moraleFactor drives output in calculateProduction",
+    "G3": "triggerAshstorm->tile.damage->output loss in calculateProduction; no repair fn anywhere",
+    "G4": "trade price = basePrices * inventoryFactor(game.resources) each render in renderTradeTab",
+    "G5": "resolveEventChoice branches costParts/gainScrip and riskMorale/costScrip mutate resources/morale distinctly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Save/load is entirely unwired (CSS-only) and building repair never exists, so ashstorm damage is permanent and trade caravan stock never depletes."
+}
+```

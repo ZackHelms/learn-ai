@@ -1,0 +1,71 @@
+# Worksheet
+
+**F1 — Core loop**: `newGame()` builds one state object `S`; `rand(S)` mulberry32 used for all randomness (map gen, colonists, events, storms); `endTurn()` calls production→needs→events→storm→caravan→checkEnd in fixed order. Score 2.
+
+**F2 — Map**: `genMap()` fills 8x8 `S.map` via `rand(S)`; `canBuild()` checks `B.terr.includes(tile.terr)`; `adjMult()` multiplies into `mult` used in `productionPhase()`. Score 2.
+
+**F3 — Economy**: chains ore→metal (forge), soil+water→food (greenhouse), ash→soil (soilworks) via `cons`/`prod`; `addRes()` clamps at `capOf()` and logs+tracks `stats.overflowLost`. Score 2.
+
+**F4 — Population**: colonists are objects with `skill,fatigue,morale,job,work`; `workerMult()` reads `c.skill`, `moraleFactor(c)`, `fatigueFactor(c)` in production. Score 2.
+
+**F5 — Needs**: `needsPhase()` computes food/water consumption, shortage → `c.morale-=12`; `moraleFactor` feeds `workerMult`; morale recovers `+3`/turn when met, no instant loss. Score 2.
+
+**F6 — Research**: 10 nodes in `RESEARCH`; `buyResearch()` enforces `R.req.every`, deducts cost; effects read in `techMult`, `capOf`, `price`, `stormPhase`, `canBuild` (needsTech). Score 2.
+
+**F7 — Events**: 12 entries in `EVENTS`; weighted roll in `eventsPhase()`; 4 events (`refugees`,`scout`,`badwater`,`festival`) have differing-state choices; `S.eventCd[id]` cooldown filters pool. Score 2.
+
+**F8 — Trade**: `price()` reads `S.res[r]/cap` scarcity and `S.market.drift[r]`; `M.caravan.inv[r]` limited and decremented; `tradeBuy`/`tradeSell` both implemented and UI-wired. Score 2.
+
+**F9 — Hazard**: `stormPhase()` fires every 7 turns, `sev` grows with `S.turn`; damaged tiles skipped in `productionPhase` (`if(t.damaged) continue`); `stormwall`/`stormproof`/`bunkers` reduce chance; `repair()` spends parts. Score 2.
+
+**F10 — Save/load**: `serialize()`→textarea; `deserialize()` parses JSON, validates required fields/array lengths, throws specific errors shown in `#saveerr`. Score 2.
+
+**F11 — End conditions**: `checkEnd()` checks win (turn 60, pop≥12, needsMet) and loss (pop 0 or failed turn-60 check); `score()` sums colonists/research/stock/scrip/turn; `renderModal()` shows summary. Score 2.
+
+**F12 — UI**: `switchTab()` wired to nav buttons; log entries store `t:S.turn`; `title=` tooltips explain resource/building math; `keydown` handles Space + Digit1-5; `@media(max-width:420px)` adapts layout. Score 2.
+
+**F13 — Dev panel**: `runTests()` asserts real invariants (PRNG determinism, cap enforcement, save/load hash equality, prereqs, build rules); `runBenchmark()` runs 200 headless turns via `greedyTurn`, prints `stateHash()`. Score 2.
+
+**G1**: `techMult(S,bkey)` reads `S.research.drills` etc., multiplied into production `mult` in `productionPhase()` every relevant turn. Score 4.
+
+**G2**: `needsPhase` shortage → `c.morale-=12` → `moraleFactor(c)` used in `workerMult()` for next turn's output. Score 4.
+
+**G3**: `stormPhase` sets `t.damaged=true`; `productionPhase` skips damaged tiles entirely; `repair()` spends `addRes(parts,-cost)`, requires idle colonist, clears `damaged` to restore output. Score 4.
+
+**G4**: `price()` reads live `S.res[r]/capOf` scarcity and `S.market.drift[r]`, drift updated each caravan cycle in `caravanPhase`. Score 4.
+
+**G5**: `refugees`/`festival`/`badwater`/`scout` choice fx write to `S.colonists`, `S.res`, `S.market.discount` (later read in `price()`), not just log. Score 4.
+
+Single biggest weakness: damaged buildings are fully zeroed rather than partially reduced (binary, not graduated) — the only place the implementation is looser than the spec's letter, though the full chain is still traceable and functional. No file-wide JS syntax defect was found on inspection.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls productionPhase/needsPhase/eventsPhase/stormPhase/caravanPhase in fixed order using rand(S)",
+    "F2": "adjMult(t) multiplied into mult in productionPhase; canBuild checks B.terr.includes(tile.terr)",
+    "F3": "forge cons ore+power prod metal; addRes clamps at capOf and logs overflow",
+    "F4": "workerMult reads c.skill, moraleFactor(c), fatigueFactor(c)",
+    "F5": "needsPhase: shortF -> c.morale-=12 -> moraleFactor used in workerMult",
+    "F6": "buyResearch enforces R.req; techMult/capOf/price/stormPhase read S.research flags",
+    "F7": "eventsPhase weighted roll over EVENTS(12); eventCd[id] gates pool",
+    "F8": "price() uses S.res[r]/cap and market.drift[r]; tradeBuy/tradeSell both mutate state",
+    "F9": "stormPhase damages tiles by sev; productionPhase skips damaged; repair() spends parts",
+    "F10": "serialize()/deserialize() with field validation, errors shown in #saveerr",
+    "F11": "checkEnd() win/lose branches; score() sums multiple fields; renderModal shows summary",
+    "F12": "switchTab wired to nav; keydown handles Space/Digit1-5; media query at 420px",
+    "F13": "runTests() asserts real invariants; runBenchmark() runs 200 headless turns, prints stateHash()",
+    "G1": "techMult reads S.research.drills etc, applied in productionPhase mult",
+    "G2": "needsPhase morale-=12 on shortage -> moraleFactor(c) used in workerMult next turn",
+    "G3": "stormPhase sets t.damaged -> productionPhase skips -> repair() spends parts and clears damaged",
+    "G4": "price() reads S.res[r]/capOf and S.market.drift[r], drift updated in caravanPhase",
+    "G5": "refugees/festival/badwater/scout fx mutate S.colonists/S.res/S.market.discount"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Damaged buildings produce exactly zero rather than a graduated reduction, so the storm chain is binary rather than proportional."
+}
+```

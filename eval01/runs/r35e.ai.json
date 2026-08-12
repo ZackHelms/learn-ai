@@ -1,0 +1,69 @@
+# Grading Worksheet
+
+**F1 (Core loop):** GameState class + window.game; mulberry32 rng used for all randomness (no Math.random found); processTurn() calls consumeNeeds→updateMorale→processProduction→updateSkills→recoverFatigue→processTradeCaravan→processEvents→processAshstorms→checkGameOver in fixed order. Score 2.
+
+**F2 (Map):** generateMap() loops 8x8, terrain from this.rng(); canBuildAt() checks requirements[buildingType] vs tile.terrain; getAdjacencyBonus() feeds outMult in processProduction(). Score 2.
+
+**F3 (Economy):** condenser produces water (costs power) → greenhouse consumes water to produce food, real 2-step chain; resourceCaps enforced with overflow event in processProduction(). Score 2.
+
+**F4 (Population):** colonists array has skill, skillLevel, fatigue, morale; buildingAssignments gives job; skillLevel/fatigue/morale read in processProduction() outMult formula. Score 2.
+
+**F5 (Needs):** consumeNeeds() consumes food/water; updateMorale() drops morale -15 if unfed/unwatered; moraleFactor used in outMult; recovery via morale>80 bonus and shelter's prod.morale. Score 2.
+
+**F6 (Research):** 8 nodes, prereq enforced in completeResearch(), costs deducted; but smelting, mining-tools, hydroponics apply NO effect anywhere (only advanced-farming/water-treatment/power-cell/fusion-core/ashfall-shielding do). Score 1.
+
+**F7 (Events):** processEvents() has only 4 events, uniform random pick (Math.floor(rng()*events.length)), no weighting, zero events offer player choices, no cooldown tracking. Score 1.
+
+**F8 (Trade):** tradeWith() buy/sell both work, caravan inventory capped by qty; but globalSupplyDrift starts as {} and is never seeded with resource keys, so the drift-price loop in generateCaravanInventory() never executes — prices never actually respond to anything. Score 1.
+
+**F9 (Hazard):** processAshstorms() fires periodically and damages building.health; severity = 1+floor((turn-lastAshstorm)/20) but lastAshstorm is set to turn just before this line, so severity is always 1 (bug); building.health is never read in processProduction(); no repair function exists anywhere. Score 1.
+
+**F10 (Save/load):** serialize() → JSON in textarea; GameState.deserialize() JSON.parse in try/catch, loadFromText() shows alert('Invalid: '+e.message) on bad input. Score 2.
+
+**F11 (End conditions):** checkGameOver() has both WIN (turn>=60, pop>=12, food/water>50) and LOSE (colonists.length===0) reachable; calculateScore() uses pop/research/resources/turn; showGameOverModal() renders summary. Score 2.
+
+**F12 (UI):** renderTabs() click handlers switch panels; log entries show `[${entry.turn}]`; tile tooltip shows health/adjacency; attachKeyboardShortcuts() (Space, 1-6); @media(max-width:600px) rules. Score 2.
+
+**F13 (Dev panel):** runTests() checks 10 real invariants (caps respected, prereqs enforced, colonist stat ranges, save/load roundtrip); runBenchmark() runs 200 headless turns via testGame.processTurn() and prints stateHash(). Score 2.
+
+**G1:** advanced-farming/water-treatment/power-cell hardcode resourceCaps increases; fusion-core does a one-time resources.power+=100 dump; processProduction()'s outMult formula never reads any research flag directly — effects bypass the yield formula, applied via hardcoded special cases only. Score 2.
+
+**G2:** consumeNeeds() shortage → foodConsumed=false → updateMorale() -15 morale → processProduction() moraleFactor=colonist.morale/100 shrinks outMult, executed every turn in order. Score 4.
+
+**G3:** processAshstorms() sets buildings[key].health lower, but processProduction() never reads building.health (no output loss) and no repair function exists anywhere in the file — chain breaks after "damage." Score 1.
+
+**G4:** tradePrices modified only inside `for (const res in this.globalSupplyDrift)` in generateCaravanInventory(), but globalSupplyDrift is initialized as `{}` and never populated with resource keys anywhere, so this loop never runs; prices never move. Score 0.
+
+**G5:** processEvents() events auto-apply impact() with no player-facing choice buttons; no event in the array offers alternative options. Score 0.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 2, "G2": 4, "G3": 1, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "mulberry32 rng; processTurn() runs 9 subsystems in fixed order",
+    "F2": "generateMap() 8x8 from rng; getAdjacencyBonus() feeds outMult in processProduction()",
+    "F3": "condenser water -> greenhouse food chain; overflow event in processProduction()",
+    "F4": "colonist.skillLevel/fatigue read in outMult formula in processProduction()",
+    "F5": "updateMorale() -15 on !foodConsumed; moraleFactor used in outMult",
+    "F6": "smelting/mining-tools/hydroponics never referenced in completeResearch() effect block",
+    "F7": "processEvents() array has only 4 entries, uniform rng pick, no choices/cooldown",
+    "F8": "globalSupplyDrift={} never seeded, drift loop in generateCaravanInventory() dead code",
+    "F9": "severity calc uses lastAshstorm set just above, always yields 1; no repair function found",
+    "F10": "serialize()/GameState.deserialize() with try/catch and alert on bad input",
+    "F11": "checkGameOver() WIN/LOSE both reachable; calculateScore() multi-factor; showGameOverModal()",
+    "F12": "renderTabs() click handlers; attachKeyboardShortcuts(); @media(max-width:600px)",
+    "F13": "runTests() checks 10 invariants; runBenchmark() 200-turn headless loop + stateHash()",
+    "G1": "advanced-farming/power-cell hardcode resourceCaps++, not read by outMult formula",
+    "G2": "consumeNeeds->updateMorale->moraleFactor in processProduction, every turn",
+    "G3": "processAshstorms() damages building.health but processProduction() never reads health, no repair fn",
+    "G4": "globalSupplyDrift never populated, price-drift loop in generateCaravanInventory() never executes",
+    "G5": "processEvents() impact() auto-applies, no choice buttons exist"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Building damage from ashstorms and research effects for 3 of 8 nodes never feed back into the production formula, and trade price drift is dead code because globalSupplyDrift is never seeded."
+}
+```

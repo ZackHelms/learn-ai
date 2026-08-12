@@ -1,0 +1,65 @@
+F1: GameState class holds state; SeededRandom(seed) drives map/colonist/event RNG; endTurn() calls production→needs→morale→storm→repairs→caravan→events in fixed order. Score 2.
+
+F2: 8x8 map loop uses seeded rng.next() for terrain; canBuild() checks terrain===required; no adjacency-bonus code found anywhere. Score 1.
+
+F3: mine produces ore, smelter consumes ore→metal (multi-step); storageMax enforced with overflow logged/clamped in processProduction and buyGood. Score 2.
+
+F4: colonists have skill/level/fatigue/morale/assigned fields, but production formula (processProduction skillBonus) only reads col.level, never col.skill or col.fatigue. Score 1.
+
+F5: processNeeds lowers morale on shortage, processMorale recovers morale +10/turn, but morale is never read in the production/output formula (only causes 30% abandonment chance below 30). Score 1.
+
+F6: 8 research nodes, prereq check in canResearch, cost deducted in doResearch, but node.effects (greenhouse:0.2 etc.) is never read anywhere else in the file. Score 1.
+
+F7: exactly 10 events with cooldown (eventCooldown, threshold 5) and uniform (not weighted) random pick; showEventModal only ever creates a single "OK" button — no event offers 2-3 choices. Score 1.
+
+F8: buyGood/sellGood both work and deduct/add scrip+resource, but prices/stock are hardcoded constants in renderTrade(), not derived from state.resources or a drifting variable, and stock resets every render (not truly limited). Score 1.
+
+F9: processStorm scales severity with turn, sets building.damage; processProduction reads healthMul=1-damage*0.3 (confirmed loss); processRepairs spends parts to reduce damage; but shield building's `mitigation` and research `stormMitigation` effect are never read in processStorm. Score 1.
+
+F10: save() serializes full state to JSON string, clipboard-copy exposed via saveBtn; GameState.load() JSON.parses with try/catch, alert(e.message) shown on bad input. Score 2.
+
+F11: checkWin (turn>=60 & pop>=12) and checkLose (pop===0) both reachable; getScore() combines population/research/resources/turns; showEndScreen renders modal with breakdown. Score 2.
+
+F12: tab-btn listeners toggle active classes; log entries show `[Turn ${entry.turn}]`; map/tree tooltips explain damage/produce/cost; keydown handles Space+1-6; @media(max-width:600px) adapts layout. Score 2.
+
+F13: runTests() has 14 real invariant checks (storage caps, prereq enforcement, save/load round-trip); runBenchmark() creates headless GameState, runs 200 endTurn() calls, prints stateHash(). Score 2.
+
+G1: research node.effects (e.g. greenhouse:0.2) set in initResearch but no other function reads `.effects` anywhere — chain fully disconnected. Score 0.
+
+G2: processNeeds shortage→col.morale-=20 confirmed; processMorale can set col.alive=false (30% chance) removing labor, but skillBonus formula never references col.morale directly — only the death special-case links to output. Score 2.
+
+G3: processStorm sets building.damage; processProduction healthMul=1-damage*0.3 reads it (visible via tile tooltip "Damage: x/5"); processRepairs spends parts, reduces damage, restoring healthMul next turn. Score 4.
+
+G4: goods array in renderTrade() has fixed buy/sell numbers (2,1/5,3/etc.), never reads game.resources or any drifting supply variable. Score 0.
+
+G5: showEventModal only builds one "OK" button calling event.outcome(); no event presents 2-3 branching choices anywhere in the source. Score 0.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 0, "G2": 2, "G3": 4, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "GameState + SeededRandom drive all RNG; endTurn() calls systems in fixed order",
+    "F2": "8x8 loop uses rng.next() for terrain, canBuild() checks terrain match; no adjacency bonus code",
+    "F3": "mine->ore, smelter consumes ore->metal; storageMax clamp+overflow log in processProduction",
+    "F4": "colonist.level used in skillBonus; col.skill and col.fatigue never read by production code",
+    "F5": "processNeeds lowers morale on shortage; processMorale recovers +10/turn; morale not read in output formula",
+    "F6": "8 nodes, canResearch enforces prereq, doResearch deducts cost; node.effects never read elsewhere",
+    "F7": "10 events with eventCooldown gating; showEventModal creates only one OK button, no choices",
+    "F8": "buyGood/sellGood work but goods[] prices/stock hardcoded in renderTrade(), not state-derived",
+    "F9": "processStorm sets building.damage, healthMul reads it in processProduction; shield mitigation never read",
+    "F10": "save() -> JSON via clipboard; GameState.load() try/catch with alert(e.message) on bad input",
+    "F11": "checkWin/checkLose both reachable; getScore() aggregates state; showEndScreen renders summary modal",
+    "F12": "tab-btn click toggles .active; log shows [Turn n]; tile/tree tooltips; keydown Space/1-6; media query",
+    "F13": "runTests() 14 invariant checks incl. save/load round-trip; runBenchmark() runs 200 headless endTurn(), prints stateHash()",
+    "G2": "processNeeds shortage -> col.morale-=20 -> processMorale 30% abandon chance removes labor, but no direct morale->output term",
+    "G3": "processStorm -> building.damage -> healthMul in processProduction -> processRepairs spends parts, restores output",
+    "G5": "showEventModal wires single outcome() to one OK button; no event has multiple choice buttons"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research effects, trade prices, and event choices are all defined as data but never wired into any formula or branching logic, leaving several systems functionally decorative."
+}
+```

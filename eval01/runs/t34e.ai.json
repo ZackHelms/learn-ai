@@ -1,0 +1,69 @@
+Worksheet:
+
+**F1 (Core loop):** Single state object `S`; `rnd(g)` mulberry32 PRNG used throughout (production, storms, events, trade); `endTurn()` calls resolveStorm→runProduction→applyCaps→consume→updatePeople→updateTrade→fireEvents→growth in fixed order. Score 2.
+
+**F2 (Map):** `GRID=8`, `NTILE=64`; `genMap(seed)` derives terrain from seed; `canBuildAt()` checks `def.terr.indexOf(t.t)`; `adjacency()` returns `mult` consumed in `produce()`'s `scale` calc. Score 2.
+
+**F3 (Economy):** Chains ash+water→soil (composter), soil+water→food (greenhouse), ore→metal (forge), metal→parts (workshop); `applyCaps()` enforces `caps()` and logs/loses overflow (`S.stats.overflow`). Score 2.
+
+**F4 (Population):** `S.people` records with `skill,fat,mor,job,at`; `personEff()` reads `p.skill`/`fatigueFactor(p.fat)`/`moraleFactor(p.mor)`, consumed by `workEff()`→`produce()`. Score 2.
+
+**F5 (Needs):** `consume()` computes `needF/needW` from pop; `tick.short` read in `updatePeople()` to lower `p.mor`; `moraleFactor` feeds `personEff` output; morale recovers with surplus (tested in "Shortages...recoverable"). Score 2.
+
+**F6 (Research):** `TREE` has 12 nodes; `researchState()` enforces `pre[]`; `buyResearch()` calls `pay()`; `researchMult()` reads `S.done.x` and multiplies real production `scale`. Score 2.
+
+**F7 (Events):** `EVENTS` has 15 entries; `fireEvents()` does weighted pool roll; 6 events (wanderers, ventsurge, sickness, crate, cachemap, hoarders) have 3 choices each with distinct state effects; `S.ev.cool[id]=turn+cd`. Score 2.
+
+**F8 (Trade):** `priceBuy/priceSell` read `scarcity(S,k)` (stockpile) and `S.trade.idx[k]` (drifting); `c.stock[k]` decremented and capped; `doBuy`/`doSell` both mutate state. Score 2.
+
+**F9 (Hazard):** `resolveStorm()` fires every `STORM_EVERY` turns, `sev` scales with `S.turn`; `hpFactor(b)` read in `produce()` cuts/zeroes output; `stormMitigation()` reads `S.done.storm1/shelter`; `repair()` spends parts via `repairCost()`. Score 2.
+
+**F10 (Save/load):** `saveString()` full JSON; `loadString()` parses, validates 6+ invariants, throws descriptive `Error` messages shown via `say(...,"bad")`. Score 2.
+
+**F11 (End conditions):** `checkEnd()` handles `people.length<=0` (lost) and `turn>WIN_TURN` win/endure via `needsMet()`; `score()` combines pop/skill/research/buildings/stock/turns/morale/storms; `renderModal()` shows summary table. Score 2.
+
+**F12 (UI):** `renderTabs`/`act("tab:...")` switch tabs; log entries `"T"+e.t`; extensive `data-tip` tooltips with formula breakdowns; keydown handles Space/1-6; `@media (max-width:760px/380px)` layout rules. Score 2.
+
+**F13 (Dev panel):** `runTests()` has 29 named assertions on real invariants (caps, prereqs, storm mitigation, save/load hash, roster consistency); `runBench()` runs 200 headless turns via `greedyStep`, prints `stateHash`. Score 2.
+
+**G1:** `S.done.sift` etc. read in `researchMult()`; `rm.out` multiplies `scale` in `produce()`; visible via tooltip and log. Full chain, every turn. Score 4.
+
+**G2:** `consume()`→`tick.short.food/water` read in `updatePeople()` (`d -= 7+13*sf`)→`p.mor` changed→`moraleFactor(p.mor)` in `personEff()`→`workEff().sum`→`produce()` scale. Fully traceable. Score 4.
+
+**G3:** `resolveStorm()` sets `b.hp`→`hpFactor(b)` zeroes/halves `produce()` output→`repair()` spends `parts`, sets `hp=100`→next `produce()` restores output (explicitly unit-tested). Score 4.
+
+**G4:** `priceBuy/priceSell` multiply `BASEPRICE*idx*(0.85+0.5*scarcity)`; `scarcity()` reads `S.res[k]/caps`; `S.trade.idx` random-walks in `updateTrade()`. Score 4.
+
+**G5:** `hoarders` choices write different `S.res.food/water`, `moraleAll`, or remove a colonist; `wanderers` choices call `addColonist`/`takeRes`/`moraleAll` differently per branch — real state mutation, not log-only. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "S state object; rnd(g) mulberry32 used everywhere; endTurn() fixed order of resolveStorm/runProduction/consume/updatePeople/...",
+    "F2": "genMap(seed) 8x8; canBuildAt() checks def.terr; adjacency().mult read in produce() scale",
+    "F3": "composter/greenhouse/forge/workshop chains; applyCaps() clamps and logs overflow to S.stats.overflow",
+    "F4": "S.people records; personEff() reads p.skill/p.fat/p.mor, used by workEff()->produce()",
+    "F5": "consume() sets tick.short; updatePeople() applies morale delta; moraleFactor used in personEff",
+    "F6": "TREE 12 nodes; researchState() checks pre[]; researchMult() reads S.done.x, multiplies produce() scale",
+    "F7": "EVENTS 15 entries; fireEvents() weighted roll; 6 choice events; S.ev.cool cooldown",
+    "F8": "priceBuy/priceSell read scarcity()+S.trade.idx; doBuy/doSell mutate c.stock and S.res",
+    "F9": "resolveStorm() severity scales w/ S.turn; hpFactor(b) cuts produce() output; repair() spends parts",
+    "F10": "saveString()/loadString() with 6+ validation checks and thrown Error messages",
+    "F11": "checkEnd() lost/win/endure; score() combines multiple fields; renderModal() summary table",
+    "F12": "renderTabs()/act('tab:'); log 'T'+e.t; data-tip tooltips; keydown Space/1-6; media queries",
+    "F13": "runTests() 29 real-invariant assertions; runBench() 200-turn headless loop prints stateHash",
+    "G1": "S.done.sift read in researchMult(), rm.out multiplies produce() scale every turn",
+    "G2": "tick.short.food/water -> updatePeople() morale delta -> moraleFactor() -> workEff() -> produce()",
+    "G3": "resolveStorm() sets b.hp -> hpFactor() zeroes produce() output -> repair() restores hp/output",
+    "G4": "priceBuy/priceSell formula reads scarcity(S,k) and S.trade.idx, idx drifts in updateTrade()",
+    "G5": "hoarders/wanderers choice branches call addRes/takeRes/moraleAll/addColonist differently, mutating S.res/S.people"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "tick.note (production shortage notes) is populated in produce() but never read/displayed anywhere in the UI, a minor dead output."
+}
+```

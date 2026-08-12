@@ -31,9 +31,20 @@
 # first response starts streaming), the rest read it.
 #
 # Per run this writes runs/<id>.html and runs/<id>.gen.json (started datetime,
-# wall time, tokens, estimated API cost from Claude Code's total_cost_usd).
+# wall time, tokens, estimated API cost from Claude Code's total_cost_usd,
+# attempts + per-attempt failure reasons when retries happened).
 # When all runs finish it prints a summary table and paste-ready RESULTS.md
-# rows. Failed runs keep their scratch dir under runs/.gen-work/<id>/.
+# rows.
+#
+# Harness-failure retries: a run can die for reasons that say nothing about the
+# model - connection drop, quota window, API error (claude exits nonzero or the
+# result JSON is missing/is_error), or a clean exit that produced no HTML file.
+# Those attempts are thrown away and retried, up to the limits set right below
+# the tunables banner (MAX_ATTEMPTS / RETRY_WAIT_S / RETRY_BUDGET_S). Every
+# failed attempt's scratch dir is preserved under runs/.gen-work/failed/
+# <id>.attemptN.<timestamp>/ (result.json + stderr.log) so the root cause
+# survives later re-runs - the t25 failure of 2026-08-11 could not be diagnosed
+# because the re-run clobbered its scratch dir.
 #
 # Auth: whatever "claude" is logged in as (subscription plan or API key).
 
@@ -49,6 +60,13 @@ EFFORTS="max xhigh high medium low"
 SUFFIX=""
 FORCE=0
 DRY=0
+
+# --- retry tuning (harness failures only; see header). Values are defaults;
+# --- the same-named environment variables override them for one-off runs.
+MAX_ATTEMPTS="${MAX_ATTEMPTS:-3}"       # total tries per run id, first attempt included (1 = never retry)
+RETRY_WAIT_S="${RETRY_WAIT_S:-60}"      # pause before each retry, seconds
+RETRY_BUDGET_S="${RETRY_BUDGET_S:-7200}" # stop retrying a run id once this much wall time is spent on it (0 = no cap)
+# ---------------------------------------------------------------------------
 
 usage() {
   cat <<'EOF'
@@ -159,57 +177,98 @@ trap 'echo "[generate] interrupted - killing runs" >&2; kill 0' INT TERM
 run_one() {
   local effort="$1" id="$2"
   local job="$WORK_ROOT/$id"
-  rm -rf "$job"
-  mkdir -p "$job"
+  local run_t0 started ts0 ts1 rc wall attempt fail_reason fail_log html keep cost note
+  run_t0="$(date +%s)"
+  fail_log=""
 
-  local started ts0 ts1 rc wall
-  started="$(date +"%Y-%m-%d_%H:%M:%S_%Z")"
-  ts0="$(date +%s)"
-  echo "[$id] started $started ($MODEL_ID, effort=$effort)" >&2
+  for (( attempt = 1; attempt <= MAX_ATTEMPTS; attempt++ )); do
+    rm -rf "$job"
+    mkdir -p "$job"
+    started="$(date +"%Y-%m-%d_%H:%M:%S_%Z")"
+    ts0="$(date +%s)"
+    echo "[$id] started $started ($MODEL_ID, effort=$effort, attempt $attempt/$MAX_ATTEMPTS)" >&2
 
-  # shellcheck disable=SC2086  # CLAUDE_FLAGS is a fixed flag list
-  (
-    cd "$job" &&
-    claude -p --model "$MODEL_ID" --effort "$effort" $CLAUDE_FLAGS < "$PROMPT_TMP"
-  ) > "$job/result.json" 2> "$job/stderr.log"
-  rc=$?
-  ts1="$(date +%s)"
-  wall=$((ts1 - ts0))
+    # shellcheck disable=SC2086  # CLAUDE_FLAGS is a fixed flag list
+    (
+      cd "$job" &&
+      claude -p --model "$MODEL_ID" --effort "$effort" $CLAUDE_FLAGS < "$PROMPT_TMP"
+    ) > "$job/result.json" 2> "$job/stderr.log"
+    rc=$?
+    ts1="$(date +%s)"
+    wall=$((ts1 - ts0))
 
-  if [ "$rc" -ne 0 ] || ! jq -e '.type == "result" and (.is_error | not)' "$job/result.json" >/dev/null 2>&1; then
-    echo "[$id] FAIL after $(fmt_time "$wall"): claude exited $rc; kept $job/ - stderr tail:" >&2
-    tail -n 5 "$job/stderr.log" >&2 || true
-    : > "$WORK_ROOT/$id.fail"
-    return 1
-  fi
-
-  local html="$job/game.html"
-  if [ ! -f "$html" ]; then
-    local candidates=( "$job"/*.html )
-    if [ "${#candidates[@]}" -eq 1 ] && [ -f "${candidates[0]}" ]; then
-      html="${candidates[0]}"
-      echo "[$id] WARN: model wrote $(basename "$html") instead of game.html; using it" >&2
-    else
-      echo "[$id] FAIL after $(fmt_time "$wall"): no game.html produced; kept $job/" >&2
-      : > "$WORK_ROOT/$id.fail"
-      return 1
+    # Classify the attempt. "claude-error" = harness failure (nonzero exit, or
+    # the result JSON is missing/unparseable/is_error). "no-html" = claude
+    # reported success but no HTML file exists. Both are retried; the reasons
+    # land in gen.json so a per-model pattern cannot hide inside silent retries.
+    fail_reason=""
+    html="$job/game.html"
+    if [ "$rc" -ne 0 ] || ! jq -e '.type == "result" and (.is_error | not)' "$job/result.json" >/dev/null 2>&1; then
+      fail_reason="claude-error rc=$rc"
+    elif [ ! -f "$html" ]; then
+      local candidates=( "$job"/*.html )
+      if [ "${#candidates[@]}" -eq 1 ] && [ -f "${candidates[0]}" ]; then
+        html="${candidates[0]}"
+        echo "[$id] WARN: model wrote $(basename "$html") instead of game.html; using it" >&2
+      else
+        fail_reason="no-html"
+      fi
     fi
-  fi
 
-  mv "$html" "$RUNS_DIR/$id.html"
-  jq -n \
-    --arg run "$id" --arg model "$MODEL_ID" --arg model_arg "$MODEL_ARG" \
-    --arg effort "$effort" --arg started "$started" --argjson wall "$wall" \
-    --slurpfile claude "$job/result.json" \
-    '{run: $run, model: $model, model_arg: $model_arg, effort: $effort,
-      started: $started, wall_seconds: $wall, claude: $claude[0]}' \
-    > "$RUNS_DIR/$id.gen.json"
+    if [ -z "$fail_reason" ]; then
+      mv "$html" "$RUNS_DIR/$id.html"
+      jq -n \
+        --arg run "$id" --arg model "$MODEL_ID" --arg model_arg "$MODEL_ARG" \
+        --arg effort "$effort" --arg started "$started" --argjson wall "$wall" \
+        --argjson attempts "$attempt" --arg faillog "$fail_log" \
+        --slurpfile claude "$job/result.json" \
+        '{run: $run, model: $model, model_arg: $model_arg, effort: $effort,
+          started: $started, wall_seconds: $wall, attempts: $attempts,
+          failed_attempts: (if $faillog == "" then null else $faillog end),
+          claude: $claude[0]}' \
+        > "$RUNS_DIR/$id.gen.json"
 
-  local cost
-  cost="$(jq -r '.total_cost_usd // empty' "$job/result.json")"
-  echo "[$id] OK -> runs/$id.html ($(fmt_time "$wall"), \$${cost:-n/a})" >&2
-  rm -rf "$job"
-  : > "$WORK_ROOT/$id.ok"
+      cost="$(jq -r '.total_cost_usd // empty' "$job/result.json")"
+      note=""
+      if [ "$attempt" -gt 1 ]; then note=" (attempt $attempt)"; fi
+      echo "[$id] OK -> runs/$id.html ($(fmt_time "$wall"), \$${cost:-n/a})$note" >&2
+      rm -rf "$job"
+      : > "$WORK_ROOT/$id.ok"
+      return 0
+    fi
+
+    # Failed attempt: surface the evidence, then move the scratch dir aside so
+    # no later attempt or re-run can destroy it.
+    echo "[$id] attempt $attempt/$MAX_ATTEMPTS FAIL after $(fmt_time "$wall"): $fail_reason" >&2
+    if [ -s "$job/result.json" ]; then
+      jq -r --arg id "$id" \
+        '"[\($id)] result.json: subtype=\(.subtype // "?") is_error=\(.is_error // "?") msg=\((.result // .error // "") | tostring | .[0:200])"' \
+        "$job/result.json" >&2 2>/dev/null \
+        || echo "[$id] result.json (raw head): $(head -c 200 "$job/result.json")" >&2
+    else
+      echo "[$id] result.json: empty" >&2
+    fi
+    tail -n 5 "$job/stderr.log" >&2 || true
+    keep="$WORK_ROOT/failed/$id.attempt$attempt.$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$WORK_ROOT/failed"
+    mv "$job" "$keep"
+    echo "[$id] failed attempt kept at ${keep#"$SCRIPT_DIR/"}/" >&2
+    fail_log="${fail_log:+$fail_log; }attempt$attempt=$fail_reason after $(fmt_time "$wall")"
+
+    if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+      echo "[$id] giving up: $MAX_ATTEMPTS attempts exhausted" >&2
+      break
+    fi
+    if [ "$RETRY_BUDGET_S" -gt 0 ] && [ $(( $(date +%s) - run_t0 + RETRY_WAIT_S )) -ge "$RETRY_BUDGET_S" ]; then
+      echo "[$id] giving up: retry budget (${RETRY_BUDGET_S}s) would be exceeded" >&2
+      break
+    fi
+    echo "[$id] retrying in ${RETRY_WAIT_S}s" >&2
+    sleep "$RETRY_WAIT_S"
+  done
+
+  : > "$WORK_ROOT/$id.fail"
+  return 1
 }
 
 # Launch in EFFORTS order (max first by default), staggered so later runs can

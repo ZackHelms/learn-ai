@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: `GameState` class is the single state object; `SeededRandom` (Mulberry32-style) instantiated as `this.rng`, used for map, colonists, storms, events, caravan — no `Math.random` found; `endTurn()` calls processProduction→processNeeds→processMorale→processStorm→processRepairs→processCaravan→processEvents in fixed order. **Score: 2**
+
+**F2 — Map**: 8x8 loop in `generateMap()`; terrain drawn via seeded `this.rng.next()`; `canBuild()` checks `terrain === required`; no adjacency-bonus code found anywhere. **Score: 1**
+
+**F3 — Economy**: `mine` produces `ore`, `smelter` consumes `ore`→`metal` (real chain); `storageMax` enforced with overflow logged/clamped in `processProduction` and `buyGood`. **Score: 2**
+
+**F4 — Population**: colonist records have skill/fatigue/morale/assigned; `processProduction` skillBonus reads only `c.level`, never `c.skill` string or `c.fatigue`. **Score: 1**
+
+**F5 — Needs**: `processNeeds()` consumes food/water, shortage sets `col.morale -=20`; morale recovers `+10`/turn in `processMorale`; but morale never multiplies production output (only indirectly triggers colonist death). **Score: 1**
+
+**F6 — Research**: 8 nodes in `initResearch`; `canResearch` checks `node.prereq` (used by `automation`); cost deducted in `doResearch`; `node.effects` object defined but never read anywhere else in the file. **Score: 1**
+
+**F7 — Events**: 10 events array in `processEvents`; selection is uniform `rng.range`, not weighted; `eventCooldown` gates recently-fired events; **zero** events have choice branches — `showEventModal` always renders a single OK button. **Score: 1**
+
+**F8 — Trade**: `goods` array in `renderTrade` has hardcoded buy/sell prices, not derived from `game.resources` or a drifting variable; `stock` param is not decremented on purchase (recreated each render); `buyGood`/`sellGood` both mutate `resources`/`scrip`. **Score: 1**
+
+**F9 — Hazard**: `processStorm()` fires on `turn%12===0`, severity scales with `turn`; `building.damage` feeds `healthMul` in `processProduction`; `processRepairs` spends `parts` to reduce damage; `shield` building/`stormMitigation` research effect defined but never read in `processStorm`. **Score: 1**
+
+**F10 — Save/load**: `save()` serializes full state to JSON string; `saveBtn` copies via clipboard/prompt; `GameState.load()` wraps `JSON.parse` in try/catch, `loadBtn` alerts `e.message` on failure. **Score: 2**
+
+**F11 — End conditions**: `checkWin()` (turn≥60 & pop≥12) and `checkLose()` (pop===0) both called in `handleEndTurn`; `getScore()` combines population/research/resources/turns; `showEndScreen` renders modal breakdown. **Score: 2**
+
+**F12 — UI**: tab-btn listeners toggle `.active`; log entries render `[Turn ${entry.turn}]`; tile/tree-node tooltips show produce/consume/damage/cost; keydown handler maps Space+1-6; `@media (max-width:600px)` adjusts layout. **Score: 2**
+
+**F13 — Dev panel**: `runTests()` asserts storage caps, prereq enforcement, save/load round-trip, damage bounds — real invariants; `runBenchmark()` runs headless `GameState`, 200 `endTurn()` calls, prints `stateHash()`. **Score: 2**
+
+**G1 — research→yield**: `research[key].effects` object written at `initResearch`/`doResearch` but no other function reads `.effects` anywhere; link absent. **Score: 0**
+
+**G2 — shortfall→morale→output**: `processNeeds` shortage → `col.morale -= 20`; morale isn't a production multiplier, but morale<30 triggers `col.alive=false` in `processMorale`, removing them from `assigned` filter in `processProduction`, indirectly cutting output. **Score: 2**
+
+**G3 — storm→damage→loss→repair→recovery**: `processStorm` sets `building.damage`; `processProduction` applies `healthMul = 1-damage*0.3`; `processRepairs` spends `parts`, decrements `damage`, restoring `healthMul` next turn. Fully traceable. **Score: 4**
+
+**G4 — trade prices respond to stockpile/supply**: `goods` array in `renderTrade` has static numeric buy/sell fields; no read of `game.resources` or any drifting supply var. **Score: 0**
+
+**G5 — event choices mutate state**: every event object has one `outcome()` and `showEventModal` builds a single OK button; no event offers branching choices at all. **Score: 0**
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 0, "G2": 2, "G3": 4, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "GameState + SeededRandom(rng) used throughout; endTurn() calls systems in fixed order",
+    "F2": "canBuild() checks terrain; generateMap() seeded; no adjacency bonus code found",
+    "F3": "mine produces ore, smelter consumes ore->metal; storageMax overflow clamped",
+    "F4": "processProduction reads only c.level, never c.skill string or c.fatigue",
+    "F5": "processNeeds lowers morale on shortage; morale never multiplies production output",
+    "F6": "research[key].effects defined in initResearch, never read elsewhere",
+    "F7": "10 events in processEvents; uniform rng.range selection; zero events have choices",
+    "F8": "goods array in renderTrade hardcodes buy/sell; stock not decremented on purchase",
+    "F9": "processStorm sets damage feeding healthMul; shield/stormMitigation effect unread",
+    "F10": "save() JSON.stringify full state; GameState.load() try/catch shows e.message",
+    "F11": "checkWin/checkLose called in handleEndTurn; getScore() feeds showEndScreen",
+    "F12": "tab-btn listeners, [Turn n] log entries, tooltips, keydown 1-6/Space, media query",
+    "F13": "runTests() asserts prereq/storage invariants; runBenchmark() headless 200-turn + stateHash",
+    "G2": "morale<30 sets col.alive=false, removed from assigned filter in processProduction",
+    "G3": "building.damage -> healthMul in processProduction -> processRepairs spends parts, restores",
+    "G1": "not found: research effects object never read by any formula",
+    "G4": "not found: trade prices are static constants, no read of resources/supply",
+    "G5": "not found: no event object has a choices array; single OK button always"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Several systems (research effects, storm mitigation, trade pricing, event choices) define the data structures for depth but never wire them into any consuming formula, leaving those chains entirely decorative."
+}
+```

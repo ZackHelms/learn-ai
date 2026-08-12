@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 Core loop**: state via `newGameState`; RNG `makeRNG`/`rngNext` (mulberry32-style) used by all `rngPick/rngInt/rngWeighted/rngChance` calls; `runTurn` resolves fixed order (storm→production→caps→needs→vitals→skill→departures→events→trade→end). Score 2.
+
+**F2 Map**: `CONFIG.GRID_SIZE=8`; `generateGrid` derives terrain from `rng`; `canBuildAt` checks `def.terrain.includes(cell.terrain)`; `adjacencyMult` changes output via `totalMultFor`. Score 2.
+
+**F3 Economy**: ore→metal (`resolveConvert`), ash→soil→food (`resolveGreenhouse`); caps via `capFor`/`enforceStorageCaps`; overflow logged in `gainResource`. Score 2.
+
+**F4 Population**: colonist records w/ skill/fatigue/morale/job; `effectiveSkillMult`, `fatigueMult`, `moraleMult` read those fields inside `totalMultFor`, used by production resolvers. Score 2.
+
+**F5 Needs**: `resolveNeeds` consumes food/water, shortfall calls `adjustAllMorale`; `moraleMult` feeds production; `resolveColonistVitals` drifts morale back toward 60 (recovery). Score 2.
+
+**F6 Research**: 12 nodes; `researchStatus` enforces `node.prereq.every(hasResearch)`; `payCost` deducts; effects read via `hasResearch()` in convert/gather/greenhouse/capFor/stormSeverity/updateCaravanSchedule/resolveNeeds. Score 2.
+
+**F7 Events**: 12 defs; `rngWeighted` selection in `rollEvent`; 5 events (`mech_failure`,`migrant_arrival`,`illness_outbreak`,`ruins_cache`,`festival`) w/ differing choice outcomes; `events.cooldowns[event.id]` checked in `eligibleEvents`. Score 2.
+
+**F8 Trade**: `currentSellPrice` reads `market.drift` + player stock ratio; `caravan.inventory` capped/decremented; `tradeBuy`/`tradeSell` both wired to UI buttons. Score 2.
+
+**F9 Hazard**: `isStormTurn`/`CONFIG.STORM_INTERVAL`; `stormSeverity` scales with `state.turn`; `dmgMult=hp/100` in `totalMultFor` reduces output; `shelters`/`reinforcement`/windbreak reduce mitig; `repairBuilding` costs parts and restores hp. Score 2.
+
+**F10 Save/load**: `serializeState`→textarea; `deserializeState`+`validateStateShape` show specific error via `saveMsg`. Score 2.
+
+**F11 End conditions**: `checkEndConditions` win (`turn>=MAX_TURNS && colonists>=WIN_POP && criticalNeedsMet`) and lose (`colonists<=0` or shortfall) both reachable; `computeScore` combines pop/research/turn/stock; `showEndScreen` renders summary. Score 2.
+
+**F12 UI**: `switchTab`; log lines carry `entry.turn`; tooltips (`resourceTooltipHtml`, `tileTooltipHtml`, `colonistTooltipHtml`) explain number sources; keys 1-6/Space wired in `keydown` listener; `@media max-width:480px`. Score 2.
+
+**F13 Dev panel**: `runTests` asserts real invariants (cap bounds, prereq gating, save/load hash equality, forge research boost); `runBenchmark` runs 200-turn headless sim via `deps.chooseEvent`, prints `hashState`. Score 2.
+
+**G1**: `hasResearch(state,'metallurgy')` boosts `mult` in `resolveConvert`; multiple similar checks in gather/greenhouse/capFor/adjacencyMult, applied every production tick. Score 4.
+
+**G2**: `resolveNeeds` shortfall → `adjustAllMorale` → `moraleMult` used in `totalMultFor` for next production pass. Score 4.
+
+**G3**: `resolveStorm` sets `b.building.hp`; `dmgMult=hp/100` cuts output in `totalMultFor`; `repairBuilding` spends parts, restores hp=100. Score 4.
+
+**G4**: `currentSellPrice` reads `market.drift[key]` (random-walked in `updateMarketDrift`) and `stockRatio=resources[key]/cap`. Score 4.
+
+**G5**: `migrant_arrival` choices change `colonists`/`resources.food` vs `resources.scrip`; `mech_failure` choices set `b.building.hp` differently — both durable state writes, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "newGameState + makeRNG/rngNext seeded for all randomness; runTurn fixed order",
+    "F2": "canBuildAt checks def.terrain; adjacencyMult multiplies totalMultFor output",
+    "F3": "resolveConvert ore->metal, resolveGreenhouse ash->soil->food; enforceStorageCaps overflow logged",
+    "F4": "effectiveSkillMult/fatigueMult/moraleMult read colonist fields, used in totalMultFor",
+    "F5": "resolveNeeds shortfall->adjustAllMorale; resolveColonistVitals drifts morale back",
+    "F6": "researchStatus enforces prereq; payCost deducts; hasResearch() read across production/cap/storm code",
+    "F7": "rngWeighted(rollEvent) selection; events.cooldowns checked in eligibleEvents; 5 choice events",
+    "F8": "currentSellPrice reads market.drift+stockRatio; caravan.inventory capped; tradeBuy/tradeSell wired",
+    "F9": "stormSeverity scales with turn; dmgMult=hp/100 cuts totalMultFor; repairBuilding spends parts",
+    "F10": "serializeState to textarea; deserializeState/validateStateShape show error in saveMsg",
+    "F11": "checkEndConditions win/lose both reachable; computeScore combines fields; showEndScreen renders",
+    "F12": "switchTab, log entry.turn, tooltips explain numbers, keydown 1-6/Space, media query",
+    "F13": "runTests asserts real invariants; runBenchmark headless 200-turn sim prints hashState",
+    "G1": "hasResearch('metallurgy') multiplies mult in resolveConvert, read every production tick",
+    "G2": "resolveNeeds shortfall->adjustAllMorale->moraleMult in totalMultFor next tick",
+    "G3": "resolveStorm sets building.hp->dmgMult cuts totalMultFor->repairBuilding spends parts restores hp",
+    "G4": "currentSellPrice reads market.drift (random-walked) and resources[key]/cap stockRatio",
+    "G5": "migrant_arrival/mech_failure choices write different colonists/resources/hp state, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Research/adjacency effect application is via scattered per-building if-checks rather than a generic effect system, but it is real and consistently wired."
+}
+```

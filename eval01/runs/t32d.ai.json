@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: `S` single state object; `rnd(S)`/`mulberry32` seeded PRNG used everywhere (genMap, doStorm, events); `endTurn()` resolves 13 steps in fixed documented order. Score 2.
+
+**F2 – Map**: 64-tile grid via `genMap()` using `rnd(S)`; `canBuild()` checks `d.terr.includes(t.terr)`; `adjBonus()` feeds `plan()`'s `scale = eff*df*ab`. Score 2.
+
+**F3 – Economy**: `greenhouse` stages ash→soil→food, `forge` ore→metal chain; `applyCaps()` enforces caps and logs overflow (`S.stats.overflow`). Score 2.
+
+**F4 – Population**: `makePerson()` creates records w/ skill/fatigue/morale/job; `workerEff()` reads `p.skill`,`p.fatigue`,`p.morale` for production. Score 2.
+
+**F5 – Needs**: `consume()` sets `S.starved/thirsted`; `moraleTick()` reads them to adjust morale (recoverable, +2/+1 when fed); `workerEff` moraleF consumes morale. Score 2.
+
+**F6 – Research**: 11 nodes in `TECH`; `techStatus()`/`buyTech()` enforce prereqs & deduct cost; effects wired via `techMult()`, `stormMitigation()`, `tradeBonus()`, `req` unlocks buildings. Score 2.
+
+**F7 – Events**: 12 events in `EVENTS`; weighted pick in `eventTick()` (`tot`, `r -= e.w`); 6 events with 2-3 choices (`scav`,`refugees`,`ventsurge`,`dispute`,`raiders`,`scholar`); `S.cooldown[ev.k]=S.turn+8`. Score 2.
+
+**F8 – Trade**: `stockFactor()` reads `S.res[k]`; `S.drift` random-walks in `tradeTick()`; caravan `stock`/`scrip` limited; `doBuy()`/`doSell()` both mutate state. Score 2.
+
+**F9 – Hazard**: `doStorm()` fires turn%7===0, severity scales w/ turn; `dmgFactor()` cuts `plan()` scale; `windbreak/bunker/reinforce` cut `stormMitigation()`; `repair()` costs parts, clears dmg. Score 2.
+
+**F10 – Save/load**: `serialize()`→JSON text in `#saveBox`; `deserialize()` validates fields/terrain/jobs/skill ranges, returns `{err}` shown in `#saveMsg`. Score 2.
+
+**F11 – End conditions**: `checkEnd()` handles pop==0 lose and turn>=60 win/lose; `computeScore()` combines pop/tech/stock/morale/skills/buildings; `renderModal()` shows summary. Score 2.
+
+**F12 – UI**: `setTab()` switches panels; log entries carry `e.t` turn; pervasive `data-tip` tooltips; keydown handles Space/1-6; `@media(max-width:420px)` layout. Score 2.
+
+**F13 – Dev panel**: `runTests()` has 24 substantive assertions (roundtrip hash, cross-ref, adjacency math, morale→output); `runBenchmark()`/`greedyTurn()` run headless loop, print `stateHash()`. Score 2.
+
+**G1**: `techMult()` reads `S.tech.filters` etc., consumed in `plan()`'s `spread()` for wantOut; test #7 confirms +25% water. Score 4.
+
+**G2**: `consume()`→`S.starved/thirsted`→`moraleTick()` dm calc→`p.morale`→`workerEff()` moraleF→production scale; full chain every turn. Score 4.
+
+**G3**: `doStorm()` sets `t.b.dmg`→`dmgFactor()` zeroes/reduces `plan()` scale→`repair()` spends parts, resets dmg to 0 restoring output. Score 4.
+
+**G4**: `sellPrice()`/`buyPrice()` read `stockFactor(S,k)` (own stockpile) and `S.drift[k]` (global walk updated in `tradeTick()`). Score 4.
+
+**G5**: `refugees` choices push people/food/morale differently; `dispute`/`raiders` choices write different `S.res`/`p.morale` per branch, not just log. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls addRes/doStorm/produce/consume/etc in fixed order; rnd(S) used throughout",
+    "F2": "genMap() uses rnd(S) for terr; canBuild() checks d.terr.includes; adjBonus() feeds plan() scale",
+    "F3": "greenhouse stages ash->soil->food; forge ore->metal; applyCaps() caps and logs overflow",
+    "F4": "makePerson() records skill/fatigue/morale/job; workerEff() reads all four for output",
+    "F5": "consume() sets S.starved; moraleTick() reads it into dm; workerEff moraleF consumes p.morale",
+    "F6": "buyTech() enforces techStatus LOCKED/OPEN, deducts cost; techMult()/stormMitigation() apply effects",
+    "F7": "EVENTS array w=weight used in eventTick() weighted pick; S.cooldown[ev.k]=S.turn+8",
+    "F8": "stockFactor(S,k) reads S.res[k]; S.drift updated in tradeTick(); doBuy/doSell both mutate state",
+    "F9": "doStorm() sev scales w/ S.turn, sets t.b.dmg; dmgFactor() cuts plan() scale; repair() costs parts",
+    "F10": "serialize()/deserialize() with field/terrain/job validation, error shown in #saveMsg",
+    "F11": "checkEnd() sets S.over win/lose; computeScore() combines multiple fields; renderModal() shows summary",
+    "F12": "setTab()/buildTabs() switch panels; log entries include e.t; data-tip tooltips; keydown Space/1-6; media query",
+    "F13": "runTests() 24 real assertions incl. save roundtrip hash; runBenchmark()/greedyTurn() headless, prints stateHash()",
+    "G1": "techMult(S,'condenser','out','water') read in plan()'s spread(), verified by test #7",
+    "G2": "consume()->S.starved read in moraleTick()->p.morale read in workerEff() moraleF, every turn",
+    "G3": "doStorm() sets t.b.dmg; dmgFactor(dmg) scales plan(); repair() spends parts and resets dmg to 0",
+    "G4": "sellPrice()/buyPrice() read stockFactor(S,k) and S.drift[k], both updated per-turn",
+    "G5": "refugees/dispute/raiders choice.f(S) write different S.res/p.morale/S.people per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Headless benchmark's greedy policy always picks event choice index 0, so automated verification only exercises one branch of each choice event even though all branches are wired."
+}
+```

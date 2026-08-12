@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 – Core loop**: `GameState` holds all state; `mulberry32(seed)` feeds `this.rng` used in map/colonist/event generation; `processTurn()` calls systems in fixed order. Score 2.
+
+**F2 – Map**: 8x8 loop in `generateMap()` using seeded rng; `canBuildAt()` checks `reqTerrains.includes(tile.terrain)`; `getAdjacencyBonus()` feeds `outMult` in `processProduction()`. Score 2.
+
+**F3 – Economy**: reactor power → condenser water → greenhouse food chain via `prod.cost`; caps in `resourceCaps`; overflow trimmed and logged in `processProduction()`. Score 2.
+
+**F4 – Population**: colonist records with `skill, skillLevel, fatigue, morale`; `buildingAssignments` sets job; `skillMult`/`moraleFactor`/fatigue read in `processProduction()`. Score 2.
+
+**F5 – Needs**: `consumeNeeds()` sets `foodConsumed/waterConsumed`; `updateMorale()` applies -15 penalties; morale feeds `moraleFactor`; recovery via `+5` when morale>80. Score 2.
+
+**F6 – Research**: 8 nodes in `initResearch`; prereq check in `completeResearch`; but `smelting`, `mining-tools`, `hydroponics` have zero effect code anywhere (only 5/8 do anything). Score 1.
+
+**F7 – Events**: only 4 events in `processEvents` array (needs 10+); no player choices anywhere, no cooldown logic. Score 1.
+
+**F8 – Trade**: `tradeWith()` buy/sell both work, caravan qty limited; but `globalSupplyDrift = {}` never gets keys anywhere, so the price-drift loop in `generateCaravanInventory` never executes — prices are effectively static. Score 1.
+
+**F9 – Hazard**: `processAshstorms()` fires periodically and damages `building.health`, but `lastAshstorm` is set *before* severity is computed so severity is always 1 (never grows); `building.health` is never read in `processProduction` (no output loss); no repair function exists anywhere. Score 1.
+
+**F10 – Save/load**: `serialize()` → textarea in `saveGame()`; `GameState.deserialize()` called from `loadFromText()`, wraps `JSON.parse` in try/catch, alerts `'Invalid: ' + e.message`. Score 2.
+
+**F11 – End conditions**: `checkGameOver()` checks both lose (`colonists.length===0`) and win (turn/pop/food/water thresholds); `calculateScore()` combines multiple state values; `showGameOverModal()` renders distinct WIN/LOSE screens. Score 2.
+
+**F12 – UI**: `renderTabs()` tab switching; log entries show `entry.turn`; `.tooltip-text` shows terrain/health/adjacency; `attachKeyboardShortcuts()` (Space, 1-6); `@media (max-width:600px)` layout. Score 2.
+
+**F13 – Dev panel**: `runTests()` checks 11 real invariants (caps, prereqs, stat ranges, save/load roundtrip, map size); `runBenchmark()` runs 200 headless turns via direct `processTurn()` calls and prints `stateHash()`. Score 2.
+
+**G1**: `completeResearch()` only changes `resourceCaps` or does a one-time `resources.power += 100` for fusion-core; `processProduction()` never reads `this.research` at all. Hardcoded special case, not a formula link. Score 2.
+
+**G2**: `consumeNeeds` sets `foodConsumed=false` → `updateMorale` -15 → `colonist.morale` → `moraleFactor` in `processProduction` scales output every turn, visible in People tab. Score 4.
+
+**G3**: `processAshstorms` sets `buildings[key].health -= damage`, but `processProduction` never reads `.health`, and no repair function exists anywhere in the file — output loss and recovery links are entirely absent. Score 1.
+
+**G4**: `tradePrices` only updated inside `for (const res in this.globalSupplyDrift)` in `generateCaravanInventory`, but `globalSupplyDrift` is initialized `{}` and never gets keys added anywhere — loop body never runs, prices never respond to stockpile or drift. Score 0.
+
+**G5**: `processEvents()` events have no choice branches at all (`.choice-buttons` CSS class defined but never referenced in JS); impacts fire automatically with no player decision. Score 0.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 2, "G2": 4, "G3": 1, "G4": 0, "G5": 0},
+  "evidence": {
+    "F1": "processTurn() calls consumeNeeds/updateMorale/processProduction/etc in fixed order, rng from mulberry32(seed)",
+    "F2": "canBuildAt() checks tile.terrain; getAdjacencyBonus() feeds outMult in processProduction()",
+    "F3": "reactor power -> condenser water -> greenhouse food via prod.cost; overflow trimmed vs resourceCaps",
+    "F4": "colonist.skillLevel/fatigue/morale read in processProduction() outMult formula",
+    "F5": "consumeNeeds sets foodConsumed=false -> updateMorale -15 -> moraleFactor recovers via +5 rule",
+    "F6": "smelting/mining-tools/hydroponics keys never referenced outside initResearch, no effect code",
+    "F7": "processEvents array has only 4 entries, no choice branches, no cooldown tracking",
+    "F8": "globalSupplyDrift={} never populated with keys, so price-drift loop in generateCaravanInventory never runs",
+    "F9": "lastAshstorm set before severity computed so severity always 1; building.health never read in processProduction; no repair fn",
+    "F10": "serialize() -> saveGame() textarea; GameState.deserialize() in loadFromText() with try/catch alert",
+    "F11": "checkGameOver() handles WIN and LOSE; calculateScore() combines colonists/research/resources/turn; showGameOverModal()",
+    "F12": "renderTabs() switching, entry.turn in log, .tooltip-text on tiles, attachKeyboardShortcuts(), media query",
+    "F13": "runTests() checks 11 invariants incl. save/load roundtrip; runBenchmark() runs 200 headless turns, prints stateHash()",
+    "G1": "completeResearch only mutates resourceCaps or does one-time power bonus; processProduction never reads this.research",
+    "G2": "foodConsumed=false -> updateMorale delta -15 -> colonist.morale -> moraleFactor scales output in processProduction every turn",
+    "G3": "processAshstorms decrements buildings[key].health but processProduction never reads .health, and no repair function exists",
+    "G4": "tradePrices update loop iterates this.globalSupplyDrift which is always {} — dead code, prices never actually drift",
+    "G5": "processEvents impacts fire automatically with no player choice; .choice-buttons CSS class unused in JS"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Ashstorm severity/repair and trade price-drift are dead code due to logic bugs (lastAshstorm reset before severity calc, globalSupplyDrift never populated), and events never offer player choices."
+}
+```

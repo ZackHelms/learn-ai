@@ -92,6 +92,21 @@ results nowhere on the page. Original values in git history and runall logs.
 
 ## (11Aug2026) eval01 set2
 
+**Grader**: sonnet-5 (high), prompt v1.3
+NOTE (11Aug2026 review): the first opus5 sweep (00:10, log runall.20260811_001010) lost
+t25 to a harness failure - claude exited 1 after 10m6s; root cause unrecoverable because
+the later re-run clobbered the scratch dir (generate.sh now retries harness failures and
+preserves every failed attempt under runs/.gen-work/failed/). eval_ashfall.py and grade.sh
+then refused to run because one of five candidates was missing (both now continue and
+print ERROR per missing file). The whole opus5 sweep was re-run 09:29 (that is the t2x
+data below); the unscored first-attempt t21-t24 are stashed in runs/zHOLD-t2-fail/.
+u23/u25 det collapse verified genuine by hand, same defect as set1 u13: the intro modal
+(#overlay/#modal) is styled `display:flex`, which overrides the HTML `hidden` attribute,
+so a full-viewport backdrop intercepts every click - no user could play either. The ai
+half is blind to it (code reads fine): 46.0/43.8. u25's B3 -3 is a scorer false positive
+(visible help text "Math.random is never used" matches the grep); fix tracked in TODO.md,
+not applied mid-set - u25 det reads 29, would be 32 under the fixed scorer.
+
 |                Datetime |            Harness |   LLM (Reasoning effort) | Run |   Time |     Cost | det + ai  = Score | Notes |
 | ----------------------- | -------------------| -------------------------| --- | ------ | -------- | ----------------- | ----- |
 | 2026-08-10_23:04:41_EDT | Claude Code (bare) | claude-haiku-4-5 (low)   | r21 |  3m05s | $ 0.1571 | 23 + 30.6 =  53.6 |  17 input,  20.7k output,    42.0k cache read,  23.7k cache write ($ 0.1571) |
@@ -118,3 +133,53 @@ results nowhere on the page. Original values in git history and runall logs.
 | 2026-08-11_00:43:30_EDT | Claude Code (bare) | claude-fable-5 (xhigh)   | u24 | 43m46s | $15.3180 | 54 + 46.0 = 100.0 |  66 input, 203.8k output,  2543.6k cache read, 129.2k cache write ($15.3180) |
 | 2026-08-11_00:43:10_EDT | Claude Code (bare) | claude-fable-5 (max)     | u25 | 38m38s | $13.6410 | 29 + 43.8 =  72.8 |  48 input, 170.3k output,  2509.1k cache read, 130.7k cache write ($13.6410) |
 
+
+
+## (11Aug2026) eval01 set3
+
+**Grader**: sonnet-5 (high), prompt v1.3
+**Validation**: first run of the hardened pipeline (generate.sh harness-failure retries, eval/grade
+continue-on-missing). 20/20 generations succeeded on attempt 1 and all 100 gradings landed, so the
+new retry/continue paths stayed idle in production; they were exercised beforehand against a stubbed
+claude CLI.
+NOTE (11Aug2026): scorer artifacts found in this set, queued as one fix + re-score batch in TODO.md:
+(1) t33 det 34 is depressed ~20 pts by a discovery blind spot - its compact tab label "6Dev" defeats
+the \bdev\b tab walk, and its tab bar re-renders on every click, detaching the fallback walker's
+stale element handles. Verified by hand: 6Dev -> Run Tests opens and clicks fine for a human.
+(2) B3 "Math.random" false positives on t31 and t34 (-3 each): the string appears only in self-test
+names asserting it is NOT used - same class as set2 u25. (3) All five haiku runs plus t35 lost B5
+(-2) with a real assumptions comment sitting past the scorer's 4KB window (r31: line 227) - six
+correlated hits after 0/20 in sets 1-2; runs within a set evidently share time-local behavior.
+Genuine defects, verified by hand: t34 (opus xhigh) det 25 - one mismatched quote at line 2391
+closes a double-quoted string with a single quote, killing its only script block; page renders,
+nothing is interactive; not truncation (A2 clean). u33 (fable high) det 46: one failing self-test
+plus 439px overflow at 360px viewport; no recurrence of the set1/set2 fable modal bug.
+Grader integrity: r32c's reply skipped all 13 F items and the lenient vetting accepted it
+(listscore warned; r32 ai avg is 20.6 with it, 24.5 without) - grade.sh now rejects incomplete
+replies, effective for future sets.
+
+|                Datetime |            Harness |   LLM (Reasoning effort) | Run |   Time |     Cost | det + ai  = Score | Notes |
+| ----------------------- | -------------------| -------------------------| --- | ------ | -------- | ----------------- | ----- |
+| 2026-08-11_13:14:38_EDT | Claude Code (bare) | claude-haiku-4-5 (low)   | r31 |  2m41s | $ 0.1378 | 46 + 29.0 =  75.0 |   17 input,  17.9k output,    42.1k cache read,  21.1k cache write ($ 0.1378) |
+| 2026-08-11_13:14:16_EDT | Claude Code (bare) | claude-haiku-4-5 (medium)| r32 |  2m38s | $ 0.1372 | 52 + 20.6 =  72.6 |   17 input,  17.8k output,    42.0k cache read,  21.0k cache write ($ 0.1372) |
+| 2026-08-11_13:13:56_EDT | Claude Code (bare) | claude-haiku-4-5 (high)  | r33 |  3m03s | $ 0.1595 | 52 + 33.4 =  85.4 |   17 input,  21.0k output,    42.0k cache read,  24.2k cache write ($ 0.1595) |
+| 2026-08-11_13:13:34_EDT | Claude Code (bare) | claude-haiku-4-5 (xhigh) | r34 |  2m42s | $ 0.1418 | 39 + 30.8 =  69.8 |   17 input,  18.4k output,    42.0k cache read,  22.0k cache write ($ 0.1418) |
+| 2026-08-11_13:13:14_EDT | Claude Code (bare) | claude-haiku-4-5 (max)   | r35 |  7m04s | $ 0.3366 | 44.7 + 28.6 =73.3 |   27 input,  49.0k output,    83.6k cache read,  40.6k cache write ($ 0.3366) |
+
+| 2026-08-11_13:34:48_EDT | Claude Code (bare) | claude-sonnet-5 (low)    | s31 |  4m52s | $ 1.4649 | 54 + 45.0 =  99.0 |   54 input,  34.1k output,  1653.5k cache read,  75.9k cache write ($ 1.4649) |
+| 2026-08-11_13:34:28_EDT | Claude Code (bare) | claude-sonnet-5 (medium) | s32 |  8m38s | $ 2.0885 | 48 + 43.8 =  91.8 |   56 input,  54.4k output,  2326.3k cache read,  95.4k cache write ($ 2.0885) |
+| 2026-08-11_13:34:06_EDT | Claude Code (bare) | claude-sonnet-5 (high)   | s33 | 19m04s | $ 5.7147 | 46 + 45.0 =  91.0 |  170 input, 108.8k output, 10638.1k cache read, 148.2k cache write ($ 5.7147) |
+| 2026-08-11_13:33:44_EDT | Claude Code (bare) | claude-sonnet-5 (xhigh)  | s34 | 29m22s | $ 6.4430 | 48 + 46.0 =  94.0 |  144 input, 176.7k output,  9196.5k cache read, 171.8k cache write ($ 6.4430) |
+| 2026-08-11_13:33:24_EDT | Claude Code (bare) | claude-sonnet-5 (max)    | s35 | 38m43s | $ 9.4695 | 54 + 45.8 =  99.8 |  206 input, 226.5k output, 15448.1k cache read, 239.3k cache write ($ 9.4695) |
+
+| 2026-08-11_14:21:53_EDT | Claude Code (bare) | claude-opus-5 (low)      | t31 |  8m21s | $ 1.9172 | 43 + 46.0 =  89.0 |   17 input,  46.0k output,   462.8k cache read,  53.4k cache write ($ 1.9172) |
+| 2026-08-11_14:21:33_EDT | Claude Code (bare) | claude-opus-5 (medium)   | t32 | 14m37s | $ 4.1269 | 54 + 45.8 =  99.8 |   57 input,  77.9k output,  2580.2k cache read,  88.6k cache write ($ 4.1269) |
+| 2026-08-11_14:21:11_EDT | Claude Code (bare) | claude-opus-5 (high)     | t33 | 22m53s | $ 7.6160 | 34 + 46.0 =  80.0 |   93 input, 110.5k output,  6355.0k cache read, 167.4k cache write ($ 7.6160) |
+| 2026-08-11_14:20:48_EDT | Claude Code (bare) | claude-opus-5 (xhigh)    | t34 | 30m38s | $10.0097 | 25 + 46.0 =  71.0 |  106 input, 153.0k output,  8631.6k cache read, 186.6k cache write ($10.0097) |
+| 2026-08-11_14:20:28_EDT | Claude Code (bare) | claude-opus-5 (max)      | t35 | 37m47s | $11.0930 | 46 + 46.0 =  92.0 |  116 input, 199.9k output,  8556.2k cache read, 181.6k cache write ($11.0930) |
+
+| 2026-08-11_15:08:46_EDT | Claude Code (bare) | claude-fable-5 (low)     | u31 |  5m51s | $ 2.6765 | 54 + 46.0 = 100.0 |   16 input,  31.0k output,   359.9k cache read,  38.2k cache write ($ 2.6765) |
+| 2026-08-11_15:08:26_EDT | Claude Code (bare) | claude-fable-5 (medium)  | u32 |  9m17s | $ 4.1393 | 54 + 46.0 = 100.0 |   23 input,  46.8k output,   715.3k cache read,  54.1k cache write ($ 4.1393) |
+| 2026-08-11_15:08:04_EDT | Claude Code (bare) | claude-fable-5 (high)    | u33 | 24m37s | $11.7846 | 46 + 46.0 =  92.0 |   49 input, 121.6k output,  2701.8k cache read, 149.9k cache write ($11.7846) |
+| 2026-08-11_15:07:44_EDT | Claude Code (bare) | claude-fable-5 (xhigh)   | u34 | 24m09s | $11.2745 | 54 + 46.0 = 100.0 |   40 input, 119.8k output,  2295.8k cache read, 149.3k cache write ($11.2745) |
+| 2026-08-11_15:07:22_EDT | Claude Code (bare) | claude-fable-5 (max)     | u35 | 39m26s | $16.8636 | 54 + 46.0 = 100.0 |   70 input, 185.2k output,  4076.3k cache read, 176.3k cache write ($16.8636) |

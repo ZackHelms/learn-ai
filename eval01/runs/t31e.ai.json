@@ -1,0 +1,69 @@
+# Grading Worksheet
+
+**F1 (Core loop):** state object `S`; `RNG`/`mulberry32` seeded PRNG used throughout; `endTurn()` resolves storm→repair→production→consumption→morale→events→market→end in fixed documented order. Score 2.
+
+**F2 (Map):** 64-tile grid (`for y<8,x<8`); terrain from `new RNG(seed^0x9e3779b9)`; `canBuild()` checks `B.terr.indexOf(t.t)`; `adjInfo()`/`tileRates()` change actual output numbers via `adjMult`/`adjAdd`. Score 2.
+
+**F3 (Economy):** chains ash→soil→food, ore→metal via `in`/`out` per building consumed in production loop; `storageCap()` enforced, overflow logged and tracked in `st.stats.overflow`. Score 2.
+
+**F4 (Population):** colonist records with skill/fatigue/morale/job/tile; `workerFactor(c)` reads skill/morale/fatigue, used in `crewFactor()` inside `tileRates()`. Score 2.
+
+**F5 (Needs):** `needF`/`needW` consumption per turn; shortage sets `st.shortage`, feeds `morale` delta (`d-=16*mm`); morale drives `workerFactor` → output; surplus/no-shortage restores morale gradually. Score 2.
+
+**F6 (Research):** 11 nodes; `canResearch()` enforces `N.pre`; `doResearch()` deducts cost; effects applied via `techMult()`, `stormMitigation()`, `storageCap()`, and building unlocks (`workshop`/`marketpost` gated by `B.tech`). Score 2.
+
+**F7 (Events):** 12 events, weighted roll (`e.w`, roll loop); 5 events (`vein`,`refugees`,`leak`,`dustlung`,`sabotage`) give 2-3 diverging choices; `st.eventCd` cooldown decremented and checked. Score 2.
+
+**F8 (Trade):** `price()` reads `st.market.drift[r]` and own stockpile ratio; `market.caravan.inv` finite and decremented; `tradeBuy`/`tradeSell` both mutate state. Score 2.
+
+**F9 (Hazard):** storm fires at `st.turn>=st.storm.next`; severity `1+Math.floor(turn/10)+R.int(2)`; `damageMult(t)` cuts output in `tileRates`; `windbreak`/`stormwalls`/`reinforced` reduce via `stormMitigation()`; `repair()` spends parts, resets `dmg`. Score 2.
+
+**F10 (Save/load):** `serialize()`→JSON text in textarea; `deserialize()` validates shape field-by-field, throws descriptive `Error`s caught in `doLoad` handler and shown in `saveMsg`. Score 2.
+
+**F11 (End conditions):** `checkEnd()` covers win (`pop>=12`+needs+morale) and lose (`pop<=0` or failed bar at turn 60); `scoreOf()` combines pop/research/turn/stock/morale/overflow; `renderEndModal()` shows summary table. Score 2.
+
+**F12 (UI):** `wire()` handles `[data-tab]`; log lines show `T`+turn (`le .tn`); pervasive `data-tip`/`wireTips()`; keydown handles Space + digits 1-6; `@media(max-width:420px)` layout rules. Score 2.
+
+**F13 (Dev panel):** `runTests()` has 26 assertions on real invariants (roster/tile consistency, research gating, morale-output link, save/load hash match); `runBenchmark()` runs `greedyTurn` headlessly for N turns and returns `stateHash()`. Score 2.
+
+**G1:** `techMult(st,bk,res)` reads `st.research.filtration` etc., multiplied into `outs[r]` inside `tileRates()`, consumed every production pass. Score 4.
+
+**G2:** shortage flags set in consumption step → `morale` delta applied to colonists → `workerFactor` (reads morale) feeds `crewFactor` → `tileRates` output next production pass. Score 4.
+
+**G3:** storm loop damages `t.dmg`; `damageMult(t)` cuts/zeroes output in `tileRates`; `repair()` spends `parts` and resets `dmg` to restore full output. Score 4.
+
+**G4:** `price()` multiplies `BASE_PRICE` by `st.market.drift[r]` (drifts each turn) and `1.45-0.75*stock/cap` scarcity term. Score 4.
+
+**G5:** e.g. `refugees` choice pushes new colonists + deducts food; `sabotage` "night watch" sets `eventCd.sabotage=25` and spends parts — all mutate `st.res`/`st.colonists`, not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() resolves storm->repair->production->consumption->morale->events->market in fixed order",
+    "F2": "adjInfo()/tileRates() adjMult multiplies B.out based on adjacent terrain count",
+    "F3": "composter consumes ash->soil, greenhouse consumes soil+water->food; storageCap() clamps overflow into stats.overflow",
+    "F4": "workerFactor(c) reads c.skill/morale/fatigue, called in crewFactor() used by tileRates()",
+    "F5": "st.shortage.food/water set in consumption step, drives morale delta d-=16*mm each turn",
+    "F6": "canResearch() checks N.pre, doResearch() deducts cost; techMult()/stormMitigation() apply unlocked effects",
+    "F7": "EVENTS array w-weighted roll in endTurn(); 5 events (vein,refugees,leak,dustlung,sabotage) branch state differently; eventCd cooldown",
+    "F8": "price() reads st.market.drift[r] and st.res[r]/cap; tradeBuy/tradeSell both mutate res and c.inv",
+    "F9": "storm section damages t.dmg; damageMult() cuts tileRates output; repair() spends parts and clears dmg",
+    "F10": "serialize()/deserialize() with field validation and thrown Errors shown in saveMsg via doLoad handler",
+    "F11": "checkEnd() sets st.over win/lose; scoreOf() combines pop/research/turn/stock/morale; renderEndModal() shows table",
+    "F12": "wire() handles [data-tab]; keydown handles Space/digits; @media(max-width:420px) responsive rules",
+    "F13": "runTests() 26 real-invariant assertions; runBenchmark()->greedyTurn headless loop returns stateHash()",
+    "G1": "techMult(st,bk,res) reads st.research flags, multiplied into outs[r] in tileRates()",
+    "G2": "shortage flags -> morale delta -> workerFactor(morale) -> crewFactor -> tileRates output next turn",
+    "G3": "storm damages t.dmg -> damageMult() cuts tileRates output -> repair() spends parts and resets dmg",
+    "G4": "price() = BASE_PRICE * market.drift[r] (drifts each turn) * stock/cap scarcity term",
+    "G5": "refugees choice pushes colonists+deducts food; sabotage watch sets eventCd and spends parts, both mutate st directly"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Interactive event-choice resolution draws from a separate RNG instantiation in renderEventModal() outside the main endTurn() RNG thread, a minor architectural inconsistency rather than a functional gap."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** state `S`, `rnd(S)` PRNG (mulberry32-style, no Math.random found), `endTurn()` resolves 9 numbered steps in fixed order. Score 2.
+
+**F2 (Map):** 64-tile grid, terrain from `rnd(st)` seeded loop, `canBuild()` checks `B.terr.includes`, `adjBonus()` feeds into `workerEff()` multiplier `(1+adjBonus(...))`. Score 2.
+
+**F3 (Economy):** chains ore→metal (`generator`,`forge`), ash→soil→food (`sifter`,`greenhouse`); `cap()`/`clampCaps()` enforce caps and log spillage. Score 2.
+
+**F4 (Population):** colonist records `{skill,fatigue,morale,job,assign}`; `skillMult`/`fatigueMult` read them, consumed in `workerEff()` used by production. Score 2.
+
+**F5 (Needs):** food/water consumed in `endTurn` step 2, shortage → `morale -=15`; `moraleMult()` feeds `workerEff`; regen `+3+shelterBonus` when no shortage. Score 2.
+
+**F6 (Research):** 9 nodes, `researchAvail()` enforces `pre.every`, `buyResearch()` deducts cost; every node's effect is read somewhere (`rkMul` in `workerEff`, `req` gates buildings, `stormMitigation`, `cap()` logistics multiplier). Score 2.
+
+**F7 (Events):** 12 events (≥10), weighted pool roll in step 6, 5 events with 2-3 differing-outcome choices (`refugees`,`sickness`,`raiders`,`dispute`,`engineer`), `st.cooldowns[ev.id]=ev.cd` decremented each turn. Score 2.
+
+**F8 (Trade):** `price()` reads `st.res[r]/cap` scarcity and drifting `st.market[r]` (updated step 7); `buyGoods`/`sellGoods` both mutate state and caravan inventory is capped by `st.caravan.inv`. Score 2.
+
+**F9 (Hazard):** storm every 7 turns, `sev=1+turn/14` scaling, `damageBuilding()` sets `t.b.st`, `workerEff` halves/zeroes output for damaged/disabled, `stormMitigation()` reads walls/shielding, `repair()` spends parts and resets `st=0`. Score 2.
+
+**F10 (Save/load):** `JSON.stringify(S)` into textarea; `loadSave()` validates JSON, version, map length, colonist shape, shows error in `#saveerr`. Score 2.
+
+**F11 (End conditions):** win (`turn>=60 && colonists>=12 && !shortageTurn`) and lose (`colonists.length===0`) both reachable; `score()` combines pop/research/stock/turn; `drawModal()` renders summary. Score 2.
+
+**F12 (UI):** `drawTabs()`/nav click handler switch tabs; log entries carry `l.t` turn numbers; extensive `data-tip` tooltips explaining formulas; keydown handler for Space/1-6; `@media(max-width:520px)` responsive CSS. Score 2.
+
+**F13 (Dev panel):** `runTests()` asserts real invariants (no negative resources, caps respected, prereqs enforced, save/load hash roundtrip, seed divergence); `runBenchmark()` runs `runSim()` headlessly for 200 turns and prints `stateHash`. Score 2.
+
+**G1:** `B.rk`/`B.rkMul` set by research completion, read in `workerEff()` multiplying output every relevant turn, shown in tile panel. Score 4.
+
+**G2:** shortage in needs step sets `c.morale-=15`, `moraleMult(c)` read inside `workerEff()` reducing production; visible on People tab bars. Score 4.
+
+**G3:** `damageBuilding()` sets `t.b.st`, `workerEff` applies 0.5x/0x, `repair()` spends parts and resets `st=0` restoring full output. Score 4.
+
+**G4:** `price()` uses `st.res[r]/cap(st,r)` scarcity ratio and `st.market[r]` drift updated every turn in step 7. Score 4.
+
+**G5:** refugees/sickness/raiders/dispute/engineer choices each write different mutations (colonist count, resources, morale, fatigue), not just log text. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "rnd(S) mulberry32 stream, endTurn() 9-step fixed order",
+    "F2": "adjBonus() feeds workerEff() multiplier, canBuild() checks terr",
+    "F3": "generator/forge ore->metal, sifter/greenhouse ash->soil->food, clampCaps() caps",
+    "F4": "c.skill/c.fatigue read in skillMult/fatigueMult used by workerEff()",
+    "F5": "needs step -15 morale on shortage, moraleMult() read in workerEff()",
+    "F6": "researchAvail() enforces pre[], rkMul/req effects read in workerEff/canBuild",
+    "F7": "EVENTS pool weighted roll, cooldowns[ev.id]=ev.cd decremented step 6",
+    "F8": "price() reads res/cap ratio and market[r] drift, buyGoods/sellGoods mutate state",
+    "F9": "damageBuilding() sets st, workerEff halves/zeroes, repair() spends parts",
+    "F10": "JSON.stringify(S) to textarea, loadSave() validates and errors to #saveerr",
+    "F11": "win/lose checks in endTurn step 9, score() computed, drawModal() summary",
+    "F12": "drawTabs()/keydown handler, log l.t turn numbers, data-tip, media query",
+    "F13": "runTests() asserts invariants, runBenchmark() runs runSim() headless prints hash",
+    "G1": "B.rk/rkMul checked and applied in workerEff() every production tick",
+    "G2": "needs shortage -15 morale, moraleMult(c) multiplies workerEff() output",
+    "G3": "damageBuilding->workerEff 0.5x/0x->repair() parts cost resets st=0",
+    "G4": "price() = PRICEBASE*market[r]*(1.6-res/cap), market drifts each turn",
+    "G5": "refugees/sickness choice branches mutate colonists/res/morale differently"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Power is modeled as a storable capped battery resource rather than a true per-turn grid, a simplification the author flags themselves, though it doesn't break any scored wiring."
+}
+```

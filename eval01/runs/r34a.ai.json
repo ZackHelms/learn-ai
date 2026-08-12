@@ -1,0 +1,69 @@
+Worksheet:
+
+**F1**: `game` state object; `mulberry32` seeded PRNG used for map, population jobs, events, hazards, trade; `endTurn()` calls production→consumption→morale→hazards→trade→events→clamp→checkEnd in fixed order. Score 2.
+
+**F2**: 8x8 `this.map` (64 tiles); `generateMap()` uses `this.rng()` for terrain; `canBuild()` checks `binfo.terrain.includes(tile.terrain)`; `getAdjacencyBonus()` multiplies output in `resolveProduction()`. Score 2.
+
+**F3**: Forge consumes `resources.power` (from solar) to produce metal; greenhouse consumes water to produce food; `clampResources()` caps and logs `overflowLog`. Score 2.
+
+**F4**: `worker.skill` read in output formula; `worker.fatigue` is written (`fatigue+1`) but never read by `resolveProduction()`. Score 1.
+
+**F5**: shortage lowers morale (`p.morale -= 15`) in `resolveConsumption`; but morale never multiplies production output, only removes colonist entirely at morale ≤ 0. Score 1.
+
+**F6**: 8 nodes with prereq/cost enforcement (`canResearch`, `doResearch`); `research.labor` ("+1 skill") is defined but never checked anywhere in code. Score 1.
+
+**F7**: Only 5 events (`fireEvent`'s `events` array), weighted via `w`; only 3 have real multi-choice branches (need 4+); `eventCooldown` object initialized but never read/written. Score 1.
+
+**F8**: `tradeCaravan` price uses `basePrice + supplyShift + demandShift`, both purely `this.rng()`-derived each caravan — never reads `this.resources` or a persisting drift variable; `tradeWith()` buy/sell both work with stock limits. Score 1.
+
+**F9**: `resolveHazards()` fires every 8 turns, severity grows with `turn`; `tile.damaged` reduces output in `resolveProduction`; `research.foundation.done` reduces damage; `repairBuildings()` spends parts to restore. Score 2.
+
+**F10**: `exportSave()` copies JSON to clipboard; `importSave()` does `JSON.parse` in try/catch showing `err.textContent`, but no structural validation beyond syntax errors. Score 1.
+
+**F11**: `checkEndConditions()` reaches both win/lose; `calculateScore()` combines pop/research/resources/turn; end-screen HTML block only runs once at initial script parse (`game.gameOver` is false then), never re-triggered after real game-over. Score 1.
+
+**F12**: `switchTab()` wired to generated buttons and `keydown` 1-6; log entries carry `entry.turn`; `div.title`/resource `item.title` tooltips explain values; `@media (max-width:600px)` adapts layout. Score 2.
+
+**F13**: `runTests()` asserts real invariants (skill range, storage caps, prereq enforcement, no duplicate IDs); `runBenchmark()` runs 200 turns via `endTurn()` loop and prints `getStateHash()`. Score 2.
+
+**G1**: `research.efficiency.done` multiplies output ×1.2 uniformly inside `resolveProduction()`'s formula chain, feeding resources used elsewhere; `labor` node effect unused (gap). Score 3.
+
+**G2**: `resources.food < foodNeed` → `p.morale -= 15` (real); morale only affects output via full colonist removal at `morale<=0` splice — a threshold special case, no continuous scaling. Score 2.
+
+**G3**: `resolveHazards()` sets `tile.damaged`; `resolveProduction()` scales output by `(1-damaged*0.5)`; `repairBuildings()` spends `parts`, resets `damaged=0` restoring output. Fully chained. Score 4.
+
+**G4**: caravan price built from random `supplyShift`/`demandShift` via `this.rng()`, never reads `this.resources` or any persisted/drifting supply state. Chain absent. Score 0.
+
+**G5**: Refugee Arrival choices push population+consume food vs. morale-only penalty; Toxic Plume choices spend food vs. morale for all colonists — both durably mutate distinct state via `choices[idx].effect()`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 2, "10": 1, "11": 1, "12": 2, "13": 2},
+  "G": {"G1": 3, "G2": 2, "G3": 4, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "game object + mulberry32 rng; endTurn() calls fixed 8-step resolve sequence",
+    "F2": "generateMap() seeds terrain, canBuild() checks terrain, getAdjacencyBonus() multiplies output",
+    "F3": "forge consumes power to make metal, greenhouse consumes water to make food, clampResources caps+overflowLog",
+    "F4": "worker.skill read in resolveProduction output formula; worker.fatigue written but never read there",
+    "F5": "resolveConsumption drops morale on shortage; morale never scales output, only removal at 0",
+    "F6": "8 research nodes with prereq/cost; research.labor effect defined but never checked anywhere",
+    "F7": "only 5 events in fireEvent(); eventCooldown object unused; only 3 events have real multi-choice",
+    "F8": "tradeCaravan price = basePrice + rng-only shifts, never reads this.resources or persisted supply",
+    "F9": "resolveHazards damages tiles by turn-based severity; tile.damaged cuts output; repairBuildings spends parts",
+    "F10": "exportSave copies JSON; importSave try/catch shows error but no field/schema validation",
+    "F11": "checkEndConditions reaches win/lose + calculateScore, but end-screen block only runs at initial parse, dead after real gameover",
+    "F12": "switchTab wired to buttons+keydown 1-6; log entries show entry.turn; tile/resource title tooltips; media query for narrow screens",
+    "F13": "runTests asserts real invariants (skill range, caps, prereqs); runBenchmark loops endTurn 200x and prints getStateHash",
+    "G1": "research.efficiency.done multiplies output x1.2 in resolveProduction's shared formula chain",
+    "G2": "food/water shortfall cuts morale in resolveConsumption; morale only affects output via full removal at 0",
+    "G3": "resolveHazards sets tile.damaged -> resolveProduction scales output down -> repairBuildings spends parts restores it",
+    "G4": "tradeCaravan price built only from this.rng() shifts, never reads this.resources or a persisted supply var",
+    "G5": "Refugee Arrival and Toxic Plume choice effects() write different population/resources/morale mutations"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Trade prices are pure random noise disconnected from stockpiles or any persistent supply state, and the end-game summary screen is dead code that never triggers after an actual playthrough ends."
+}
+```

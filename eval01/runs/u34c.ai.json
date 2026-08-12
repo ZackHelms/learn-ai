@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 — Core loop**: state object `newGame()`; `rand(st)` mulberry32 over `st.rngState`; `endTurnCore()` runs stormPhase→productionPhase→needsPhase→colonistPhase→eventPhase→tradePhase→advancePhase in fixed order. Score 2.
+
+**F2 — Map**: 64-tile grid, `genMap()` terrain from `rand(st)` seeded by seed; `canBuild()` checks `b.terr.includes(g.terr)`; `hasAdjTerr` drives `mult*=b.adj.mult` in `productionPhase`. Score 2.
+
+**F3 — Economy**: ore+power→metal (forge), soil+water→food (greenhouse), power→water (condenser); `capOf`/`addRes` enforce caps, overflow tracked in `st.stats.overflow`. Score 2.
+
+**F4 — Population**: colonist records `{id,name,job,skill,fatigue,morale,assign}`; `workerMult()` reads `c.skill`/`c.fatigue` for production multiplier. Score 2.
+
+**F5 — Needs**: `needsPhase()` consumes food/water, sets shortage → morale −8 in loop; `workerMult` reads morale; +3 morale/turn recovery when fed. Score 2.
+
+**F6 — Research**: 10 nodes in `RESEARCH`; `canResearch` enforces `r.pre`; `buyResearch` deducts cost; effects read via `chainMult`, `canBuild` req, `stormChance`, `colonistPhase` fmult, `priceOf` barter. Score 2.
+
+**F7 — Events**: 12 entries in `EVENTS`; weighted pick via `tw`/`r-=e.w` loop; 5 events (`refugees`,`sickness`,`wreck`,`wanderer`,`festival`) have 3 choices each with distinct `apply()`; `st.events.cd[id]` cooldown checked in `avail` filter. Score 2.
+
+**F8 — Trade**: `priceOf` uses `st.res[k]/cap` and `market.drift[k]` (drifts each turn in `tradePhase`); `c.stock[k]` limited; `buyGood`/`sellGood` both implemented and wired to UI. Score 2.
+
+**F9 — Hazard**: `stormPhase` fires on `st.storm.next`; `sev=1+turn/25` grows chance; damaged buildings skip output in `productionPhase`; `forecasting`/`walls` research and `baffle` building cut chance; `tryRepair` costs 2 parts +12 fatigue. Score 2.
+
+**F10 — Save/load**: `JSON.stringify(state)` into `#savebox`; `deserialize`→`validateState` checks structure, shows error in `#loaderr`. Score 2.
+
+**F11 — End conditions**: win/lose both resolved in `advancePhase` (turn>60 check, pop<=0 immediate loss); `finalize()` scores pop/research/stockpile/turns/bonus; `renderEnd()` shows summary. Score 2.
+
+**F12 — UI**: `ui.tab`/`renderTabs`; log lines carry `l.t` turn numbers; extensive `data-tip` formula tooltips; keydown handler for Space/1-6; `@media(max-width:700px)` layout. Score 2.
+
+**F13 — Dev panel**: `runTests()` 23 real invariant checks (bounds, prereqs, round-trip, cooldown); `runBenchmark`/`simGame` run 200-turn headless loop, print `stateHash`. Score 2.
+
+**G1**: `chainMult` reads `research.done`, multiplies output in `productionPhase`, shown in `bld.last` notes. Score 4.
+
+**G2**: `needsPhase` shortage → morale −8; `workerMult` reads `c.morale` to scale production mult every turn. Score 4.
+
+**G3**: `stormPhase` sets `b.damaged`; `productionPhase` skips damaged (`continue`); `tryRepair` costs 2 parts, clears `damaged`, restoring output. Score 4.
+
+**G4**: `priceOf` combines `st.res[k]/capOf` stockpile factor with `market.drift[k]` updated each `tradePhase`. Score 4.
+
+**G5**: `refugees`/`sickness` choices each mutate `st.colonists`, `st.res`, morale differently, not just logged. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurnCore() calls storm/production/needs/colonist/event/trade/advance phases in order",
+    "F2": "hasAdjTerr()/b.adj.mult read in productionPhase mult calc",
+    "F3": "forge inp{ore,power} out{metal}; addRes() caps+overflow tracked in st.stats.overflow",
+    "F4": "workerMult(c,b) reads c.skill, c.fatigue for production multiplier",
+    "F5": "needsPhase() shortage -> morale -8; workerMult reads morale",
+    "F6": "canResearch enforces r.pre; chainMult/canBuild/stormChance/colonistPhase read research.done",
+    "F7": "EVENTS weighted pick (tw/r-=e.w); events.cd[id] cooldown checked in avail filter",
+    "F8": "priceOf() uses st.res[k]/capOf and market.drift[k]; buyGood/sellGood both wired",
+    "F9": "stormPhase damages buildings; productionPhase skips damaged; tryRepair costs parts+fatigue",
+    "F10": "deserialize()->validateState() shows error in #loaderr on bad paste",
+    "F11": "advancePhase turn>60 win/lose; finalize() computes score from pop/research/stock/turns",
+    "F12": "keydown handler for Space/digits; data-tip tooltips with formulas; media query layout",
+    "F13": "runTests() 23 invariant asserts; runBenchmark()->simGame(200) prints stateHash",
+    "G1": "chainMult(research.done) applied in productionPhase mult, shown in bld.last",
+    "G2": "needsPhase shortage sets morale -8; workerMult(c.morale) scales output every turn",
+    "G3": "stormPhase sets b.damaged; productionPhase skips damaged; tryRepair clears damage",
+    "G4": "priceOf combines st.res[k]/cap stockpile factor with market.drift updated in tradePhase",
+    "G5": "refugees/sickness choice.apply() mutate colonists/res/morale differently per branch"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Several producers (sifter, mine, generator, scavpost) create resources from nothing rather than consuming a raw input, so chains are shallower than the ore→metal/soil→food ideal despite real chains existing elsewhere."
+}
+```

@@ -1,0 +1,69 @@
+## Worksheet
+
+**F1 (Core loop):** Game class holds full state; `mulberry32(seed)` assigned to `this.rng`, no `Math.random` found anywhere; `endTurn()` runs consumption→morale→produceResources→skill→departures→caravan→storm→events→caps→win/lose in fixed order. Score 2.
+
+**F2 (Map):** `initMap()` builds 8x8 grid using `this.rng()` for terrain; `buildBuilding()` checks `building_def.terrain.includes(tile.terrain)`; no adjacency-bonus code found anywhere. Score 1.
+
+**F3 (Economy):** `produceResources()` consumes power/water to produce metal/food; `storage_caps` enforced and overflow logged in `endTurn()`. Score 2.
+
+**F4 (Population):** Colonist records have skill/fatigue/morale/job; `produceResources()` uses hardcoded `avg_skill = b.workers>0?3:1` instead of `col.skill`, and no code ever assigns colonists to `assigned_building`/`b.workers`, so fatigue/skill never actually feed production. Score 1.
+
+**F5 (Needs):** `food_deficit`/`water_deficit` computed in `endTurn()`, lower `col.morale`; morale is never read by `produceResources()`; no code anywhere raises morale (no recovery path). Score 1.
+
+**F6 (Research):** 8 nodes in `initResearch()`; `completeResearch()` enforces prereqs and deducts cost; only 4/8 unlocks (irrigation, smelting, hydro, reinforcement) have a real, wired effect — `advanced_refinery`/`battery_bank`/`clinic`/`repair` have no effect anywhere. Score 1.
+
+**F7 (Events):** Only 7 event types defined (`event_defs`), below the 10 required; selection in `fireRandomEvent()` is uniform, not weighted; ≥4 events (discovery/accident/visitor/illness/ashstorm) have differing state-changing choices; weak cooldown via `events_fired`. Score 1.
+
+**F8 (Trade):** `tradeResource()` supports buy/sell both ways; price formula reads `game.market_demand`, which is initialized but never updated anywhere — dead variable; no caravan inventory cap. Score 1.
+
+**F9 (Hazard):** `applyAshstorm()` fires on `storm_arrival` countdown, severity scales with `turn`; `produceResources()` applies `damage_factor`; `repairBuilding()` costs parts and restores; but `shelter_count` damage-reduction is computed *after* damage is already applied to buildings, so storm_shelter never actually reduces applied damage. Score 1.
+
+**F10 (Save/load):** `save()` serializes to JSON text shown in textarea; `load()` wraps `JSON.parse` in try/catch, `loadGame()` alerts a clear error on failure. Score 2.
+
+**F11 (End conditions):** Lose via `colonists.length===0`; win via turn≥60 & pop≥12 & resources; `endGame()` computes `total_score` from pop/research/resources/turns; `showEndGame()` renders summary modal. Score 2.
+
+**F12 (UI):** `switchTab()` wired to buttons; log entries carry `entry.turn`; keydown listener for Space/1-5; `@media (max-width:600px)` layout rules exist; `.tooltip`/`.tooltip-text` CSS defined but never used on any element. Score 1.
+
+**F13 (Dev panel):** `runTests()` asserts real invariants (caps, prereqs, PRNG determinism, save/load roundtrip, skill/morale/fatigue bounds); `runBenchmark()` runs a separate headless `bench_game` 200 turns and prints `simpleHash(final_state)`. Score 2.
+
+**G1:** `buildBuilding()` gates construction on `research[...].completed`; `produceResources()` never reads research state directly, only building type/damage — effect is an indirect build-gate, not a yield-formula read. Score 2.
+
+**G2:** `food_deficit`/`water_deficit` → `col.morale -=1` (real state change), but `produceResources()` never reads `col.morale`, so "reduced labor output" link is absent. Score 1.
+
+**G3:** `applyAshstorm()` sets `tile.building.damage`; `produceResources()` applies `damage_factor`; `repairBuilding()` spends 5 parts and reduces damage, restoring output. Score 3.
+
+**G4:** price formula in `render()`/`tradeResource()` reads `game.market_demand`, which is never mutated anywhere after construction — no actual price drift or stockpile linkage. Score 0.
+
+**G5:** `discovery`/`accident`/`visitor`/`illness`/`ashstorm` each offer 2 choices with distinct resource/colonist/morale mutations via `effect()` callbacks, applied through `selectEventChoice()`. Score 4.
+
+```json
+{
+  "F": {"1": 2, "2": 1, "3": 2, "4": 1, "5": 1, "6": 1, "7": 1,
+        "8": 1, "9": 1, "10": 2, "11": 2, "12": 1, "13": 2},
+  "G": {"G1": 2, "G2": 1, "G3": 3, "G4": 0, "G5": 4},
+  "evidence": {
+    "F1": "mulberry32(seed) -> this.rng, used throughout; endTurn() fixed system order",
+    "F2": "buildBuilding() checks building_def.terrain; no adjacency bonus code found",
+    "F3": "produceResources() consumes power/water for metal/food; storage_caps overflow logged in endTurn()",
+    "F4": "produceResources() uses hardcoded avg_skill=3, not col.skill; workers/assigned_building never set",
+    "F5": "col.morale lowered on deficit in endTurn() but never read by produceResources(); no recovery code",
+    "F6": "completeResearch() enforces prereqs/cost; battery_bank/clinic/repair unlocks have no wired effect",
+    "F7": "event_defs has 7 entries (<10); fireRandomEvent() picks uniformly, not weighted",
+    "F8": "tradeResource() price reads game.market_demand, which is never updated anywhere",
+    "F9": "applyAshstorm() computes shelter_count damage reduction after damage loop already ran, so it's dead",
+    "F10": "save()/load() JSON roundtrip; loadGame() alerts on JSON.parse failure",
+    "F11": "endGame() checks colonists.length===0 and turn>=60&&pop>=12; total_score computed, showEndGame() renders modal",
+    "F12": "switchTab()/keydown listener wired; .tooltip CSS class never used in any rendered element",
+    "F13": "runTests() checks real invariants; runBenchmark() runs bench_game 200 turns headless, prints simpleHash()",
+    "G1": "research[id].completed gates buildBuilding(); produceResources() never reads research state directly",
+    "G2": "food/water deficit -> col.morale -=1 in endTurn(), but produceResources() never reads col.morale",
+    "G3": "applyAshstorm() sets tile.building.damage; produceResources() applies damage_factor; repairBuilding() restores",
+    "G4": "market_demand read in price formula but never mutated after Game constructor",
+    "G5": "discovery/accident/visitor/illness/ashstorm choices each write distinct resource/colonist state via effect()"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Several systems compute real effects (colonist skill, morale, storm-shelter mitigation, market demand) that are never actually read by the formulas that should consume them, leaving core feedback loops disconnected despite plausible-looking code."
+}
+```

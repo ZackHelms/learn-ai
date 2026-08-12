@@ -1,0 +1,71 @@
+## Worksheet
+
+**F1 Core loop** — one state object `S`/`G`; `rand(S)` uses `S.rngState`; `endTurn()` calls storm→production→needs→settlers→caravan→event in fixed order. Score 2.
+
+**F2 Map** — `genMap` builds 64 tiles from `mulberry32(seed^...)`; `buildAt` checks `def.terr.includes(tl.t)`; `prodInfo` applies `def.adj` multipliers (e.g. condenser +30%/adjacent water) to output. Score 2.
+
+**F3 Economy** — ore→metal (mine→forge), soil+water→food (sifter/condenser→greenhouse); `capsOf`/`addRes` enforce caps and tally overflow in `S._over`/`stats.overflowLost`. Score 2.
+
+**F4 Population** — `newColonist` creates records with skill/fatigue/morale/job/assign; `prodInfo` reads `w.skill` and `w.fatigue` to scale output. Score 2.
+
+**F5 Needs** — `runNeeds` computes `needF/needW` vs stock, sets `shortage`, applies `dm-=12` to morale; `prodInfo` reads morale for output; morale regains `+5` when needs met (not instant loss). Score 2.
+
+**F6 Research** — 10 nodes in `RESEARCH`; `buyResearch` enforces `def.req`, deducts cost; effects read in `prodInfo` (agronomy/refining/turbines), `runStorm` (shutters/frames), `capsOf` (deepstore), `priceOf` (guild), `buildAt` (clinic/bazaar req). Score 2.
+
+**F7 Events** — 12 entries in `EVENTS`; weighted pick in `drawEvent` (`tot+=e.w`); 5 events (refugees, medic, sickness, wanderer, festival) offer 2-3 choices with distinct `fx`; cooldown via `eventsLast`/`e.cd`. Score 2.
+
+**F8 Trade** — `priceOf` reads `S.res[g]` stockpile ratio and `S.drift[g]`; `S.caravan.stock` limited/decremented; `tradeBuy`/`tradeSell` both mutate state. Score 2.
+
+**F9 Hazard** — `runStorm` fires every 7 turns, `sev` grows with `S.turn`; damaged tiles give `prodInfo` mult 0; `shutters`/`frames`/windbreak reduce chance; `repairAt` spends parts and clears damage after a skip turn. Score 2.
+
+**F10 Save/load** — `serialize(S)`→textarea; `deserialize` validates version/res/map/colonists/research, returns `{err}` shown in `saveStatus`. Score 2.
+
+**F11 End conditions** — `checkEnd` handles pop===0 (lose) and turn>=60 win/lose; `mkScore` combines pop/research/stock/turns; `renderModal` shows summary table. Score 2.
+
+**F12 UI** — `switchTab` toggles panels; `renderLog` prefixes `T'+e.t`; extensive `data-tip` tooltips; keydown handles Space/1-6; `@media(min-width:760px)` reflows map layout. Score 2.
+
+**F13 Dev panel** — `runTests` asserts caps, determinism, morale/fatigue thresholds, storm mitigation efficacy, save round-trip (non-trivial); `runBenchmark` runs 200 headless turns via `policyStep`/`endTurn(S,true)`, prints `hashState`. Score 2.
+
+**G1** — `S.research.agronomy` set in `buyResearch`, read in `prodInfo` (`m*=1.3` for greenhouse) every turn, shown in tile tooltip. Score 4.
+
+**G2** — `runNeeds` shortage → `c.morale+=dm(-12)` → `prodInfo` reads `w.morale` to scale mult (0.6/0.8/0 tiers). Full loop, every turn. Score 4.
+
+**G3** — `runStorm` sets `tl.b.dmg=true` → `prodInfo` mult 0 → `repairAt` spends parts, clears dmg, sets `skip=1` → production resumes next turn. Score 4.
+
+**G4** — `priceOf` reads `S.res[g]/cap` and `S.drift[g]`, drift updated each caravan in `runCaravan`; test confirms abundance lowers sell price. Score 4.
+
+**G5** — refugees choice mutates `S.colonists`/food/water; medic choice mutates scrip/fatigue/morale; sickness choice mutates parts/sick — real state writes, not just log lines. Score 4.
+
+No `// TODO` markers found in source.
+
+```json
+{
+  "F": {"1": 2, "2": 2, "3": 2, "4": 2, "5": 2, "6": 2, "7": 2,
+        "8": 2, "9": 2, "10": 2, "11": 2, "12": 2, "13": 2},
+  "G": {"G1": 4, "G2": 4, "G3": 4, "G4": 4, "G5": 4},
+  "evidence": {
+    "F1": "endTurn() calls runStorm/runProduction/runNeeds/runSettlers/runCaravan/drawEvent in order; rand(S) uses S.rngState",
+    "F2": "genMap seeds terrain via mulberry32; buildAt checks def.terr; prodInfo applies def.adj multipliers",
+    "F3": "forge consumes ore->metal, greenhouse consumes soil+water->food; addRes/capsOf enforce caps, overflow tallied",
+    "F4": "newColonist record {skill,fatigue,morale,job,assign}; prodInfo reads w.skill/w.fatigue",
+    "F5": "runNeeds sets shortage, applies morale -12/+5; prodInfo reads c.morale for output mult",
+    "F6": "10 RESEARCH nodes; buyResearch enforces req/cost; effects read in prodInfo/runStorm/capsOf/priceOf",
+    "F7": "12 EVENTS, weighted pick in drawEvent; 5 events w/ 2-3 choices; eventsLast cooldown check",
+    "F8": "priceOf reads S.res[g] and S.drift[g]; caravan.stock limited; tradeBuy/tradeSell both work",
+    "F9": "runStorm severity scales with S.turn; dmg->prodInfo mult 0; shutters/frames reduce chance; repairAt spends parts",
+    "F10": "serialize(S) to textarea; deserialize validates and returns err shown in saveStatus",
+    "F11": "checkEnd handles pop===0 and turn>=60; mkScore combines state; renderModal shows summary table",
+    "F12": "switchTab toggles panels; renderLog prefixes turn; data-tip tooltips; keydown Space/1-6; media query reflow",
+    "F13": "runTests asserts caps/determinism/morale rules; runBenchmark runs 200 headless turns, prints hashState",
+    "G1": "S.research.agronomy read in prodInfo (m*=1.3) every production tick",
+    "G2": "runNeeds shortage -> c.morale -12 -> prodInfo reads morale for mult tiers",
+    "G3": "runStorm sets dmg -> prodInfo mult 0 -> repairAt spends parts, clears dmg, skip=1 then recovers",
+    "G4": "priceOf reads S.res[g]/cap and S.drift[g]; drift updated in runCaravan each arrival",
+    "G5": "refugees/medic/sickness choice fx mutate colonists/res/fatigue/morale directly, not just log"
+  },
+  "todo_notes": [],
+  "grader_confidence": "high",
+  "contamination": "none",
+  "single_biggest_weakness": "Damaged buildings lose output entirely (mult=0) rather than degrading gradually, a minor deviation from a smoother 'produce less' model."
+}
+```
