@@ -102,10 +102,12 @@ prefix tokens for speed/cost and cannot carry content between jobs.
 If you grade in an **interactive** agent session instead, use a fresh session that has not
 explored the repo, and lead with read discipline:
 
-> Read ONLY these two files, in this order: `eval01/GRADER_PROMPT.md` then
-> `eval01/runs/r01.html`. No directory listings, no other files, no commands, no
-> subagents - do the grading yourself in this session. Then follow GRADER_PROMPT.md and
-> write your full reply verbatim to `eval01/runs/r01b.ai.json`.
+> Read ONLY these two files, in this order:
+> `track-04-benchmark/eval01-build-ashfall/GRADER_PROMPT.md` then
+> `track-04-benchmark/eval01-build-ashfall/runs/r01.html`. No directory listings, no
+> other files, no commands, no subagents - do the grading yourself in this session.
+> Then follow GRADER_PROMPT.md and write your full reply verbatim to
+> `track-04-benchmark/eval01-build-ashfall/runs/r01b.ai.json`.
 
 Grader-prompt version: **v1.3** (2026-08-09: added rules 13-14 - never delegate, declare
 contamination - and the `contamination` output field). Record the version in the RESULTS.md
@@ -221,4 +223,7 @@ Initial files drafted by Opus 5 (xhigh) in the Claude desktop app, 2026-08-08. R
 2026-08-09 with Claude Code (Fable 5): grader prompt restructured for weak grader models,
 merge parsing hardened, runtime checks taught to open the Dev tab, pipeline validated
 end-to-end with subagent-generated candidates (see RESULTS.md). Renamed `benchmark01/` to
-`eval01/` the same day, once the eval-vs-benchmark distinction sank in.
+`eval01/` the same day, once the eval-vs-benchmark distinction sank in. Moved from the
+repo root into `track-04-benchmark/` on 2026-08-12 when the benchmark became a track
+([ADR 0007](../../docs/decisions/0007-benchmark-track.md)); run ids, results, and scorer
+are unchanged by the move.

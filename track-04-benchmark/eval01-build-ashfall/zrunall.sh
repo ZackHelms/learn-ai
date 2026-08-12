@@ -48,10 +48,10 @@ function zrunall {
 export -f zrunall
 
 # QQQ=1 # DONE 22:00 10Aug2026 eval01 set1
-# QQQ=2 # DONE 10:16 11Aug2026 eval01 set2
+# QQQ=2 # DONE 10:16 11Aug2026 eval01 set2; haiku45/sonnet5/opus5/fable5 took 20m/47m/47m/60m for full sweep
 
 QQQ=3
-zrunall $QQQ r haiku45    # 20m
-zrunall $QQQ s sonnet5    # 47m
-zrunall $QQQ t opus5      # 47m
-zrunall $QQQ u fable5     # 60m
+zrunall $QQQ r haiku45 
+zrunall $QQQ s sonnet5 
+zrunall $QQQ t opus5   
+zrunall $QQQ u fable5  
