@@ -89,28 +89,6 @@ if these are guessed at.** Record answers in module 01's field notes.
 
 ## Repo maintenance
 
-- [ ] **eval01: scorer fix batch (one coordinated change + re-score).** Three
-      artifact classes found in the 11Aug set2/set3 reviews. Apply together with
-      a local re-score of sets 1-3 det halves (no API cost) and a RESULTS.md
-      NOTE, same as the 10Aug re-score:
-      (a) B3 (and in principle B1/B2) grep the whole file, so self-test names
-      and help text *about* `Math.random` count as violations — hits: u25 set2,
-      t31 + t34 set3, -3 each. Restrict to `<script>` code with comments
-      stripped.
-      (b) Runtime discovery misses compact tab labels — `\bdev\b` cannot match
-      "6Dev" (digit+letter = no word boundary) — and the fallback walk iterates
-      a stale element snapshot, so a tab bar that re-renders on click detaches
-      every remaining handle. Hit: t33 set3, ~20 det pts (verified by hand that
-      6Dev -> Run Tests works). Fix: match `dev` at a letter boundary and
-      re-query controls after each fallback click.
-      (c) B5's 4KB window: six set3 candidates (all five haiku + t35) keep a
-      real `// ASSUMPTIONS` comment past 4KB (r31: line 227) after 0 such
-      misses in sets 1-2. Decide whether position matters enough to keep the
-      window this tight.
-- [ ] **eval01: stray `eval01/eval01/` logs.** The hand-reconstructed
-      `*.plus-stderr.log` files from the 11Aug set2 failure landed in nested
-      `eval01/eval01/(eval01/)` dirs; move them next to the other `runall.*.log`
-      files and delete the nested dirs.
 - [ ] **Clear the `tag_verified: false` flags.** Run `/update-models` from a
       machine with network access. Note the likely failure mode: fixing only the
       one tag that blocked you and leaving the other five stale.

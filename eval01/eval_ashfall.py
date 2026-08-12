@@ -56,7 +56,10 @@ the same file are graded once, so a pasted listscore-style expansion also works.
 is still accepted (it is now the default) so old command lines keep working.
 
 Writes <candidate>.eval.json next to the candidate unless --no-write is passed.
-Exit code is 0 on a completed grade, 1 on a usage, IO, or missing-playwright error.
+Arguments whose candidate file does not exist are reported as ERROR while the rest
+are still evaluated (a failed generation must not block scoring its siblings).
+Exit code is 0 on a fully clean run, 1 when anything was missing or on a usage,
+IO, or missing-playwright error.
 """
 
 import argparse
@@ -85,18 +88,26 @@ BANNED_STORAGE = [
     r"document\s*\.\s*cookie",
 ]
 
-EXTERNAL_RES = [
+# Markup-level indicators: tags, imports, and CDN hostnames. Checked over the
+# whole (comment-stripped) file - a hostname is a violation wherever it appears,
+# including a URL string a script would inject.
+EXTERNAL_RES_MARKUP = [
     r"<script[^>]+src\s*=\s*[\"']https?://",
     r"<script[^>]+src\s*=\s*[\"'](?!data:)[^\"'>]+\.js",
     r"<link[^>]+href\s*=\s*[\"']https?://",
     r"@import\s+url\s*\(",
-    r"\bfetch\s*\(",
-    r"\bXMLHttpRequest\b",
-    r"\bimportScripts\s*\(",
     r"cdn\.",
     r"googleapis\.com",
     r"unpkg\.com",
     r"jsdelivr",
+]
+
+# JS network calls. Checked over executable script code only (see script_code):
+# prose or a self-test name mentioning fetch() must not count as calling it.
+EXTERNAL_RES_JSCALLS = [
+    r"\bfetch\s*\(",
+    r"\bXMLHttpRequest\b",
+    r"\bimportScripts\s*\(",
 ]
 
 PRNG_HINTS = [
@@ -121,8 +132,32 @@ def strip_comments(text):
     return text
 
 
+def script_code(raw):
+    """The JS that would actually execute: <script> bodies with comments and
+    string literals crudely removed.
+
+    Violation checks (B1, B3, B2's network calls) grep this instead of the whole
+    file, so visible help text, header prose, and self-test names ABOUT a banned
+    API cannot count as using it. That false positive cost set2 u25 and set3
+    t31/t34 3 points each - candidates whose self-tests assert "no Math.random
+    anywhere" carry the banned string precisely because they comply. Evidence
+    checks (B4's PRNG hints) stay on the full comment-stripped text, where
+    leniency is harmless. Same crudeness contract as strip_comments: template
+    literals with nested quotes or regex literals containing quote marks can
+    leak, which is acceptable for detecting APIs that legitimate candidates do
+    not use at all."""
+    js = "\n".join(re.findall(r"<script\b[^>]*>(.*?)</script>", raw, re.I | re.S))
+    js = re.sub(r"/\*.*?\*/", " ", js, flags=re.S)
+    js = re.sub(r"(?m)^\s*//.*$", " ", js)
+    js = re.sub(r"'(?:\\.|[^'\\\n])*'", "''", js)
+    js = re.sub(r'"(?:\\.|[^"\\\n])*"', '""', js)
+    js = re.sub(r"`(?:\\.|[^`\\])*`", "``", js)
+    return js
+
+
 def static_checks(raw):
-    code = strip_comments(raw)
+    code = strip_comments(raw)   # full text minus comments: markup checks, B4 evidence
+    js = script_code(raw)        # executable JS only: violation checks B1/B3 + network calls
     r = {}
 
     # A1 - well-formed enough to be a page with inline script
@@ -142,35 +177,55 @@ def static_checks(raw):
                          % (closed, not open_script, fence_leak),
                "tail": tail[-120:]}
 
-    # B1 - storage APIs
+    # B1 - storage APIs (calls live in JS; prose about them must not count)
     hits = []
     for pat in BANNED_STORAGE:
-        hits += [pat for _ in re.findall(pat, code)]
+        hits += [pat for _ in re.findall(pat, js)]
     r["B1"] = {"pts": 4.0 if not hits else 0.0, "max": 4.0,
                "detail": "violations=%d %s" % (len(hits), sorted(set(hits)))}
 
-    # B2 - external resources
+    # B2 - external resources: markup/hostname patterns over the whole file,
+    # network-call patterns over executable JS only
     ext = []
-    for pat in EXTERNAL_RES:
+    for pat in EXTERNAL_RES_MARKUP:
         for m in re.findall(pat, code, re.I):
+            ext.append(pat)
+    for pat in EXTERNAL_RES_JSCALLS:
+        for m in re.findall(pat, js, re.I):
             ext.append(pat)
     r["B2"] = {"pts": 4.0 if not ext else 0.0, "max": 4.0,
                "detail": "violations=%d %s" % (len(ext), sorted(set(ext)))}
 
-    # B3 - Math.random
-    mr = re.findall(r"Math\s*\.\s*random", code)
+    # B3 - Math.random used in code (mentions in strings/text are compliance, not violation)
+    mr = re.findall(r"Math\s*\.\s*random", js)
     r["B3"] = {"pts": 3.0 if not mr else 0.0, "max": 3.0, "detail": "occurrences=%d" % len(mr)}
 
     # B4 - seeded PRNG evidence
     prng = sorted({p for p in PRNG_HINTS if re.search(p, code, re.I)})
     r["B4"] = {"pts": 2.0 if prng else 0.0, "max": 2.0, "detail": "hints=%s" % prng}
 
-    # B5 - assumptions header
-    head = raw[:4000]
-    assumptions = bool(re.search(r"assumption", head, re.I)) and bool(
-        re.search(r"<!--|/\*", head))
+    # B5 - assumptions header: a comment mentioning assumptions that STARTS
+    # before the game code does - anywhere from the top of the file through the
+    # first 4KB of the first <script> block. The original first-4KB window
+    # failed 20 real blocks across sets 0-3 on position alone: compliant models
+    # put the block in the file head (sonnet/opus/fable), at the top of the JS
+    # after front-loading CSS (every haiku run, both opus-max runs), or in the
+    # markup between the two (set1 r11) - against zero observed cases of an
+    # early comment mentioning assumptions that was NOT the assumptions block.
+    # The word must sit inside an actual comment so prose cannot count, and a
+    # block buried below the top of the code still fails - the only position
+    # signal worth enforcing from "list them ... at the top of the file".
+    m = re.search(r"<script\b[^>]*>", raw, re.I)
+    window_end = (m.end() if m else 0) + 4000
+    assumptions = False
+    for cm in re.finditer(r"<!--.*?-->|/\*.*?\*/|(?:^[ \t]*//[^\n]*\n?)+", raw, re.S | re.M):
+        if cm.start() >= window_end:
+            break
+        if re.search(r"assumption", cm.group(0), re.I):
+            assumptions = True
+            break
     r["B5"] = {"pts": 2.0 if assumptions else 0.0, "max": 2.0,
-               "detail": "assumptions_comment_in_first_4kb=%s" % assumptions}
+               "detail": "assumptions_comment_before_code=%s" % assumptions}
 
     # C1 static half - a control labelled like "run tests" exists in the markup
     tests_label = bool(re.search(r"run\s*tests?", raw, re.I))
@@ -254,16 +309,18 @@ def find_button_in_tabs(page, pattern):
 
     The prompt asks for Run Tests / Run Benchmark inside a "Dev" panel, and visible-text
     discovery cannot see into a tab that is not active. Try the current view first, then
-    click a Dev/Debug-looking control, then walk every short-labelled control that looks
-    like a tab header. Candidates label the toggle "Dev Panel", "6 Dev", "6. Dev",
-    "Dev 6", ... - match the word anywhere in the label, never anchored: the anchored
-    ^dev\\w*$ used in the first pass zeroed the whole runtime cluster (C1/C2/C3/D2/D3)
-    for 9 of 20 candidates whose panels worked fine when opened by their real label.
+    click a Dev/Debug-looking control, then walk short-labelled controls that look like
+    tab headers. Candidates label the toggle "Dev Panel", "6 Dev", "6. Dev", "Dev 6",
+    "6Dev", ... - match the word anywhere in the label, bounded only against being
+    inside another word. Two discovery bugs live in this function's history: the
+    anchored ^dev\\w*$ of the first pass zeroed the runtime cluster for 9 of 20
+    candidates (fixed 10Aug), and \\bdev\\b could not match set3 t33's compact "6Dev"
+    label because digit->letter is not a word boundary (fixed 11Aug).
     """
     btn = find_button(page, pattern)
     if btn is not None:
         return btn
-    for tab_pat in (r"\bdev\w*\b", r"\bdebug\b", r"\btests?\b", r"\btools?\b"):
+    for tab_pat in (r"(?<![a-z])dev", r"(?<![a-z])debug", r"(?<![a-z])tests?", r"(?<![a-z])tools?"):
         tab = find_button(page, tab_pat)
         if tab is None:
             continue
@@ -275,30 +332,42 @@ def find_button_in_tabs(page, pattern):
         btn = find_button(page, pattern)
         if btn is not None:
             return btn
-    # Last resort: click every remaining short-labelled control that cannot mutate
-    # state (bounded), re-running discovery after each - custom tab bars whose labels
-    # never mention dev/debug end up here.
+    # Last resort: click short-labelled controls that cannot mutate state,
+    # re-running discovery after each. Controls are RE-QUERIED after every click
+    # attempt: a tab bar that re-renders itself on each switch (set3 t33)
+    # detaches previously fetched element handles, and the old snapshot-based
+    # walk then threw on every remaining click - costing 20 runtime points on a
+    # page a human could drive fine. Labels already tried are skipped by text;
+    # attempts are bounded so a fully click-blocked page cannot stall the pass.
+    tried = set()
     clicked = 0
-    for el in page.query_selector_all(CONTROL_TIERS[0] + ", " + CONTROL_TIERS[1]):
-        if clicked >= 12:
-            break
-        try:
-            if not el.is_visible():
+    attempts = 0
+    while clicked < 12 and attempts < 24:
+        advanced = False
+        for el in page.query_selector_all(CONTROL_TIERS[0] + ", " + CONTROL_TIERS[1]):
+            try:
+                if not el.is_visible():
+                    continue
+                txt = (el.inner_text() or "").strip()
+            except Exception:
                 continue
-            txt = (el.inner_text() or "").strip()
-        except Exception:
-            continue
-        if not txt or len(txt) > 24 or STATEFUL_LABEL_RX.search(txt):
-            continue
-        try:
-            el.click(timeout=1500)
-            page.wait_for_timeout(300)
-        except Exception:
-            continue
-        clicked += 1
-        btn = find_button(page, pattern)
-        if btn is not None:
-            return btn
+            if not txt or len(txt) > 24 or txt in tried or STATEFUL_LABEL_RX.search(txt):
+                continue
+            tried.add(txt)
+            attempts += 1
+            advanced = True
+            try:
+                el.click(timeout=1500)
+                page.wait_for_timeout(300)
+            except Exception:
+                break  # stale or blocked handle: re-query and try the next label
+            clicked += 1
+            btn = find_button(page, pattern)
+            if btn is not None:
+                return btn
+            break  # the click may have re-rendered the page: re-query controls
+        if not advanced:
+            break
     return None
 
 
@@ -708,12 +777,21 @@ def main():
         ap.print_help()
         return 1
 
+    # Missing candidates are reported, not fatal: a sweep where one generation
+    # failed (e.g. t25 in set2) must still evaluate the other four. Exit code
+    # stays nonzero so callers can see something was missing.
     paths, errors = resolve_candidates(a.candidates)
     for err in errors:
-        print("error: %s" % err, file=sys.stderr)
-    if errors:
+        print("ERROR: %s" % err, file=sys.stderr)
+    if not paths:
+        if errors:
+            print("ERROR: none of the %d argument(s) resolved - nothing evaluated"
+                  % len(a.candidates), file=sys.stderr)
         return 1
-    if len(paths) < len(a.candidates):
+    if errors:
+        print("ERROR: continuing with the %d candidate(s) that do exist" % len(paths),
+              file=sys.stderr)
+    elif len(paths) < len(a.candidates):
         print("note: %d arguments -> %d unique candidate(s)" % (len(a.candidates), len(paths)),
               file=sys.stderr)
 
@@ -754,7 +832,10 @@ def main():
         for g in graded:
             print("%-34s %8.1f %6.1f/%.0f" % (g["candidate"][:34], g["deterministic_points"],
                                               g["total"], g["scored_out_of"]))
-    return 0
+    if errors:
+        print("ERROR: %d of %d argument(s) had no candidate file (see above)"
+              % (len(errors), len(a.candidates)), file=sys.stderr)
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
