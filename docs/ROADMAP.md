@@ -259,10 +259,10 @@ one axis and fails another is visible instead of averaged away. Full premise in
 | # | Eval | Status |
 |---|---|---|
 | eval01 | [Build Ashfall](../track-04-benchmark/eval01-build-ashfall/) — one-prompt build | ✅ shipped; sets 0–3 scored |
-| eval02 | Play Ashfall — agent as player | 📋 specced below |
-| eval03 | Repair, not build | 📋 specced below |
+| eval02 | [Play Ashfall](../track-04-benchmark/eval02-play-ashfall/) — agent as player | ✅ shipped 2026-08-12 |
+| eval03 | [Repair, not build](../track-04-benchmark/eval03-repair/) | ✅ shipped 2026-08-12 |
 | eval04 | [Constraint stack](../track-04-benchmark/eval04-constraint-stack/) | ✅ shipped 2026-08-12 |
-| eval05 | Grounded answer, poisoned context | 📋 specced below |
+| eval05 | [Grounded answer, poisoned context](../track-04-benchmark/eval05-poisoned-context/) | ✅ shipped 2026-08-12 |
 
 Design rules for the new four: **no judge** (eval01's judged half is comparable
 only while judge model + effort + grader prompt stay fixed — a dependency not
@@ -272,6 +272,12 @@ eval04 first (smallest, immediately useful as the cheap daily driver), then
 eval02 (the frozen reference artifact already exists).
 
 ### eval02 — Play Ashfall
+
+> **Shipped 2026-08-12.** As specced, plus the contract's key design call:
+> the model's only memory is a 600-char note it re-writes each turn.
+> Build-day finding: nothing — including the game's own greedy policy —
+> survives seed 1337 to turn 60; winnability is an open question and the
+> eval is unsaturated in both directions. Spec kept below.
 
 **Thesis:** long-horizon coherence is a different axis from single-step
 reasoning, and eval01 never touches it.
@@ -311,6 +317,12 @@ Depends on: the frozen reference (exists), Playwright driver (exists in spirit
 in eval01's runtime checks).
 
 ### eval03 — Repair, not build
+
+> **Shipped 2026-08-12.** Five defects across the four planned classes,
+> hardened once pre-freeze: the draft bug reports were diagnostic enough
+> that haiku-low scored 100, so v1 froze with symptom-only reports. Still
+> expected to saturate for frontier models — a subtler v2 defect set is in
+> the track TODO. Spec kept below.
 
 **Thesis:** eval01 is output-bound; repair is input-bound. Reading 2k lines
 and touching 10 is the inverse skill of emitting 3k lines cold, and it
@@ -369,6 +381,11 @@ a reference output proving satisfiability before the eval ships.
 Depends on: nothing. Smallest eval in the track; build first.
 
 ### eval05 — Grounded answer, poisoned context
+
+> **Shipped 2026-08-12.** Generator-derived bundle and key exactly as
+> specced (the gates run at generation time; `--check` reproduces the
+> committed files). Two variants, ~6k and ~30k tokens, same key. Spec kept
+> below.
 
 **Thesis:** eval01–04 never ask "did the model believe its context or invent
 one." This does, with abstention and conflict-detection as first-class scored

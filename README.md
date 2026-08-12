@@ -47,9 +47,12 @@ recorded runs instead of impressions. One eval is shipped with four model
 families scored across five effort levels; four more are specced to cover
 long-horizon coherence, repair, instruction following, and grounding.
 
-- [eval01 — Build Ashfall](track-04-benchmark/eval01-build-ashfall/) ✅ shipped, sets 0–3 scored
-- [eval04 — Constraint stack](track-04-benchmark/eval04-constraint-stack/) ✅ shipped 2026-08-12
-- eval02, 03, 05 — specced in [`docs/ROADMAP.md`](docs/ROADMAP.md)
+All five evals are shipped and runnable:
+[eval01 — Build Ashfall](track-04-benchmark/eval01-build-ashfall/) (sets 0–3
+scored), [eval02 — Play Ashfall](track-04-benchmark/eval02-play-ashfall/),
+[eval03 — Repair](track-04-benchmark/eval03-repair/),
+[eval04 — Constraint stack](track-04-benchmark/eval04-constraint-stack/),
+and [eval05 — Poisoned context](track-04-benchmark/eval05-poisoned-context/).
 
 Later tracks may cover the base paid tiers of OpenAI, Gemini, and GitHub
 Copilot — deferred, see the [roadmap](docs/ROADMAP.md).

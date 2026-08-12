@@ -5,6 +5,32 @@ carries the scores, per-eval READMEs carry the how-to.
 
 ## 2026-08-12
 
+- **eval05 (poisoned context) shipped.** Generator-derived bundle + key
+  (seed 1337): 3 documents, 20 questions (12 value / 4 conflict / 4
+  absent), gates asserted at generation, `--check` proves the committed
+  files match the generator. Two variants share the key: small ~6k tokens,
+  full ~30k. Smoke: haiku-low 95/100 on small - believed exactly one
+  poisoned claim; small is near-saturated, full is the real test.
+- **eval03 (repair) shipped, hardened once pre-freeze.** Five one-edit
+  defects seeded into the reference (`make_defective.py`, reproducible +
+  sha-pinned); 12-test hidden suite (6 defect + 6 guard); dual-format patch
+  applier (SEARCH/REPLACE or unified diff, content-matched). Selftest
+  proves both directions: unpatched fails exactly the 6 defect tests,
+  reference fix (10 touched lines) scores 100. The first draft's bug
+  reports were too diagnostic - haiku-low scored a perfect 100 in 48s - so
+  v1 froze with symptom-only reports (haiku drops to 86.7). A subtler v2
+  defect set is the open follow-up.
+- **eval02 (play Ashfall) shipped.** Playwright driver over the frozen
+  reference (sha-pinned, refuses drift); contract v1 = compact state JSON
+  in, action JSON out, with a 600-char self-written note as the model's
+  ONLY memory between turns. Baselines: idle dies t10 (64), contract-level
+  naive t13 (92), the game's own greedy policy t20 (52) - all reproduce to
+  identical state hashes, and none survive seed 1337: winnability is
+  genuinely open. haiku-low contract run started as the smoke (slow burn,
+  ~6 min/turn - it plans hard); its row lands in RESULTS when it ends.
+- **Track scorecard added** (`scorecard.py`): reads every
+  `runs/*.eval.json` across evals and prints headline numbers; computes
+  nothing.
 - **eval04 (constraint stack) shipped.** 23 constraints (21 satisfiable + 2
   impossible), 100 pts fully deterministic, ~2k tokens/run. Reference
   solution proves satisfiability (`--selftest`); checker survived adversarial

@@ -26,10 +26,10 @@ no numbers, including dollar ones.
 | # | Eval | Axis it isolates | Judge | Status |
 |---|---|---|---|---|
 | eval01 | [Build Ashfall](eval01-build-ashfall/) - one prompt, one huge artifact | one-shot breadth under an output ceiling | 46/100 LLM-judged | shipped; 4 model families x 5 effort levels, sets 0-3 scored |
-| eval02 | Play Ashfall - agent as player, 60 turns | long-horizon coherence | none | specced in [ROADMAP](../docs/ROADMAP.md#track-04--benchmark) |
-| eval03 | Repair, not build - seeded defects, minimal diff | comprehension + fault localization | none | specced |
+| eval02 | [Play Ashfall](eval02-play-ashfall/) - agent as player, 60 turns | long-horizon coherence | none | shipped 2026-08-12 |
+| eval03 | [Repair, not build](eval03-repair/) - seeded defects, minimal patch | comprehension + fault localization | none | shipped 2026-08-12 |
 | eval04 | [Constraint stack](eval04-constraint-stack/) - 23 checked constraints, 2 impossible | precise instruction following, abstention | none | shipped 2026-08-12 |
-| eval05 | Grounded answer, poisoned context | grounding, conflict detection, abstention | none | specced |
+| eval05 | [Grounded answer, poisoned context](eval05-poisoned-context/) | grounding, conflict detection, abstention | none | shipped 2026-08-12 |
 
 eval01 measures generation breadth and is output-bound: a model that cannot
 emit ~60k+ bytes cannot compete regardless of quality. eval02-05 are designed
