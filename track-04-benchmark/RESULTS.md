@@ -24,6 +24,17 @@ with `./run.sh -b <name> <id>`. See
 | 2026-08-12_13:14:02_EDT | naive | naiveb | 1337 | 13 | 2s | $0 | 92 | loss | 0/1/132 | dc133b09 |
 | 2026-08-12_13:14:05_EDT | greedy | greedya | 1337 | 20 | 0s | $0 | 52 | loss | 0/0/63 | 2a3ddb5b |
 | 2026-08-12_13:14:06_EDT | greedy | greedyb | 1337 | 20 | 0s | $0 | 52 | loss | 0/0/63 | 2a3ddb5b |
+| 2026-08-12_13:15:18_EDT | claude-haiku-4-5 (low) | r1 | 1337 | 16 | 35m47s | $1.3467 | 76 | loss | 0/1/22 | bd0fd65f |
+
+NOTE (12Aug2026, r1): the first model run. haiku-low played genuinely - grew
+the colony to pop 10 by turn 7 (refugees + settlers), survived the first
+ashstorm behind a pre-built windbreak, then hit the mid-game food wall and
+collapsed to zero by turn 16. Outlasted naive (13 turns) but not greedy
+(20); scored between them (76). Its notes stayed coherent to the end; the
+transcript (runs/r1.turns.jsonl) is worth reading. Cost flag: at effort
+LOW, haiku averaged ~12.6k output tokens of thinking per turn - $1.35 and
+36 minutes for one run. Budget eval02 sweeps accordingly; higher efforts
+will cost multiples of that.
 
 NOTE (12Aug2026): repeated baselines land on identical hashes - the
 environment side is deterministic as designed. Even the game's own greedy

@@ -27,10 +27,8 @@ Story of what happened lives in [CHANGELOG.md](CHANGELOG.md); scores live in
 
 ## Follow-ups (open)
 
-- [ ] **eval02: record the in-flight haiku run.** A claude-haiku-4-5 (low)
-      contract run on seed 1337 was still playing when this was written
-      (~6 min/turn). When `eval02-play-ashfall/runs/r1.eval.json` exists,
-      add its row to RESULTS (`scorecard.py eval02` prints the numbers).
+- [x] **eval02: record the in-flight haiku run** - DONE 2026-08-12: r1
+      finished (pop 0 at turn 16, score 76, $1.35); row + note in RESULTS.
 - [ ] **eval02: winnability probe.** Nothing has survived seed 1337 to turn
       60. Worth one strong-model run (or a smarter scripted policy) to learn
       whether the win bonus is reachable at all; the answer changes how
