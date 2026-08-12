@@ -46,14 +46,6 @@ is a valid answer** — these are not blocking.
       *If unchanged:* evals land at 03, and everything downstream gets written
       to be measurable against the harness built there.
 
-- [ ] **Where `eval01/` formally lives.** The Ashfall Outpost one-prompt eval
-      sits at the repo root as a deliberate working area while it stabilizes —
-      outside the track structure, which normally forbids new top-level
-      directories. Once proven, either formalize as a shared `evals/` asset
-      (short ADR) or fold into a module (Track 01's evals module, or Track 02 as
-      the free-tier comparison exercise).
-      *If unchanged:* stays at root, exempt from the track rules.
-
 - [ ] **The spine example carried across modules.**
       Currently proposed: a changelog / release-notes drafter that reads
       `git log` and emits structured output. Chosen because ground truth is
@@ -98,6 +90,28 @@ if these are guessed at.** Record answers in module 01's field notes.
       `/verify-docs` has proven itself locally.
 - [ ] **Scheduled freshness check** — monthly job running the `freshness-auditor`
       subagent, opening an issue when the roster drifts.
+
+---
+
+## Track 04 — benchmark backlog
+
+Specs for all four are in [ROADMAP](docs/ROADMAP.md#track-04--benchmark);
+these are the build items, in intended order.
+
+- [ ] **Build eval04 (constraint stack) first** — smallest, no dependencies,
+      becomes the cheap daily driver. Gate before shipping: a reference output
+      proving the 23 satisfiable constraints are actually satisfiable, and
+      flag-scoring that punishes "flag everything".
+- [ ] **Build eval02 (play Ashfall)** — Playwright driver + state/action
+      contract v1 against `reference/ashfall-reference-v1.html`. The contract
+      is versioned like a prompt; the artifact never changes.
+- [ ] **Build eval03 (repair)** — derive the defective file from the reference,
+      seed N defects, write the hidden suite + a reference fix that passes 100%.
+- [ ] **Build eval05 (poisoned context)** — bundle *generator* (event script ->
+      spec/changelog/logs with injected contradictions) so the answer key is
+      derived, not hand-written.
+- [ ] **Track-level scorecard** — once two or more evals exist, a small script
+      aggregating per-eval results into one table per model config.
 
 ---
 
@@ -176,6 +190,10 @@ marked as such in the text.
 
 ## Done
 
+- Track 04 (benchmark): `eval01/` moved to
+  `track-04-benchmark/eval01-build-ashfall/` with history
+  ([ADR 0007](docs/decisions/0007-benchmark-track.md)), eval02–05 specced in
+  ROADMAP, reference artifact frozen from run u35, 2026-08-12
 - Track restructure: top-level `track-NN-slug/` layout, tracks 01–03
   ([ADR 0006](docs/decisions/0006-tracks-top-level.md)), 2026-08-08
 - Modules 00 (overview) and 01 (local model lab), with exercises

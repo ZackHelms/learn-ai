@@ -337,9 +337,23 @@ Leave eval01-set2 alone and re-test with zrunall.sh which is currently configure
 claude --model claude-fable-5 --effort max --permission-mode auto --name 202608120839-eval01-repo-maint
 
 
+> lets refactor eval01 into a subfolder in a new track `track-04-benchmark`, and add a few more evals to round out a benchmark (which you said was a collection of evals). How about the following:
+```
+eval02 - Play Ashfall (agent-as-player, 100% deterministic)
+Reuse eval01's reference build as the environment. Each turn the model gets the state JSON and returns an action JSON; a Python driver applies it and scores final outcome at turn 60 from a fixed seed. Measures long-horizon coherence, which is now a distinct evaluated axis from raw reasoning: Vending-Bench 2's failure modes are looping, identity drift, and repeated bad decisions across thousands of steps rather than failures at any single step. No judge, no rubric drift, and a weak model still produces a number (it just starves). Bonus: no output-length ceiling, so 4k-context local models can compete. 
 
+eval03 - Repair, not build
+Give a working 2k-line file with N seeded defects (off-by-one, wrong operator precedence, a race in turn ordering, a broken save round-trip) plus a hidden test suite. Model must output a minimal diff. Scored deterministically: tests passed, defects found, lines touched (penalize shotgun rewrites). This is input-comprehension-bound instead of output-bound, so it separates models that eval01 lumps together. Related idea worth stealing: TRAIL grades whether a model can localize the failure in an annotated trace, where the best model scores about 11% - far from saturation. 
 
+eval04 - Constraint stack (tiny, run it anywhere)
+One page of output, 20-25 programmatically checked constraints, several in tension, two impossible (correct behavior is to flag, not fake). Use unusual constraints on purpose: IFBench found models score well on IFEval but much worse on new unseen constraints, indicating overfitting to a small set of verifiable constraint types. Costs ~2k tokens per run, so it is your daily driver for local models and free-tier quota days. Fully deterministic, zero judge cost. 
 
+eval05 - Grounded answer with poisoned context
+A 30-50k-token bundle (spec + changelog + logs) and 20 questions: some answerable, some contradicted between documents, some genuinely absent. Answer key is exact-match plus a required abstention/conflict flag. Scores hallucination resistance and context handling, which eval01 never touches. Difficulty scales by bundle size, so one task file serves both an 8k local model and Opus.
+
+Structurally: eval02 and eval03 both depend on a frozen reference artifact, so cut that from our best eval01 100/100 run and version it. eval04/eval05 have no judge at all, which usefully de-risks our current dependence on grader-fixed comparability.
+```
+> TODO wait on that to finish & review
 
 
 

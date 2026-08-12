@@ -24,6 +24,7 @@ audience, and spend assumption, stated in its README. See
 | `track-01-local-models/` | Local weak models, harness-agnostic | Zero — no paid tooling, no API keys |
 | `track-02-free-tier/` | What the free tiers of Gemini, Microsoft Copilot, ChatGPT/Codex, and Claude can do | Zero — free accounts only |
 | `track-03-claude-pro/` | What Claude Pro at $20/month unlocks | A Claude Pro subscription, nothing beyond it |
+| `track-04-benchmark/` | A benchmark — a fixed collection of evals plus a protocol — measuring models instead of vibing them | Deterministic scorers free; hosted candidates and eval01's judge cost metered API |
 
 Deferred (roadmap mention only — never scaffold): base paid tiers of OpenAI,
 Gemini, GitHub Copilot.
@@ -31,7 +32,9 @@ Gemini, GitHub Copilot.
 Rules that keep this structure from regressing:
 
 - Modules live only inside a track: `track-NN-slug/MM-slug/`. Never create a
-  bare `modules/` directory.
+  bare `modules/` directory. (Track 04's benchmark modules are named
+  `evalNN-slug/` because the eval ids are load-bearing in run ids and results —
+  [ADR 0007](docs/decisions/0007-benchmark-track.md).)
 - Module numbers are zero-padded and **restart per track**, so cross-track
   references must name the track ("Track 01, module 04").
 - A track's premise governs its modules. Content that fits no existing premise
@@ -108,6 +111,7 @@ track-NN-slug/           one track per directory; README.md + MM-slug/ modules
   track-01-local-models/   local weak models, harness-agnostic (00–01 written)
   track-02-free-tier/      the big four platforms at zero spend
   track-03-claude-pro/     what Claude Pro unlocks
+  track-04-benchmark/      the measuring instrument: evalNN-slug/ modules + frozen reference/ fixtures
 scripts/                 check-env, pull-roster, bench, render-roster (Track 01)
 TODO.md                  the working backlog — actionable items live HERE
 docs/STYLE.md            voice rules + module template  ← read before writing

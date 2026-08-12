@@ -39,6 +39,17 @@ whether to.
 
 - Planned — candidate modules in [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
+### [Track 04 — Benchmark](track-04-benchmark/)
+
+**Measure models instead of vibing them.** A benchmark — a fixed collection of
+evals plus a protocol — for comparing models, effort levels, and harnesses with
+recorded runs instead of impressions. One eval is shipped with four model
+families scored across five effort levels; four more are specced to cover
+long-horizon coherence, repair, instruction following, and grounding.
+
+- [eval01 — Build Ashfall](track-04-benchmark/eval01-build-ashfall/) ✅ shipped, sets 0–3 scored
+- eval02–05 — specced in [`docs/ROADMAP.md`](docs/ROADMAP.md)
+
 Later tracks may cover the base paid tiers of OpenAI, Gemini, and GitHub
 Copilot — deferred, see the [roadmap](docs/ROADMAP.md).
 
@@ -49,6 +60,7 @@ Copilot — deferred, see the [roadmap](docs/ROADMAP.md).
 | [`track-01-local-models/`](track-01-local-models/) | Track 01 — local models, built by hand |
 | [`track-02-free-tier/`](track-02-free-tier/) | Track 02 — the big four platforms at zero spend |
 | [`track-03-claude-pro/`](track-03-claude-pro/) | Track 03 — what the $20/month Claude tier unlocks |
+| [`track-04-benchmark/`](track-04-benchmark/) | Track 04 — the benchmark: evals, protocol, recorded results |
 | [`models/roster.yaml`](models/roster.yaml) | Track 01's model list — single source of truth |
 | [`scripts/`](scripts/) | Environment check, model pull, benchmarking (Track 01) |
 | [`TODO.md`](TODO.md) | The working backlog — open questions and what's next to do |

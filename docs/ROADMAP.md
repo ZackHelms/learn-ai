@@ -15,6 +15,7 @@ appears on disk when it has content. Until then it lives here as a spec.
 | [01 — Local models](../track-01-local-models/) | Weak local models make the machinery visible | 00–01 written; 02–09 specced below |
 | [02 — Free tier](../track-02-free-tier/) | The big four platforms at zero spend | module 01 in progress (2026-08) |
 | [03 — Claude Pro](../track-03-claude-pro/) | What $20/month unlocks over free | planned; candidates below |
+| [04 — Benchmark](../track-04-benchmark/) | Measure models, don't vibe them | eval01 shipped; eval02–05 specced below |
 | later | Base paid tiers of OpenAI, Gemini, GitHub Copilot | deferred, below |
 
 ---
@@ -244,6 +245,146 @@ whether to. Planned; nothing specced in detail yet. Candidate directions:
   land differently on strong models, and the reinforcement is the point. What
   the Pro subscription itself covers versus what needs separate API billing is
   an open question — verify at write time.
+
+---
+
+## Track 04 — Benchmark
+
+Premise: **a benchmark is a collection of evals plus a protocol.** One eval
+measures one axis; the track's job is to cover several, so a model that aces
+one axis and fails another is visible instead of averaged away. Full premise in
+[its README](../track-04-benchmark/README.md); the move-in decision is
+[ADR 0007](decisions/0007-benchmark-track.md).
+
+| # | Eval | Status |
+|---|---|---|
+| eval01 | [Build Ashfall](../track-04-benchmark/eval01-build-ashfall/) — one-prompt build | ✅ shipped; sets 0–3 scored |
+| eval02 | Play Ashfall — agent as player | 📋 specced below |
+| eval03 | Repair, not build | 📋 specced below |
+| eval04 | Constraint stack | 📋 specced below |
+| eval05 | Grounded answer, poisoned context | 📋 specced below |
+
+Design rules for the new four: **no judge** (eval01's judged half is comparable
+only while judge model + effort + grader prompt stay fixed — a dependency not
+worth repeating), and **no output ceiling** (eval01 is output-bound; each new
+eval removes that so small-context local models get real numbers). Build order:
+eval04 first (smallest, immediately useful as the cheap daily driver), then
+eval02 (the frozen reference artifact already exists).
+
+### eval02 — Play Ashfall
+
+**Thesis:** long-horizon coherence is a different axis from single-step
+reasoning, and eval01 never touches it.
+
+Mechanism: the frozen reference build
+(`track-04-benchmark/reference/ashfall-reference-v1.html`, a 100/100 eval01
+run) is the environment. A Python driver runs it in headless Chromium from a
+fixed seed; each turn the model receives compact state JSON and returns action
+JSON; the driver applies it and advances. Final outcome at turn 60 is scored
+deterministically (survival, resources, milestones — exact weights set at
+write time from the reference's actual mechanics).
+
+Why this axis: [Vending-Bench 2](https://andonlabs.com/evals/vending-bench-2)
+(Andon Labs; accessed 2026-08-12; original paper
+[arXiv:2502.15840](https://arxiv.org/abs/2502.15840)) shows frontier-model
+failures over thousands of steps are looping, identity drift, and repeated bad
+decisions — coherence failures, not reasoning failures at any single step.
+This is the 60-turn small-scale version.
+
+Properties worth having: no judge; no output ceiling, so a 4k-context local
+model competes (small state in, small action out — Track 01's roster can play,
+it just plays badly, which is a number rather than a DNF); per-turn cost is
+tiny.
+
+Design risks, named now so they get solved rather than discovered: the
+determinism claim is environment-side — the game's own seeded PRNG (eval01
+bans `Math.random`, so every compliant build ships one) plus a fixed seed
+makes environment and scoring reproducible, but the *model* is still sampled,
+so replicates are still required. The reference exposes a UI, not an API; the
+driver's state-export/action contract is part of eval02 and must be versioned
+like a prompt — the artifact itself stays frozen. And the state JSON must stay
+small enough that turn history fits small contexts, or the protocol defines
+what the model is told each turn (last-K turns only) — that memory design is
+itself part of what gets measured.
+
+Depends on: the frozen reference (exists), Playwright driver (exists in spirit
+in eval01's runtime checks).
+
+### eval03 — Repair, not build
+
+**Thesis:** eval01 is output-bound; repair is input-bound. Reading 2k lines
+and touching 10 is the inverse skill of emitting 3k lines cold, and it
+separates models eval01 lumps together.
+
+Mechanism: a working ~2k-line file derived from the reference build, with N
+seeded defects (off-by-one, operator-precedence, a turn-ordering race, a
+broken save/load round-trip). The model gets the defective file and the
+symptom list only, and must output a minimal unified diff. Scored
+deterministically: hidden tests passed, defects fixed, lines touched
+(penalizing shotgun rewrites), diff-applies-cleanly as its own reported line
+(a malformed diff is signal, but legible signal).
+
+Why this axis: [TRAIL](https://arxiv.org/abs/2505.08638) (Patronus AI, 2025)
+found the best model localizes and categorizes errors in annotated agent
+traces at ~11% — fault localization is nowhere near saturated, unlike
+build-from-scratch.
+
+Design risks: every seeded defect must be provably detectable by the hidden
+suite (ship a reference fix that passes 100% — the never-invent-a-number rule
+applied to solvability). The suite lives in the public repo, so "hidden" means
+excluded from the run protocol, not secret — contamination risk is real and
+worth a dated note. The lines-touched penalty needs calibrating against the
+reference fix so minimal-correct scores maximum. The reference build's own
+self-test pattern (it ships 30+ in-page tests) seeds the suite.
+
+Depends on: the frozen reference (exists).
+
+### eval04 — Constraint stack
+
+**Thesis:** instruction following measured with *unseen* constraint types,
+cheap enough to run daily on anything.
+
+Mechanism: one page of output, 20–25 programmatically checked constraints,
+several in deliberate tension, and exactly two impossible to satisfy. Correct
+behavior on the impossible pair is to flag it, not silently fake it. Scoring
+is a checker script, fully deterministic, ~2k tokens per run — the daily
+driver for local models and free-tier quota days.
+
+Why this axis: [IFBench](https://arxiv.org/abs/2507.02833) (AI2/UW, 2025)
+found models overfit the small set of verifiable constraint types in
+IFEval-style benchmarks — leading models score under 50% on unseen constraint
+types. So the constraints here are deliberately unusual, and the set is
+versioned like a prompt: leaked-and-stale constraint sets get retired to a new
+version with a new results table, never edited.
+
+Design risks: the flag mechanic must be scored as classification — credit for
+flagging the two impossible constraints AND for *not* flagging the satisfiable
+ones — or "flag everything" games it. Every satisfiable-in-tension pair needs
+a reference output proving satisfiability before the eval ships.
+
+Depends on: nothing. Smallest eval in the track; build first.
+
+### eval05 — Grounded answer, poisoned context
+
+**Thesis:** eval01–04 never ask "did the model believe its context or invent
+one." This does, with abstention and conflict-detection as first-class scored
+outcomes.
+
+Mechanism: a 30–50k-token bundle (spec + changelog + logs) and 20 questions —
+some answerable, some contradicted between documents, some genuinely absent.
+Answers use a constrained format (`VALUE` / `ABSENT` / `CONFLICT` with doc
+references) so the key is exact-match and judge-free. Difficulty scales with
+bundle size: an 8k variant and a full variant from the same generator serve a
+small local model and a frontier model, reported separately.
+
+Design risks: hand-writing an answer key against 50k tokens of prose is where
+key errors live — the bundle should be *generated* from a ground-truth event
+script with contradictions injected deliberately, so the key derives from the
+script instead of from a human re-reading the prose. Freeze the v1 bundle for
+comparability; the generator plus a new seed is the long-term contamination
+answer.
+
+Depends on: nothing shared; the bundle generator is the work.
 
 ---
 
