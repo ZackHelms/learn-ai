@@ -5,6 +5,16 @@ carries the scores, per-eval READMEs carry the how-to.
 
 ## 2026-08-12
 
+- **eval04 (constraint stack) shipped.** 23 constraints (21 satisfiable + 2
+  impossible), 100 pts fully deterministic, ~2k tokens/run. Reference
+  solution proves satisfiability (`--selftest`); checker survived adversarial
+  tests (near-miss, flag spam, structureless reply). One design change came
+  out of the shakedown run: both conflict pairs are symmetric, so the prompt
+  gained an explicit "satisfy the lower-numbered member" tie-break before
+  freezing v1 - the pre-freeze haiku run had flagged both pairs correctly and
+  then obeyed the *higher* member of each. First recorded run: haiku-4-5 low,
+  72.0 ($0.14). Identical-config shakedown pair differed by 4 pts on sampling
+  alone; noted in RESULTS.
 - **Track created** ([ADR 0007](../docs/decisions/0007-benchmark-track.md)).
   `eval01/` moved from the repo root to `eval01-build-ashfall/` via `git mv`,
   history preserved; run ids, scores, and scorer untouched. One hiccup: an IDE

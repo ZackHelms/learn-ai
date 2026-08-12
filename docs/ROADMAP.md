@@ -261,7 +261,7 @@ one axis and fails another is visible instead of averaged away. Full premise in
 | eval01 | [Build Ashfall](../track-04-benchmark/eval01-build-ashfall/) — one-prompt build | ✅ shipped; sets 0–3 scored |
 | eval02 | Play Ashfall — agent as player | 📋 specced below |
 | eval03 | Repair, not build | 📋 specced below |
-| eval04 | Constraint stack | 📋 specced below |
+| eval04 | [Constraint stack](../track-04-benchmark/eval04-constraint-stack/) | ✅ shipped 2026-08-12 |
 | eval05 | Grounded answer, poisoned context | 📋 specced below |
 
 Design rules for the new four: **no judge** (eval01's judged half is comparable
@@ -340,6 +340,10 @@ self-test pattern (it ships 30+ in-page tests) seeds the suite.
 Depends on: the frozen reference (exists).
 
 ### eval04 — Constraint stack
+
+> **Shipped 2026-08-12.** Built as specced: 23 constraints (21 satisfiable +
+> 2 impossible), plus a lower-numbered tie-break rule the shakedown run
+> showed was needed. Spec kept below for the record.
 
 **Thesis:** instruction following measured with *unseen* constraint types,
 cheap enough to run daily on anything.

@@ -28,7 +28,7 @@ no numbers, including dollar ones.
 | eval01 | [Build Ashfall](eval01-build-ashfall/) - one prompt, one huge artifact | one-shot breadth under an output ceiling | 46/100 LLM-judged | shipped; 4 model families x 5 effort levels, sets 0-3 scored |
 | eval02 | Play Ashfall - agent as player, 60 turns | long-horizon coherence | none | specced in [ROADMAP](../docs/ROADMAP.md#track-04--benchmark) |
 | eval03 | Repair, not build - seeded defects, minimal diff | comprehension + fault localization | none | specced |
-| eval04 | Constraint stack - 20-25 checked constraints, 2 impossible | precise instruction following, abstention | none | specced |
+| eval04 | [Constraint stack](eval04-constraint-stack/) - 23 checked constraints, 2 impossible | precise instruction following, abstention | none | shipped 2026-08-12 |
 | eval05 | Grounded answer, poisoned context | grounding, conflict detection, abstention | none | specced |
 
 eval01 measures generation breadth and is output-bound: a model that cannot

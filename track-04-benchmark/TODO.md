@@ -7,10 +7,10 @@ Story of what happened lives in [CHANGELOG.md](CHANGELOG.md); scores live in
 
 ## Build items, in intended order
 
-- [ ] **Build eval04 (constraint stack) first** - smallest, no dependencies,
-      becomes the cheap daily driver. Gate before shipping: a reference output
-      proving the satisfiable constraints are actually satisfiable, and
-      flag-scoring that punishes "flag everything".
+- [x] **Build eval04 (constraint stack) first** - DONE 2026-08-12. Both gates
+      met: `reference-solution.txt` scores 100.0 (`--selftest`), spurious
+      flags cost 4 pts each so "flag everything" loses. Shipped with a haiku
+      shakedown run recorded in RESULTS.
 - [ ] **Build eval02 (play Ashfall)** - Playwright driver + state/action
       contract v1 against `reference/ashfall-reference-v1.html`. The contract
       is versioned like a prompt; the artifact never changes. Gate: a scripted
