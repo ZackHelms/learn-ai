@@ -4,6 +4,9 @@ Track-specific decisions and empirical gates. Repo-wide items live in the
 [root TODO](../TODO.md); module specs live in
 [ROADMAP](../docs/ROADMAP.md#track-01--local-models).
 
+Open work only: check an item off when it lands, then fold it into a dated entry
+in the [root CHANGELOG](../CHANGELOG.md) at the next commit and drop the line.
+
 ## Decisions pending
 
 Mine to make, nobody else's. Each says what happens if left alone, so **silence

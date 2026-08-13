@@ -5,30 +5,15 @@ specs for the evals live in [ROADMAP](../docs/ROADMAP.md#track-04--benchmark).
 Story of what happened lives in [CHANGELOG.md](CHANGELOG.md); scores live in
 [RESULTS.md](RESULTS.md).
 
-## Build items, in intended order
+This file holds **open work only**. Check an item off when it lands, write the
+detail into [CHANGELOG.md](CHANGELOG.md), and drop the checked line at the next
+commit - the repo-level summary goes in the [root changelog](../CHANGELOG.md).
 
-- [x] **Build eval04 (constraint stack) first** - DONE 2026-08-12. Both gates
-      met: `reference-solution.txt` scores 100.0 (`--selftest`), spurious
-      flags cost 4 pts each so "flag everything" loses. Shipped with a haiku
-      shakedown run recorded in RESULTS.
-- [x] **Build eval02 (play Ashfall)** - DONE 2026-08-12. Gate met: naive and
-      greedy baselines each reproduce to identical state hashes on seed 1337.
-      Finding: nothing (including the game's own greedy policy) survives to
-      turn 60 - winnability is open.
-- [x] **Build eval03 (repair)** - DONE 2026-08-12. Gates met via
-      `--selftest`: defective file fails exactly the 6 defect tests, the
-      10-line reference fix scores 100, guards + minimality punish shotgun
-      rewrites. Hardened pre-freeze after haiku-low aced the draft prompt.
-- [x] **Build eval05 (poisoned context)** - DONE 2026-08-12. Key derived from
-      the generator with gates asserted at generation; `--check` reproduces
-      the committed bundles byte-for-byte.
-- [x] **Track-level scorecard** - DONE 2026-08-12: `scorecard.py` (a pure
-      reader over `runs/*.eval.json`).
+All five evals are built and runnable (2026-08-12, see the changelog). What is
+left:
 
 ## Follow-ups (open)
 
-- [x] **eval02: record the in-flight haiku run** - DONE 2026-08-12: r1
-      finished (pop 0 at turn 16, score 76, $1.35); row + note in RESULTS.
 - [ ] **eval02: winnability probe.** Nothing has survived seed 1337 to turn
       60. Worth one strong-model run (or a smarter scripted policy) to learn
       whether the win bonus is reachable at all; the answer changes how

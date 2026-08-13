@@ -113,7 +113,9 @@ track-NN-slug/           one track per directory; README.md + MM-slug/ modules
   track-03-claude-pro/     what Claude Pro unlocks
   track-04-benchmark/      the measuring instrument: evalNN-slug/ modules + frozen reference/ fixtures
 scripts/                 check-env, pull-roster, bench, render-roster (Track 01)
+README.md                reader's entry point: how to start, which track to pick
 TODO.md                  repo-wide backlog + pointer index; active tracks carry their own TODO.md
+CHANGELOG.md             what already landed, repo-wide; Track 04 keeps its own for eval detail
 docs/STYLE.md            voice rules + module template  ← read before writing
 docs/ROADMAP.md          curriculum design; track and module specs, ordering
 docs/decisions/          ADRs for load-bearing choices
@@ -141,12 +143,23 @@ docs/decisions/          ADRs for load-bearing choices
 - **Shell** is bash, `set -uo pipefail`, shellcheck-clean.
 - **Commits** are conventional style, scoped: `docs(module-01): ...`,
   `feat(scripts): ...`, `fix(roster): ...`.
+- **Each root file has one job.** `README.md` is the reader's entry point — how
+  to start and which track to pick. `TODO.md` is open work only. `CHANGELOG.md`
+  is what already landed. Do not let setup instructions drift into the backlog,
+  or backlog items into the README.
+- **Backlogs hold open work; finished work moves to the changelog.** Check the
+  item off in the backlog it lived in, then at the next commit fold it into a
+  dated entry in the root `CHANGELOG.md` and delete the checked line. One entry
+  per significant feature or coherent set of items — do not pepper the changelog
+  with every small edit. A track with its own changelog (Track 04) keeps the
+  detail there and gets only a repo-level summary in the root one.
 
 ## Common tasks
 
 | Task | How |
 |---|---|
 | Find what needs doing | Read `TODO.md`, then the relevant track's own `TODO.md` (linked from root). Record new items in the nearest backlog, never a new file |
+| Record what got done | Check it off in its backlog; at commit time move it into a dated `CHANGELOG.md` entry and drop the checked line |
 | Refresh models against upstream | `/update-models`, or edit `models/roster.yaml` and re-render |
 | Start a new module | `/new-module`, or copy the template from `docs/STYLE.md` |
 | Check docs are consistent | `/verify-docs` |

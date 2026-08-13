@@ -1,38 +1,19 @@
 # TODO
 
-The working backlog, written to be **read cold** - assume no memory of the
-session that produced the repo. This root file is a quick read: repo-wide items
-plus pointers to the per-track backlogs. Each active track keeps its own
-`TODO.md` with the details. [`docs/ROADMAP.md`](docs/ROADMAP.md) covers *what
-the modules are*; the TODO files cover *what needs doing*.
+The repo-wide backlog, written to be **read cold** - assume no memory of the
+session that produced it. Only two things live here: items that cut across every
+track, and pointers to the per-track backlogs where the detailed work lives.
 
----
+- *What the modules are* → [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- *What needs doing, per track* → the track's own `TODO.md`, linked below
+- *What already landed* → [`CHANGELOG.md`](CHANGELOG.md)
+- *How to get started as a reader* → [`README.md`](README.md#start-here)
 
-## Start here on a fresh machine
-
-```bash
-git clone https://github.com/ZackHelms/learn-ai.git
-cd learn-ai
-
-bash scripts/check-env.sh          # do this BEFORE downloading gigabytes
-```
-
-Fix anything it flags, then:
-
-```bash
-curl -fsSL https://ollama.com/install.sh | sh   # native app on macOS instead
-bash scripts/pull-roster.sh --dry-run           # see what it will fetch
-bash scripts/pull-roster.sh
-```
-
-> **Expect the first pull to fail.** The model tags in `models/roster.yaml` were
-> never confirmed against the live registry - see *Unverified tags* below. A 404
-> means the roster is stale, not that you did something wrong.
-> `scripts/pull-roster.sh` prints the three-step fix.
-
-Then work through [Track 01, Module 01](track-01-local-models/01-local-model-lab/)
-and record what you get in its
-[`FIELD-NOTES.md`](track-01-local-models/01-local-model-lab/FIELD-NOTES.md).
+**This file holds open work only.** When an item finishes, check it off here,
+then fold it into a dated entry in [`CHANGELOG.md`](CHANGELOG.md) at the next
+commit - one entry per significant feature or coherent set of items, not one per
+edit. Same rule in the per-track backlogs, except a track with its own changelog
+(Track 04) records the detail there and only the repo-level summary comes here.
 
 ---
 
@@ -43,7 +24,7 @@ and record what you get in its
 | 01 - Local models | [`track-01-local-models/TODO.md`](track-01-local-models/TODO.md) | decisions pending + empirical gates on module 01 |
 | 02 - Free tier | none - status in [ROADMAP](docs/ROADMAP.md#track-02--free-tier) | module 01 being written live in a separate session (2026-08) |
 | 03 - Claude Pro | none - candidates in [ROADMAP](docs/ROADMAP.md#track-03--claude-pro) | planned, nothing actionable yet |
-| 04 - Benchmark | [`track-04-benchmark/TODO.md`](track-04-benchmark/TODO.md) | **in progress** - eval02-05 being built; details and open questions there |
+| 04 - Benchmark | [`track-04-benchmark/TODO.md`](track-04-benchmark/TODO.md) | all five evals shipped; open follow-ups and a run matrix waiting on Zack |
 
 ---
 
@@ -103,27 +84,9 @@ exercise's grading logic against handcrafted cases, all relative links and
 anchors.
 
 **Never run:** anything requiring a model. No model was pulled, loaded, or
-benchmarked. That is why the repo ships **zero performance figures** - it ships
+benchmarked. That is why Track 01 ships **zero performance figures** - it ships
 `scripts/bench.py` and an empty `FIELD-NOTES.md` instead.
 
 The macOS instructions and the llama.cpp appendix are likewise unverified and
 marked as such in the text. (Track 04 is the exception on model runs: its
 RESULTS files record real model runs with real costs.)
-
----
-
-## Done
-
-- Per-track TODO split: root TODO became repo-wide items + pointers;
-  Track 01 and Track 04 carry their own backlogs, 2026-08-12
-- Track 04 (benchmark): `eval01/` moved to
-  `track-04-benchmark/eval01-build-ashfall/` with history
-  ([ADR 0007](docs/decisions/0007-benchmark-track.md)), eval02-05 specced in
-  ROADMAP, reference artifact frozen from run u35, 2026-08-12
-- Track restructure: top-level `track-NN-slug/` layout, tracks 01-03
-  ([ADR 0006](docs/decisions/0006-tracks-top-level.md)), 2026-08-08
-- Modules 00 (overview) and 01 (local model lab), with exercises
-- `models/roster.yaml` as single source of truth, with generated-block rendering
-- `scripts/`: `check-env.sh`, `pull-roster.sh`, `bench.py`, `render-roster.py`
-- `AGENTS.md` + `CLAUDE.md`, `.claude/` commands and subagents
-- `docs/`: `STYLE.md`, `ROADMAP.md`, five ADRs

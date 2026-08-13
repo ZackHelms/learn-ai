@@ -353,7 +353,7 @@ A 30-50k-token bundle (spec + changelog + logs) and 20 questions: some answerabl
 
 Structurally: eval02 and eval03 both depend on a frozen reference artifact, so cut that from our best eval01 100/100 run and version it. eval04/eval05 have no judge at all, which usefully de-risks our current dependence on grader-fixed comparability.
 ```
-> TODO wait on that to finish & review
+> DONE wait on that to finish & review
 
 
 
